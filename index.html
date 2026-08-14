@@ -5,6 +5,7 @@
   <title>健康陪跑 Health Companion</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;display=swap" rel="stylesheet">
   <style>
     :root{
@@ -570,7 +571,8 @@
         <div class="option">
          <span><b>Google Sheets</b><small id="technical-api-status">連線中</small></span><i id="settings-status-dot" class="status-dot connecting"></i>
         </div><button id="reconnect-button" class="secondary-button" type="button" style="margin-top:10px;width:100%" data-template-id="reconnect-label">重新整理資料</button>
-        <button id="logout-button" class="secondary-button" type="button" style="margin-top:10px;width:100%">登出 Google 帳號</button>
+        <button id="line-link-button" class="secondary-button" type="button" style="display:none;margin-top:10px;width:100%;border-color:#06c;color:#06c">綁定 LINE 帳號</button>
+        <button id="logout-button" class="secondary-button" type="button" style="margin-top:10px;width:100%">登出帳號</button>
        </article>
       </div>
      </section>
@@ -625,10 +627,12 @@
       DATA_MODE:"production",
       API_BASE_URL:"https://script.google.com/macros/s/AKfycbwc9OBZtGgFiXk2n1_bquNZqkFkX9OzgAxlh7rljySrvNiF6ywsxEpBzNv5V4onRv5h/exec",
       API_TIMEOUT:15000,
-      TIMEZONE:"Asia/Taipei"
+      TIMEZONE:"Asia/Taipei",
+      LIFF_ID:""
     };
     let currentUser=null;
     let sessionToken=null;
+    let liffReady=false;
     let exerciseDatabase=[], workoutSession=null;
     let currentRange=30;
     const appState={body:[],sleep:[],activity:[],workouts:[],dashboard:null,profile:null};
@@ -637,6 +641,7 @@
     function dateDaysAgo(days){const date=new Date(`${getLocalDateString()}T12:00:00+08:00`);date.setDate(date.getDate()-days);return getLocalDateString(date);}
     function rangeDates(days=currentRange){if(days==="year"){const today=getLocalDateString();return {start:`${today.slice(0,4)}-01-01`,end:today};}return {start:dateDaysAgo(Number(days)-1),end:getLocalDateString()};}
     function isConfigured(){return CONFIG.API_BASE_URL&&CONFIG.API_BASE_URL!=="YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";}
+    function isLiffConfigured(){return Boolean(CONFIG.LIFF_ID&&CONFIG.LIFF_ID!=="YOUR_LIFF_ID");}
     function readableError(error){if(!error)return "目前無法取得健康資料。";if(typeof error === "string")return error;return error.message||error.error?.message||"目前無法取得健康資料。";}
     function isSessionError(error){return ["UNAUTHORIZED","SESSION_EXPIRED","INVALID_TOKEN"].includes(error?.code)||["UNAUTHORIZED","SESSION_EXPIRED","INVALID_TOKEN"].some(x=>String(error?.message||"").includes(x));}
     function clearPersonalState(){currentUser=null;sessionToken=null;sessionStorage.removeItem("healthCompanionSessionToken");Object.assign(appState,{body:[],sleep:[],activity:[],workouts:[],dashboard:null,profile:null});["header-greeting","header-date","header-avatar"].forEach(id=>setValue(id,id==="header-avatar"?"—":""));}
@@ -652,8 +657,11 @@
     async function sessionPost(action,payload={}){if(!isConfigured())throw new Error("尚未設定資料庫 API");const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CONFIG.API_TIMEOUT);try{const res=await fetch(CONFIG.API_BASE_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,sessionToken,payload}),signal:controller.signal});if(!res.ok)throw new Error(`HTTP ${res.status}`);return unwrapApiResponse(await res.json());}catch(e){if(e.name==="AbortError")throw new Error("資料連線逾時，請稍後重新整理。");if(isSessionError(e)){clearPersonalState();showLogin();}throw e;}finally{clearTimeout(timer)}}
     async function apiGet(action,params={}){return sessionPost(action,params);}
     async function apiPost(action,data={}){return sessionPost(action,data);}
-    async function createSession(idToken){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CONFIG.API_TIMEOUT);try{const res=await fetch(CONFIG.API_BASE_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"createSession",idToken}),signal:controller.signal});if(!res.ok)throw new Error(`HTTP ${res.status}`);const data=unwrapApiResponse(await res.json());sessionToken=data.sessionToken;sessionStorage.setItem("healthCompanionSessionToken",sessionToken);return data;}finally{clearTimeout(timer)}}
-    async function logout(){if(sessionToken){try{await sessionPost("logout",{})}catch(e){}}clearPersonalState();showLogin();}
+    async function createExternalSession(action,tokenField,token){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CONFIG.API_TIMEOUT);try{const res=await fetch(CONFIG.API_BASE_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,[tokenField]:token}),signal:controller.signal});if(!res.ok)throw new Error(`HTTP ${res.status}`);const data=unwrapApiResponse(await res.json());sessionToken=data.sessionToken;sessionStorage.setItem("healthCompanionSessionToken",sessionToken);return data;}finally{clearTimeout(timer)}}
+    async function createSession(idToken){return createExternalSession("createSession","idToken",idToken);}
+    async function createLineSession(lineIdToken){return createExternalSession("createLineSession","lineIdToken",lineIdToken);}
+    function applyAuthenticatedUser(data){const user=data?.user||data?.profile||data||{};currentUser={userId:user.userId||user.id,email:user.email||"",name:user.name||user.displayName||"",displayName:user.displayName||user.name||"",photoUrl:user.photoUrl||user.photoURL||user.picture||"",lineUserId:user.lineUserId||""};return currentUser;}
+    async function logout(){if(sessionToken){try{await sessionPost("logout",{})}catch(e){}}if(liffReady&&window.liff?.isLoggedIn())liff.logout();sessionStorage.removeItem("healthCompanionLinkLine");clearPersonalState();showLogin();}
     const apiService={
       healthCheck:()=>apiGet("healthCheck"),getUserProfile:()=>apiGet("getUserProfile"),getDashboardData:()=>apiGet("getDashboardData"),
       getBodyMetrics:(start,end)=>apiGet("getBodyRecords",{startDate:start,endDate:end}),getBodyRecords:(start,end)=>apiGet("getBodyRecords",{startDate:start,endDate:end}),
@@ -703,11 +711,16 @@
     function showDashboardError(message){document.getElementById("dashboard-error").innerHTML=`<div class="error-state" style="margin-bottom:14px">資料載入失敗。${message?` ${message}`:""}<br><button id="inline-retry" class="secondary-button" style="margin-top:10px" type="button">重新整理</button></div>`;document.getElementById("inline-retry").onclick=boot;}
     async function boot(){if(!currentUser||!sessionToken){showLogin();return;}setConnectionState("connecting");document.getElementById("dashboard-error").innerHTML="";try{await apiService.healthCheck();setConnectionState("connected");await Promise.all([loadRange(currentRange),renderNutrition(),buildExerciseSelect()]);}catch(error){setConnectionState("error");showDashboardError(error.message);["dashboard-weight-chart","body-trend-chart","sleep-duration-chart","sleep-score-chart","activity-steps-chart","activity-calorie-chart","training-volume-chart"].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="chart-empty">資料載入失敗</div>';});}}
     async function buildExerciseSelect(){exerciseDatabase=await apiService.getExerciseDatabase();const select=document.getElementById("exercise-select");select.innerHTML=Array.isArray(exerciseDatabase)&&exerciseDatabase.length?exerciseDatabase.filter(x=>x.active!==false).map(x=>`<option value="${x.exerciseId}">${x.exerciseName} · ${x.muscleGroup||"未分類"}</option>`).join(""):`<option value="">尚無可用訓練動作</option>`;}
-    function showLogin(){let el=document.getElementById("google-login-entry");if(!el){el=document.createElement("div");el.id="google-login-entry";el.style.cssText="position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:var(--bg-primary);";el.innerHTML='<div style="text-align:center"><h1 style="font-family:Fraunces,serif">健康陪跑</h1><p style="color:var(--text-secondary);margin:8px 0 18px">請登入以查看你的健康資料</p><div id="google-login-button"></div><p id="google-login-error" style="color:var(--status-danger);font-size:.8rem;margin-top:12px"></p></div>';document.body.appendChild(el);}el.style.display="grid";if(window.google?.accounts?.id)google.accounts.id.renderButton(document.getElementById("google-login-button"),{theme:"outline",size:"large",text:"signin_with"});}
+    function showLogin(){let el=document.getElementById("google-login-entry");if(!el){el=document.createElement("div");el.id="google-login-entry";el.style.cssText="position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:var(--bg-primary);padding:20px";el.innerHTML='<div style="width:min(360px,100%);text-align:center"><h1 style="font-family:Fraunces,serif">健康陪跑</h1><p style="color:var(--text-secondary);margin:8px 0 18px">請登入以查看你的健康資料</p><button id="line-login-button" type="button" style="display:none;width:100%;border:0;border-radius:8px;padding:11px 16px;background:#06c;color:#fff;font-weight:700;margin-bottom:12px">使用 LINE 登入</button><div id="google-login-button" style="display:flex;justify-content:center"></div><p id="google-login-error" style="color:var(--status-danger);font-size:.8rem;margin-top:12px"></p></div>';document.body.appendChild(el);document.getElementById("line-login-button").onclick=handleLineLogin;}el.style.display="grid";const lineButton=document.getElementById("line-login-button");if(lineButton)lineButton.style.display=isLiffConfigured()?"block":"none";if(window.google?.accounts?.id)google.accounts.id.renderButton(document.getElementById("google-login-button"),{theme:"outline",size:"large",text:"signin_with"});}
     function hideLogin(){const el=document.getElementById("google-login-entry");if(el)el.style.display="none";}
-    async function handleGoogleCredential(response){try{const data=await createSession(response.credential);const user=data.user||data.profile||{};currentUser={userId:user.userId||user.id,email:user.email,name:user.name,displayName:user.displayName||user.name,photoUrl:user.photoUrl||user.picture};hideLogin();await boot();}catch(error){const el=document.getElementById("google-login-error");if(el)el.textContent=readableError(error);}}
+    async function handleGoogleCredential(response){try{applyAuthenticatedUser(await createSession(response.credential));hideLogin();await boot();}catch(error){showLoginError(error);}}
     function loadGoogleIdentity(){return new Promise(resolve=>{if(window.google?.accounts?.id)return resolve();const script=document.createElement("script");script.src="https://accounts.google.com/gsi/client";script.onload=()=>resolve();script.onerror=()=>resolve();document.head.appendChild(script);});}
-    async function initializeSession(){sessionToken=sessionStorage.getItem("healthCompanionSessionToken");if(!sessionToken){await loadGoogleIdentity();if(window.google?.accounts?.id){google.accounts.id.initialize({client_id:"686099401474-v2infa5949657gd3j5d64aoolvnq4421.apps.googleusercontent.com",callback:handleGoogleCredential});}showLogin();return false;}try{const user=await sessionPost("getCurrentUser",{});const profile=user.user||user.profile||user;currentUser={userId:profile.userId||profile.id,email:profile.email,name:profile.name,displayName:profile.displayName||profile.name,photoUrl:profile.photoUrl||profile.picture};return true;}catch(error){clearPersonalState();await loadGoogleIdentity();showLogin();return false;}}
+    function showLoginError(error){const el=document.getElementById("google-login-error");if(el)el.textContent=readableError(error);}
+    async function initializeLiff(){if(!isLiffConfigured()||!window.liff)return false;if(liffReady)return true;try{await liff.init({liffId:CONFIG.LIFF_ID});liffReady=true;return true;}catch(error){console.warn("LIFF initialization failed");return false;}}
+    async function handleLineLogin(){try{if(!await initializeLiff())throw new Error("LINE 登入尚未完成設定");if(!liff.isLoggedIn()){liff.login({redirectUri:location.href});return;}const idToken=liff.getIDToken();if(!idToken)throw new Error("無法取得 LINE 登入憑證，請重新登入");applyAuthenticatedUser(await createLineSession(idToken));hideLogin();await boot();}catch(error){showLoginError(error);}}
+    async function linkCurrentUserToLine(){try{if(!sessionToken)throw new Error("請先登入帳號");if(!await initializeLiff())throw new Error("LINE 綁定尚未完成設定");if(!liff.isLoggedIn()){sessionStorage.setItem("healthCompanionLinkLine","1");liff.login({redirectUri:location.href});return;}const idToken=liff.getIDToken();if(!idToken)throw new Error("無法取得 LINE 登入憑證，請重新登入");const result=await apiPost("linkLineIdentity",{lineIdToken:idToken});sessionStorage.removeItem("healthCompanionLinkLine");applyAuthenticatedUser(result.profile||currentUser);updateLineLinkButton();toast("LINE 帳號已綁定至目前的健康資料。");}catch(error){sessionStorage.removeItem("healthCompanionLinkLine");toast(readableError(error));}}
+    function updateLineLinkButton(){const button=document.getElementById("line-link-button");if(!button)return;button.style.display=isLiffConfigured()?"block":"none";button.textContent=currentUser?.lineUserId?"LINE 帳號已綁定":"綁定 LINE 帳號";button.disabled=Boolean(currentUser?.lineUserId);}
+    async function initializeSession(){await initializeLiff();sessionToken=sessionStorage.getItem("healthCompanionSessionToken");if(sessionToken){try{applyAuthenticatedUser(await sessionPost("getCurrentUser",{}));if(sessionStorage.getItem("healthCompanionLinkLine")==="1"&&liffReady&&liff.isLoggedIn())await linkCurrentUserToLine();updateLineLinkButton();return true;}catch(error){clearPersonalState();}}if(liffReady&&liff.isLoggedIn()){try{const idToken=liff.getIDToken();if(idToken){applyAuthenticatedUser(await createLineSession(idToken));updateLineLinkButton();return true;}}catch(error){showLoginError(error);}}await loadGoogleIdentity();if(window.google?.accounts?.id){google.accounts.id.initialize({client_id:"686099401474-v2infa5949657gd3j5d64aoolvnq4421.apps.googleusercontent.com",callback:handleGoogleCredential});}showLogin();return false;}
     function openSheet(view="quick-sheet"){document.getElementById("sheet-backdrop").classList.add("show");["quick-sheet","weight-form","meal-form","checkin-form"].forEach(id=>document.getElementById(id).style.display=id===view?"block":"none");}
     function closeSheet(){document.getElementById("sheet-backdrop").classList.remove("show");}
     function setSubmitting(button,on){button.disabled=on;}
@@ -739,6 +752,7 @@
     document.getElementById("apply-theme").onclick=()=>toast("外觀設定已套用。");
     document.getElementById("header-theme-toggle").onclick=()=>{const current=document.documentElement.dataset.theme==="dark"?"light":"dark";localStorage.setItem("themeMode",current);applyThemeMode(current);refreshThemeOptions();};
     document.getElementById("reconnect-button").onclick=boot;
+    document.getElementById("line-link-button").onclick=linkCurrentUserToLine;
     document.getElementById("logout-button").onclick=logout;
     document.getElementById("header-date").textContent=`今天是 ${new Intl.DateTimeFormat("zh-TW",{timeZone:CONFIG.TIMEZONE,year:"numeric",month:"2-digit",day:"2-digit",weekday:"long"}).format(new Date())}`;
     initTheme();lucide.createIcons();initializeSession().then(ok=>{if(ok)boot();});
