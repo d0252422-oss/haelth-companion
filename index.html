@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="zh-Hant">
+ <head><meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>健康陪跑 Health Companion</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg-primary:#f8fafc;--bg-secondary:#f1f5f9;--bg-card:#ffffff;--bg-elevated:#ffffff;
+      --text-primary:#111827;--text-secondary:#6b7280;--text-tertiary:#94a3b8;--border-color:#e5e7eb;
+      --accent-primary:#2563eb;--accent-soft:#eff6ff;--accent-secondary:#60a5fa;
+      --status-success:#10b981;--status-warning:#f59e0b;--status-danger:#ef4444;
+      --chart-1:#2563eb;--chart-2:#10b981;--chart-3:#8b5cf6;--chart-4:#f59e0b;--chart-5:#ef4444;
+      --shadow:0 8px 28px rgba(15,23,42,.07);--shadow-soft:0 2px 10px rgba(15,23,42,.04);
+    }
+    [data-theme="dark"]{
+      --bg-primary:#0f172a;--bg-secondary:#111827;--bg-card:#172033;--bg-elevated:#1e293b;
+      --text-primary:#f8fafc;--text-secondary:#94a3b8;--text-tertiary:#64748b;--border-color:#334155;
+      --accent-primary:#3b82f6;--accent-soft:rgba(59,130,246,.14);--accent-secondary:#93c5fd;
+      --status-success:#34d399;--status-warning:#fbbf24;--status-danger:#f87171;
+      --chart-1:#60a5fa;--chart-2:#34d399;--chart-3:#a78bfa;--chart-4:#fbbf24;--chart-5:#f87171;
+      --shadow:0 10px 30px rgba(0,0,0,.2);--shadow-soft:0 2px 10px rgba(0,0,0,.16);
+    }
+    [data-accent="green"]{--accent-primary:#10b981;--accent-secondary:#34d399;--accent-soft:rgba(16,185,129,.12)}
+    [data-accent="purple"]{--accent-primary:#8b5cf6;--accent-secondary:#a78bfa;--accent-soft:rgba(139,92,246,.12)}
+    [data-accent="orange"]{--accent-primary:#f59e0b;--accent-secondary:#fbbf24;--accent-soft:rgba(245,158,11,.13)}
+    *{box-sizing:border-box} html{background:var(--bg-primary)}
+    body{margin:0;background:var(--bg-primary);color:var(--text-primary);font-family:"DM Sans",sans-serif;transition:background .25s,color .25s}
+    button,input,select,textarea{font:inherit} button{cursor:pointer} button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent-secondary);outline-offset:2px}
+    .app-wrapper{width:100%;min-height:calc(100 * min(var(--vh,1vh),1vh));background:var(--bg-primary);overflow-x:hidden}
+    .app-layout{width:100%;max-width:1540px;margin:0 auto;display:flex;min-height:calc(100 * min(var(--vh,1vh),1vh))}
+    .sidebar{width:258px;flex:0 0 258px;padding:22px 16px;border-right:1px solid var(--border-color);background:var(--bg-card);position:sticky;top:0;height:calc(100 * min(var(--vh,1vh),1vh));display:flex;flex-direction:column}
+    .brand{display:flex;align-items:center;gap:11px;padding:4px 10px 27px}.brand-symbol{width:38px;height:38px;border-radius:12px;background:var(--accent-primary);color:#fff;display:grid;place-items:center;box-shadow:0 7px 16px color-mix(in srgb,var(--accent-primary) 30%,transparent)}.brand-name{font:700 1.05rem Fraunces,serif}.brand-sub{display:block;font-size:.66rem;color:var(--text-secondary);letter-spacing:.08em;margin-top:2px}
+    .nav-group-label{font-size:.65rem;font-weight:700;letter-spacing:.12em;color:var(--text-tertiary);padding:0 12px;margin:8px 0}
+    .side-nav{display:grid;gap:4px}.side-btn{border:0;background:transparent;color:var(--text-secondary);padding:10px 12px;border-radius:11px;display:flex;align-items:center;gap:11px;text-align:left;font-size:.87rem;font-weight:600}.side-btn:hover{background:var(--bg-secondary);color:var(--text-primary)}.side-btn.active{background:var(--accent-soft);color:var(--accent-primary)}.side-btn svg{width:18px;height:18px}
+    .side-bottom{margin-top:auto;border-top:1px solid var(--border-color);padding-top:15px}.connection{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--text-secondary);font-size:.73rem}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--text-tertiary);box-shadow:0 0 0 4px color-mix(in srgb,var(--text-tertiary) 14%,transparent)}.status-dot.connected{background:var(--status-success);box-shadow:0 0 0 4px color-mix(in srgb,var(--status-success) 14%,transparent)}.status-dot.connecting{background:var(--status-warning)}.status-dot.error{background:var(--status-danger)}
+    .main-content{width:100%;min-width:0;padding:24px 32px 48px}.top-header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:25px}.eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.12em;color:var(--accent-primary);margin:0 0 5px}.page-title{font:700 2rem/1.15 Fraunces,serif;margin:0}.page-sub{font-size:.87rem;color:var(--text-secondary);margin:8px 0 0}.header-actions{display:flex;align-items:center;gap:9px}.date-select,.icon-button,.avatar-button{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);border-radius:11px;height:39px;box-shadow:var(--shadow-soft)}.date-select{padding:0 11px;font-size:.8rem}.icon-button{width:39px;display:grid;place-items:center}.icon-button:hover{background:var(--bg-secondary)}.avatar-button{width:39px;background:var(--accent-soft);border-color:transparent;color:var(--accent-primary);font-weight:700}
+    .screen{display:none;animation:enter .26s ease both}.screen.active{display:block}@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(305px,.8fr);gap:18px}.card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:15px;box-shadow:var(--shadow-soft)}.card-pad{padding:18px}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:27px 0 12px}.section-heading h2{font:700 1.16rem Fraunces,serif;margin:0}.section-heading p{color:var(--text-secondary);font-size:.77rem;margin:3px 0 0}
+    .score-panel{padding:22px;background:linear-gradient(135deg,var(--bg-card),var(--accent-soft));min-height:207px}.score-top{display:flex;gap:19px;align-items:center}.score-ring{--score:0;width:130px;height:130px;border-radius:50%;background:conic-gradient(var(--accent-primary) calc(var(--score)*1%),var(--border-color) 0);padding:10px;flex:none}.score-center{height:100%;border-radius:50%;background:var(--bg-card);display:grid;place-items:center;text-align:center}.score-value{font-size:2.15rem;font-weight:700;line-height:1}.score-label{font-size:.68rem;color:var(--text-secondary);margin-top:4px}.score-copy h2{font:700 1.12rem Fraunces,serif;margin:10px 0 6px}.score-copy p{font-size:.81rem;color:var(--text-secondary);line-height:1.55;margin:0}.pill{display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb,var(--status-success) 13%,transparent);color:var(--status-success);padding:5px 8px;border-radius:999px;font-size:.69rem;font-weight:700}
+    .coach-panel{padding:18px;background:var(--bg-elevated);color:var(--text-primary)}.coach-panel h3{font-size:.9rem;margin:0 0 5px}.coach-panel p{color:var(--text-secondary);font-size:.79rem;line-height:1.5;margin:0}.coach-icon{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);color:var(--accent-primary);display:grid;place-items:center;float:left;margin-right:11px}
+    .kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.kpi-card{padding:15px;min-width:0;transition:transform .18s,box-shadow .18s}.kpi-card[data-target]{cursor:pointer}.kpi-card[data-target]:hover{transform:translateY(-2px);box-shadow:var(--shadow)}.kpi-label{display:flex;justify-content:space-between;gap:5px;color:var(--text-secondary);font-size:.72rem}.kpi-icon{color:var(--accent-primary)}.kpi-value{font-size:1.28rem;font-weight:700;margin:12px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi-detail{font-size:.68rem;color:var(--text-secondary);min-height:16px}.mini-chart{height:31px;margin-top:10px}.mini-chart svg{width:100%;height:100%}
+    .analysis-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}.chart-card{padding:18px}.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.card-title{font-size:.93rem;font-weight:700;margin:0}.card-caption{font-size:.72rem;color:var(--text-secondary);margin:4px 0 0}.chart-box{height:205px;margin-top:14px;position:relative}.chart-box svg{width:100%;height:100%;overflow:visible}.chart-empty{height:100%;display:grid;place-items:center;border:1px dashed var(--border-color);border-radius:10px;color:var(--text-secondary);font-size:.78rem;text-align:center;padding:12px}.chart-tooltip{position:absolute;display:none;background:var(--bg-elevated);border:1px solid var(--border-color);padding:7px 9px;border-radius:8px;font-size:.7rem;box-shadow:var(--shadow);pointer-events:none;z-index:3}
+    .donut-layout{display:flex;align-items:center;gap:18px;margin-top:16px}.donut{width:136px;height:136px;border-radius:50%;position:relative;flex:none;background:conic-gradient(var(--border-color) 0 100%)}.donut:after{content:"";position:absolute;inset:22px;border-radius:50%;background:var(--bg-card)}.donut-center{position:absolute;inset:0;z-index:1;display:grid;place-content:center;text-align:center}.donut-center b{font-size:1.05rem}.donut-center span{font-size:.63rem;color:var(--text-secondary)}.legend{display:grid;gap:8px;width:100%}.legend-row{display:flex;justify-content:space-between;gap:7px;font-size:.74rem}.legend-key{display:flex;align-items:center;gap:7px;color:var(--text-secondary)}.legend-dot{width:8px;height:8px;border-radius:50%}
+    .performance-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.performance-card{padding:14px}.performance-card b{font-size:1.1rem;display:block;margin:8px 0 1px}.performance-card span{font-size:.69rem;color:var(--text-secondary)}
+    .range-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.range-btn{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);padding:7px 10px;border-radius:9px;font-size:.72rem}.range-btn.active{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff}.custom-range{display:none;gap:8px;margin-top:12px}.custom-range.show{display:flex}.form-input,.date-input,.select-input{width:100%;color:var(--text-primary);background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:10px 11px;font-size:.82rem}.primary-button,.secondary-button{border-radius:10px;padding:10px 13px;font-weight:700;font-size:.8rem;display:inline-flex;align-items:center;justify-content:center;gap:7px}.primary-button{border:0;background:var(--accent-primary);color:#fff}.secondary-button{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary)}.primary-button:disabled,.secondary-button:disabled{opacity:.55;cursor:wait}
+    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat-card{padding:16px}.stat-card b{display:block;font-size:1.35rem;margin:8px 0 2px}.stat-card span{color:var(--text-secondary);font-size:.72rem}.table-wrap{overflow:auto}.data-table{border-collapse:collapse;width:100%;font-size:.78rem}.data-table th{font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);text-align:left;padding:11px;border-bottom:1px solid var(--border-color)}.data-table td{padding:12px 11px;border-bottom:1px solid var(--border-color);white-space:nowrap}.data-table tr:last-child td{border-bottom:0}
+    .nutrition-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.meal-list{display:grid;gap:10px}.meal{padding:14px;display:flex;justify-content:space-between;gap:14px}.meal-title{font-size:.87rem;margin:0}.meal-detail{font-size:.72rem;color:var(--text-secondary);margin:4px 0 0}.meal-value{text-align:right;font-size:.82rem;font-weight:700}.meal-macros{font-size:.68rem;color:var(--text-secondary);font-weight:400;margin-top:5px}
+    .settings-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.option-list{display:grid;gap:9px}.option{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);border-radius:11px;padding:12px;display:flex;align-items:center;justify-content:space-between;text-align:left}.option.active{border-color:var(--accent-primary);background:var(--accent-soft)}.option small{display:block;color:var(--text-secondary);margin-top:3px}.swatch{width:20px;height:20px;border-radius:50%;background:var(--swatch);box-shadow:inset 0 0 0 3px rgba(255,255,255,.5)}.theme-preview{padding:16px;background:var(--bg-secondary);border-radius:12px}.theme-preview-top{display:flex;justify-content:space-between}.theme-preview-bars{display:grid;gap:7px;margin-top:15px}.theme-preview-bar{height:10px;border-radius:5px;background:var(--border-color)}.theme-preview-bar.accent{background:var(--accent-primary);width:68%}
+    .empty-state,.error-state{padding:20px;border:1px dashed var(--border-color);border-radius:12px;text-align:center;color:var(--text-secondary);font-size:.8rem}.error-state{border-color:color-mix(in srgb,var(--status-danger) 45%,var(--border-color));color:var(--status-danger)}.skeleton{height:100%;min-height:75px;border-radius:10px;background:linear-gradient(90deg,var(--bg-secondary),var(--bg-elevated),var(--bg-secondary));background-size:200% 100%;animation:shimmer 1.2s infinite}@keyframes shimmer{to{background-position:-200% 0}}
+    .mobile-nav{display:none}.sheet-backdrop{display:none;position:fixed;z-index:60;inset:0;background:rgba(15,23,42,.56);align-items:flex-end}.sheet-backdrop.show{display:flex}.sheet{width:100%;max-width:680px;margin:0 auto;background:var(--bg-card);border-radius:20px 20px 0 0;padding:17px 18px calc(20px + env(safe-area-inset-bottom));max-height:88%;overflow:auto}.sheet-handle{height:4px;width:42px;border-radius:99px;background:var(--border-color);margin:0 auto 14px}.sheet-title{font:700 1.28rem Fraunces,serif;margin:0}.sheet-sub{font-size:.78rem;color:var(--text-secondary);margin:5px 0 15px}.quick-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quick-option{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);border-radius:12px;padding:14px;text-align:left}.quick-option svg{color:var(--accent-primary);margin-bottom:9px}.quick-option b{display:block;font-size:.82rem}.quick-option span{display:block;font-size:.69rem;color:var(--text-secondary);margin-top:3px}.form-label{display:block;font-size:.75rem;font-weight:700;margin:13px 0 6px}.choice-row{display:flex;gap:7px}.choice{flex:1;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);padding:9px;border-radius:9px}.choice.selected{border-color:var(--accent-primary);background:var(--accent-soft);color:var(--accent-primary)}.toast{position:fixed;z-index:100;left:50%;bottom:28px;transform:translate(-50%,18px);opacity:0;background:var(--text-primary);color:var(--bg-card);padding:10px 14px;border-radius:10px;font-size:.77rem;box-shadow:var(--shadow);transition:.2s;white-space:nowrap}.toast.show{opacity:1;transform:translate(-50%,0)}
+    @media(max-width:1180px) and (min-width:768px){.sidebar{width:72px;flex-basis:72px;padding:20px 10px}.brand{padding:3px 7px 24px}.brand-name,.nav-group-label,.side-btn span,.connection span{display:none}.side-btn{justify-content:center;padding:11px}.side-bottom{display:grid;place-items:center}.main-content{padding:24px}.kpi-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:767px){.app-layout{display:block}.sidebar{display:none}.main-content{padding:18px 14px 94px}.top-header{margin-bottom:19px}.page-title{font-size:1.6rem}.header-actions{gap:6px}.date-select{max-width:91px;padding:0 5px}.header-actions .icon-button:first-of-type{display:none}.dashboard-grid,.analysis-grid,.settings-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:1fr 1fr;gap:9px}.kpi-card:last-child{grid-column:span 2}.score-panel{padding:17px}.score-ring{width:112px;height:112px}.score-top{gap:14px}.performance-grid{grid-template-columns:1fr 1fr}.stat-grid,.nutrition-summary{grid-template-columns:1fr 1fr;gap:9px}.donut-layout{gap:13px}.donut{width:116px;height:116px}.donut:after{inset:19px}.chart-box{height:185px}.mobile-nav{position:fixed;z-index:40;bottom:0;left:0;width:100%;display:grid;grid-template-columns:repeat(5,1fr);align-items:center;padding:7px 5px calc(7px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--border-color)}.mobile-nav button{border:0;background:transparent;color:var(--text-secondary);font-size:.59rem;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px}.mobile-nav button.active{color:var(--accent-primary);font-weight:700}.mobile-nav .add-nav{width:47px;height:47px;border-radius:15px;background:var(--accent-primary);color:#fff;display:grid;place-items:center;margin-top:-23px;justify-self:center;box-shadow:0 8px 20px color-mix(in srgb,var(--accent-primary) 38%,transparent)}.mobile-nav svg{width:18px;height:18px}.data-table th:nth-child(n+5),.data-table td:nth-child(n+5){display:none}.custom-range{flex-wrap:wrap}.custom-range .date-input{width:calc(50% - 4px)}.custom-range .primary-button{width:100%}}
+  </style>
+  </head>
+ <body data-template-id="__page-root">
+  <div class="app-wrapper">
+   <div class="app-layout">
+    <aside class="sidebar" aria-label="主要導覽">
+     <div class="brand">
+      <div class="brand-symbol">
+       <i data-lucide="heart-pulse"></i>
+      </div>
+      <div>
+       <div class="brand-name">
+        健康陪跑
+       </div><span class="brand-sub">HEALTH COMPANION</span>
+      </div>
+     </div>
+     <div class="nav-group-label">
+      HEALTH OVERVIEW
+     </div>
+     <nav class="side-nav"><button type="button" class="side-btn active" data-screen="dashboard-screen"><i data-lucide="layout-dashboard"></i><span data-template-id="nav-dashboard" class="canva-text">總覽</span></button> <button type="button" class="side-btn" data-screen="body-screen"><i data-lucide="activity"></i><span data-template-id="nav-body" class="canva-text">身體數據</span></button> <button type="button" class="side-btn" data-screen="training-screen"><i data-lucide="dumbbell"></i><span data-template-id="nav-training" class="canva-text">訓練</span></button> <button type="button" class="side-btn" data-screen="sleep-screen"><i data-lucide="moon"></i><span data-template-id="nav-sleep" class="canva-text">睡眠</span></button> <button type="button" class="side-btn" data-screen="activity-screen"><i data-lucide="footprints"></i><span data-template-id="nav-activity" class="canva-text">活動</span></button> <button type="button" class="side-btn" data-screen="nutrition-screen"><i data-lucide="utensils"></i><span data-template-id="nav-nutrition" class="canva-text">飲食</span></button>
+     </nav>
+     <div class="nav-group-label" style="margin-top:19px">
+      INSIGHTS
+     </div>
+     <nav class="side-nav"><button type="button" class="side-btn" data-screen="report-screen"><i data-lucide="file-chart-column"></i><span data-template-id="nav-report" class="canva-text">健康報告</span></button> <button type="button" class="side-btn" data-screen="settings-screen"><i data-lucide="settings-2"></i><span data-template-id="nav-settings" class="canva-text">設定</span></button>
+     </nav>
+     <div class="side-bottom">
+      <div class="connection">
+       <i id="sync-dot" class="status-dot connecting"></i><span id="connection-label">連線中</span>
+      </div>
+     </div>
+    </aside>
+    <main class="main-content">
+     <header class="top-header">
+      <div>
+       <p class="eyebrow" data-template-id="header-eyebrow">HEALTH PORTFOLIO</p>
+       <h1 id="header-greeting" class="page-title">嗨，—</h1>
+       <p id="header-date" class="page-sub">—</p>
+      </div>
+      <div class="header-actions"><select id="global-range" class="date-select" aria-label="全域時間區間"> <option value="7">近 7 天</option><option value="30" selected>近 30 天</option><option value="90">近 90 天</option><option value="year">今年</option> </select> <button id="notification-button" class="icon-button" type="button" aria-label="通知"><i data-lucide="bell"></i></button> <button id="header-theme-toggle" class="icon-button" type="button" aria-label="切換深色模式"><i data-lucide="moon"></i></button> <button id="header-avatar" class="avatar-button" type="button" aria-label="我的設定">—</button>
+      </div>
+     </header>
+     <section id="dashboard-screen" class="screen active">
+      <div id="dashboard-error"></div>
+      <div class="dashboard-grid">
+       <div class="card score-panel">
+        <div class="score-top">
+         <div id="health-ring" class="score-ring">
+          <div class="score-center">
+           <b id="health-score" class="score-value">—</b><span data-template-id="score-label" class="score-label canva-text">健康分數</span>
+          </div>
+         </div>
+         <div class="score-copy"><span class="pill"><i data-lucide="sparkles" style="width:13px"></i><span id="score-status">等待同步</span></span>
+          <h2 id="today-state">今天的健康狀態</h2>
+          <p id="today-advice">資料同步後，健康陪跑將協助你掌握今天的整體狀態。</p>
+         </div>
+        </div>
+       </div>
+       <aside class="card coach-panel">
+        <div class="coach-icon">
+         <i data-lucide="heart-handshake" style="width:18px"></i>
+        </div>
+        <h3 data-template-id="coach-title" class="canva-text">健康陪跑</h3>
+        <p id="coach-advice">AI 健康分析尚未啟用</p>
+       </aside>
+      </div>
+      <div class="section-heading">
+       <div>
+        <h2 data-template-id="kpi-title" class="canva-text">目前健康狀態</h2>
+        <p data-template-id="kpi-subtitle" class="canva-text">用一眼看懂的指標掌握你的健康組合</p>
+       </div>
+      </div>
+      <div class="kpi-grid">
+       <article class="card kpi-card" data-target="dashboard-screen">
+        <div class="kpi-label">
+         <span data-template-id="kpi-health" class="canva-text">健康分數</span><i class="kpi-icon" data-lucide="heart-pulse" style="width:15px"></i>
+        </div>
+        <div id="kpi-score" class="kpi-value">
+         —
+        </div>
+        <div id="kpi-score-detail" class="kpi-detail">
+         等待同步
+        </div>
+        <div id="kpi-score-chart" class="mini-chart"></div>
+       </article>
+       <article class="card kpi-card" data-target="body-screen">
+        <div class="kpi-label">
+         <span data-template-id="kpi-weight" class="canva-text">體重</span><i class="kpi-icon" data-lucide="scale" style="width:15px"></i>
+        </div>
+        <div id="kpi-weight-value" class="kpi-value">
+         —
+        </div>
+        <div id="kpi-weight-detail" class="kpi-detail">
+         尚無資料
+        </div>
+        <div id="kpi-weight-chart" class="mini-chart"></div>
+       </article>
+       <article class="card kpi-card" data-target="body-screen">
+        <div class="kpi-label">
+         <span data-template-id="kpi-fat" class="canva-text">體脂率</span><i class="kpi-icon" data-lucide="circle-gauge" style="width:15px"></i>
+        </div>
+        <div id="kpi-fat-value" class="kpi-value">
+         —
+        </div>
+        <div id="kpi-fat-detail" class="kpi-detail">
+         尚無資料
+        </div>
+        <div id="kpi-fat-chart" class="mini-chart"></div>
+       </article>
+       <article class="card kpi-card" data-target="sleep-screen">
+        <div class="kpi-label">
+         <span data-template-id="kpi-sleep" class="canva-text">睡眠</span><i class="kpi-icon" data-lucide="moon" style="width:15px"></i>
+        </div>
+        <div id="kpi-sleep-value" class="kpi-value">
+         —
+        </div>
+        <div id="kpi-sleep-detail" class="kpi-detail">
+         尚無資料
+        </div>
+        <div id="kpi-sleep-chart" class="mini-chart"></div>
+       </article>
+       <article class="card kpi-card" data-target="training-screen">
+        <div class="kpi-label">
+         <span data-template-id="kpi-training" class="canva-text">訓練表現</span><i class="kpi-icon" data-lucide="dumbbell" style="width:15px"></i>
+        </div>
+        <div id="kpi-training-value" class="kpi-value">
+         —
+        </div>
+        <div id="kpi-training-detail" class="kpi-detail">
+         尚無資料
+        </div>
+        <div id="kpi-training-chart" class="mini-chart"></div>
+       </article>
+      </div>
+      <div class="analysis-grid">
+       <section>
+        <div class="section-heading">
+         <div>
+          <h2 data-template-id="trend-title" class="canva-text">近期變化</h2>
+          <p data-template-id="trend-subtitle" class="canva-text">追蹤身體數據，觀察長期趨勢</p>
+         </div><button type="button" class="secondary-button" data-screen-link="body-screen">查看明細 <i data-lucide="arrow-up-right" style="width:14px"></i></button>
+        </div>
+        <article class="card chart-card">
+         <div class="card-top">
+          <div>
+           <h3 data-template-id="weight-chart-title" class="card-title canva-text">體重趨勢</h3>
+           <p id="weight-chart-caption" class="card-caption">等待同步</p>
+          </div><span id="weight-change-badge" class="pill">—</span>
+         </div>
+         <div id="dashboard-weight-chart" class="chart-box">
+          <div class="skeleton"></div>
+         </div>
+        </article>
+       </section>
+       <section>
+        <div class="section-heading">
+         <div>
+          <h2 data-template-id="composition-title" class="canva-text">身體組成</h2>
+          <p data-template-id="composition-subtitle" class="canva-text">以目前可取得的身體組成資料呈現</p>
+         </div>
+        </div>
+        <article class="card chart-card">
+         <div class="donut-layout">
+          <div id="composition-donut" class="donut">
+           <div class="donut-center">
+            <b id="composition-weight">—</b><span data-template-id="composition-center-label" class="canva-text">目前體重</span>
+           </div>
+          </div>
+          <div id="composition-legend" class="legend">
+           <div class="chart-empty">
+            尚無資料
+           </div>
+          </div>
+         </div>
+        </article>
+       </section>
+      </div>
+      <div class="section-heading">
+       <div>
+        <h2 data-template-id="performance-title" class="canva-text">本週健康績效</h2>
+        <p data-template-id="performance-subtitle" class="canva-text">像檢視投資績效一樣，快速檢視健康投入</p>
+       </div>
+      </div>
+      <section class="performance-grid">
+       <article class="card performance-card">
+        <span data-template-id="perf-sets" class="canva-text">本週訓練組數</span><b id="perf-sets">—</b><span data-template-id="perf-sets-note" class="canva-text">期間累積</span>
+        <div id="perf-sets-chart" class="mini-chart"></div>
+       </article>
+       <article class="card performance-card">
+        <span data-template-id="perf-volume" class="canva-text">總訓練量</span><b id="perf-volume">—</b><span data-template-id="perf-volume-note" class="canva-text">期間累積</span>
+        <div id="perf-volume-chart" class="mini-chart"></div>
+       </article>
+       <article class="card performance-card">
+        <span data-template-id="perf-steps" class="canva-text">每日平均步數</span><b id="perf-steps">—</b><span data-template-id="perf-steps-note" class="canva-text">期間平均</span>
+        <div id="perf-steps-chart" class="mini-chart"></div>
+       </article>
+       <article class="card performance-card">
+        <span data-template-id="perf-calories" class="canva-text">平均活動熱量</span><b id="perf-calories">—</b><span data-template-id="perf-calories-note" class="canva-text">每日平均</span>
+        <div id="perf-calories-chart" class="mini-chart"></div>
+       </article>
+       <article class="card performance-card">
+        <span data-template-id="perf-sleep" class="canva-text">平均睡眠</span><b id="perf-sleep">—</b><span data-template-id="perf-sleep-note" class="canva-text">期間平均</span>
+        <div id="perf-sleep-chart" class="mini-chart"></div>
+       </article>
+       <article class="card performance-card">
+        <span data-template-id="perf-sleep-score" class="canva-text">平均睡眠分數</span><b id="perf-sleep-score">—</b><span data-template-id="perf-sleep-score-note" class="canva-text">期間平均</span>
+        <div id="perf-sleep-score-chart" class="mini-chart"></div>
+       </article>
+      </section>
+     </section>
+     <section id="body-screen" class="screen">
+      <p class="eyebrow" data-template-id="body-eyebrow">BODY METRICS</p>
+      <h2 class="page-title" data-template-id="body-title">身體數據</h2>
+      <p class="page-sub" data-template-id="body-subtitle">以趨勢而非單日數字，了解身體正在發生的改變。</p>
+      <div class="section-heading">
+       <div class="range-row" data-range-area="body">
+        <button class="range-btn" data-days="7">近 7 天</button><button class="range-btn active" data-days="30">近 30 天</button><button class="range-btn" data-days="90">近 90 天</button><button class="range-btn" data-days="custom">自訂日期</button>
+       </div>
+      </div>
+      <div id="body-custom-range" class="custom-range">
+       <input id="body-start" class="date-input" type="date" aria-label="開始日期"><input id="body-end" class="date-input" type="date" aria-label="結束日期"><button id="apply-body-range" class="primary-button" type="button">套用</button>
+      </div>
+      <div class="stat-grid">
+       <article class="card stat-card">
+        <span data-template-id="body-current-label" class="canva-text">目前體重</span><b id="body-current">—</b><span id="body-current-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="body-fat-label" class="canva-text">體脂率</span><b id="body-fat">—</b><span id="body-fat-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="body-bmi-label" class="canva-text">BMI</span><b id="body-bmi">—</b><span id="body-bmi-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="body-muscle-label" class="canva-text">肌肉量</span><b id="body-muscle">—</b><span id="body-muscle-note">尚無資料</span>
+       </article>
+      </div>
+      <div class="analysis-grid">
+       <article class="card chart-card">
+        <div class="card-top">
+         <div>
+          <h3 data-template-id="body-trend-title" class="card-title canva-text">身體數據趨勢</h3>
+          <p data-template-id="body-trend-subtitle" class="card-caption canva-text">切換不同指標，檢視近期資料走勢</p>
+         </div><select id="body-metric-select" class="select-input" style="width:auto"><option value="weight">體重</option><option value="bodyFat">體脂率</option><option value="bmi">BMI</option><option value="muscleMass">肌肉量</option><option value="skeletalMuscle">骨骼肌</option><option value="water">水分</option></select>
+        </div>
+        <div id="body-trend-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+       <article class="card chart-card">
+        <h3 data-template-id="body-composition-title" class="card-title canva-text">身體組成配置</h3>
+        <div class="donut-layout">
+         <div id="body-donut" class="donut">
+          <div class="donut-center">
+           <b id="body-donut-value">—</b><span data-template-id="composition-center-label" class="canva-text">目前體重</span>
+          </div>
+         </div>
+         <div id="body-legend" class="legend">
+          <div class="chart-empty">
+           尚無資料
+          </div>
+         </div>
+        </div>
+       </article>
+      </div>
+     </section>
+     <section id="training-screen" class="screen">
+      <div id="training-overview">
+       <p class="eyebrow" data-template-id="training-eyebrow">TRAINING ANALYTICS</p>
+       <h2 class="page-title" data-template-id="training-title">訓練分析</h2>
+       <p class="page-sub" data-template-id="training-subtitle">檢視訓練投入、強度與肌群配置。</p>
+       <div class="section-heading">
+        <div class="range-row" data-range-area="training">
+         <button class="range-btn active" data-days="7">近 7 天</button><button class="range-btn" data-days="30">近 30 天</button><button class="range-btn" data-days="90">近 90 天</button>
+        </div><button id="start-workout" class="primary-button" type="button"><i data-lucide="play" style="width:15px"></i><span data-template-id="start-workout-label" class="canva-text">開始訓練</span></button>
+       </div>
+       <div class="stat-grid">
+        <article class="card stat-card">
+         <span data-template-id="training-total-sets" class="canva-text">本期總訓練組數</span><b id="training-sets">—</b><span data-template-id="training-period-note" class="canva-text">所選期間</span>
+        </article>
+        <article class="card stat-card">
+         <span data-template-id="training-total-volume" class="canva-text">總訓練量</span><b id="training-volume">—</b><span data-template-id="training-period-note" class="canva-text">所選期間</span>
+        </article>
+        <article class="card stat-card">
+         <span data-template-id="training-sessions" class="canva-text">訓練次數</span><b id="training-sessions">—</b><span data-template-id="training-period-note" class="canva-text">所選期間</span>
+        </article>
+        <article class="card stat-card">
+         <span data-template-id="training-intensity" class="canva-text">平均訓練強度</span><b id="training-intensity">—</b><span data-template-id="training-period-note" class="canva-text">所選期間</span>
+        </article>
+       </div>
+       <div class="analysis-grid">
+        <article class="card chart-card">
+         <h3 data-template-id="muscle-distribution-title" class="card-title canva-text">部位訓練比例</h3>
+         <div class="donut-layout">
+          <div id="muscle-donut" class="donut">
+           <div class="donut-center">
+            <b id="muscle-total">—</b><span data-template-id="sets-label" class="canva-text">總組數</span>
+           </div>
+          </div>
+          <div id="muscle-legend" class="legend">
+           <div class="chart-empty">
+            尚無資料
+           </div>
+          </div>
+         </div>
+        </article>
+        <article class="card chart-card">
+         <h3 data-template-id="weekly-volume-title" class="card-title canva-text">每週訓練量</h3>
+         <div id="training-volume-chart" class="chart-box">
+          <div class="skeleton"></div>
+         </div>
+        </article>
+       </div>
+       <div class="section-heading">
+        <div>
+         <h2 data-template-id="training-details-title" class="canva-text">訓練明細</h2>
+         <p data-template-id="training-details-subtitle" class="canva-text">依既有資料來源顯示已同步的訓練紀錄</p>
+        </div>
+       </div>
+       <article class="card table-wrap">
+        <table class="data-table">
+         <thead>
+          <tr>
+           <th>日期</th>
+           <th>部位</th>
+           <th>動作</th>
+           <th>組數</th>
+           <th>重量</th>
+           <th>次數</th>
+           <th>總訓練量</th>
+          </tr>
+         </thead>
+         <tbody id="training-table">
+          <tr>
+           <td colspan="7">等待同步</td>
+          </tr>
+         </tbody>
+        </table>
+       </article>
+      </div>
+      <section id="workout-session" class="screen"><button id="back-training" class="secondary-button" type="button"><i data-lucide="arrow-left" style="width:15px"></i>返回分析</button>
+       <p class="eyebrow" style="margin-top:18px" data-template-id="session-eyebrow">WORKOUT SESSION</p>
+       <h2 class="page-title" data-template-id="session-title">開始今天的訓練</h2>
+       <article class="card card-pad" style="margin-top:17px">
+        <label class="form-label" data-template-id="exercise-label" for="exercise-select">選擇訓練動作</label><select id="exercise-select" class="select-input"></select>
+        <div id="exercise-session-list"></div><button id="add-exercise" class="secondary-button" style="margin-top:13px" type="button">＋ 新增動作</button>
+       </article><button id="finish-workout" class="primary-button" style="margin-top:13px;width:100%" type="button" data-template-id="finish-workout-label">完成本次訓練</button>
+      </section>
+     </section>
+     <section id="sleep-screen" class="screen">
+      <p class="eyebrow" data-template-id="sleep-eyebrow">SLEEP ANALYTICS</p>
+      <h2 class="page-title" data-template-id="sleep-title">睡眠分析</h2>
+      <p class="page-sub" data-template-id="sleep-subtitle">檢視恢復品質與睡眠紀律的近期變化。</p>
+      <div class="stat-grid" style="margin-top:20px">
+       <article class="card stat-card">
+        <span data-template-id="sleep-last-label" class="canva-text">最近睡眠時間</span><b id="sleep-last">—</b><span id="sleep-last-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="sleep-score-label" class="canva-text">睡眠分數</span><b id="sleep-score">—</b><span id="sleep-score-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="sleep-average7-label" class="canva-text">近 7 日平均</span><b id="sleep-average7">—</b><span data-template-id="days-label" class="canva-text">期間平均</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="sleep-average30-label" class="canva-text">近 30 日平均</span><b id="sleep-average30">—</b><span data-template-id="days-label" class="canva-text">期間平均</span>
+       </article>
+      </div>
+      <div class="analysis-grid">
+       <article class="card chart-card">
+        <h3 data-template-id="sleep-duration-title" class="card-title canva-text">睡眠時間趨勢</h3>
+        <div id="sleep-duration-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+       <article class="card chart-card">
+        <h3 data-template-id="sleep-score-trend-title" class="card-title canva-text">睡眠分數趨勢</h3>
+        <div id="sleep-score-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+      </div>
+     </section>
+     <section id="activity-screen" class="screen">
+      <p class="eyebrow" data-template-id="activity-eyebrow">ACTIVITY ANALYTICS</p>
+      <h2 class="page-title" data-template-id="activity-title">活動分析</h2>
+      <p class="page-sub" data-template-id="activity-subtitle">掌握日常活動量與熱量消耗趨勢。</p>
+      <div class="stat-grid" style="margin-top:20px">
+       <article class="card stat-card">
+        <span data-template-id="activity-steps-label" class="canva-text">步數</span><b id="activity-steps">—</b><span id="activity-steps-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="activity-active-label" class="canva-text">活動熱量</span><b id="activity-active">—</b><span id="activity-active-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="activity-total-label" class="canva-text">總消耗熱量</span><b id="activity-total">—</b><span id="activity-total-note">尚無資料</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="activity-time-label" class="canva-text">活動時間</span><b id="activity-time">—</b><span id="activity-time-note">尚無資料</span>
+       </article>
+      </div>
+      <div class="analysis-grid">
+       <article class="card chart-card">
+        <h3 data-template-id="activity-steps-chart-title" class="card-title canva-text">每日步數</h3>
+        <div id="activity-steps-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+       <article class="card chart-card">
+        <h3 data-template-id="activity-calorie-chart-title" class="card-title canva-text">每日熱量消耗</h3>
+        <div id="activity-calorie-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+      </div>
+     </section>
+     <section id="nutrition-screen" class="screen">
+      <p class="eyebrow" data-template-id="nutrition-eyebrow">NUTRITION LOG</p>
+      <h2 class="page-title" data-template-id="nutrition-title">飲食紀錄</h2>
+      <p class="page-sub" data-template-id="nutrition-subtitle">查看今天已同步的營養攝取與餐點內容。</p>
+      <div class="nutrition-summary" style="margin-top:20px">
+       <article class="card stat-card">
+        <span data-template-id="nutrition-calories-label" class="canva-text">今日總熱量</span><b id="nutrition-calories">—</b><span data-template-id="today-label" class="canva-text">今日累積</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="nutrition-protein-label" class="canva-text">蛋白質</span><b id="nutrition-protein">—</b><span data-template-id="today-label" class="canva-text">今日累積</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="nutrition-carbs-label" class="canva-text">碳水</span><b id="nutrition-carbs">—</b><span data-template-id="today-label" class="canva-text">今日累積</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="nutrition-fat-label" class="canva-text">脂肪</span><b id="nutrition-fat">—</b><span data-template-id="today-label" class="canva-text">今日累積</span>
+       </article>
+      </div>
+      <div class="section-heading">
+       <div>
+        <h2 data-template-id="meal-list-title" class="canva-text">今天吃了什麼</h2>
+        <p data-template-id="meal-list-subtitle" class="canva-text">早餐、午餐、晚餐與點心紀錄</p>
+       </div><button id="add-meal" class="primary-button" type="button"><i data-lucide="plus" style="width:15px"></i><span data-template-id="add-meal-label" class="canva-text">新增飲食</span></button>
+      </div>
+      <div id="meal-list" class="meal-list">
+       <div class="skeleton"></div>
+      </div>
+     </section>
+     <section id="report-screen" class="screen">
+      <p class="eyebrow" data-template-id="report-eyebrow">WEEKLY EXECUTIVE SUMMARY</p>
+      <h2 class="page-title" data-template-id="report-title">每週健康報告</h2>
+      <p id="report-period" class="page-sub">本週健康摘要</p>
+      <div class="stat-grid" style="margin-top:20px">
+       <article class="card stat-card">
+        <span data-template-id="report-score-label" class="canva-text">本週健康分數</span><b id="report-score">—</b><span data-template-id="report-week-label" class="canva-text">本週摘要</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="report-weight-label" class="canva-text">體重變化</span><b id="report-weight">—</b><span data-template-id="report-week-label" class="canva-text">本週摘要</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="report-training-label" class="canva-text">訓練量</span><b id="report-training">—</b><span data-template-id="report-week-label" class="canva-text">本週摘要</span>
+       </article>
+       <article class="card stat-card">
+        <span data-template-id="report-sleep-label" class="canva-text">平均睡眠</span><b id="report-sleep">—</b><span data-template-id="report-week-label" class="canva-text">本週摘要</span>
+       </article>
+      </div>
+      <div class="analysis-grid">
+       <article class="card chart-card">
+        <h3 data-template-id="report-weight-chart-title" class="card-title canva-text">本週體重走勢</h3>
+        <div id="report-weight-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+       <article class="card chart-card">
+        <h3 data-template-id="report-training-chart-title" class="card-title canva-text">每日訓練組數</h3>
+        <div id="report-training-chart" class="chart-box">
+         <div class="skeleton"></div>
+        </div>
+       </article>
+      </div>
+      <article class="card card-pad" style="margin-top:18px">
+       <h3 data-template-id="report-coach-title" class="card-title canva-text">健康陪跑建議</h3>
+       <p id="report-coach-copy" class="page-sub" style="line-height:1.6">AI 健康分析尚未啟用</p>
+      </article>
+     </section>
+     <section id="settings-screen" class="screen">
+      <p class="eyebrow" data-template-id="settings-eyebrow">PREFERENCES</p>
+      <h2 class="page-title" data-template-id="settings-title">設定</h2>
+      <p class="page-sub" data-template-id="settings-subtitle">自訂你偏好的健康儀表板外觀。</p>
+      <div class="settings-grid" style="margin-top:20px">
+       <article class="card card-pad">
+        <h3 data-template-id="appearance-title" class="card-title canva-text">外觀</h3>
+        <p data-template-id="appearance-subtitle" class="card-caption canva-text">選擇顯示模式與主要主題色。</p><label class="form-label" data-template-id="mode-label">外觀模式</label>
+        <div id="theme-mode-options" class="option-list">
+         <button class="option" data-mode="system" type="button"><span><b>跟隨系統</b><small>依照裝置外觀設定</small></span><i data-lucide="monitor" style="width:17px"></i></button><button class="option" data-mode="light" type="button"><span><b>淺色模式</b><small>明亮清晰的介面</small></span><i data-lucide="sun" style="width:17px"></i></button><button class="option" data-mode="dark" type="button"><span><b>深色模式</b><small>低光環境更舒適</small></span><i data-lucide="moon" style="width:17px"></i></button>
+        </div><label class="form-label" data-template-id="accent-label">主題色</label>
+        <div id="accent-options" class="option-list">
+         <button class="option" data-accent-option="blue" type="button"><span><b>Blue</b><small>#2563EB</small></span><i class="swatch" style="--swatch:#2563EB"></i></button><button class="option" data-accent-option="green" type="button"><span><b>Green</b><small>#10B981</small></span><i class="swatch" style="--swatch:#10B981"></i></button><button class="option" data-accent-option="purple" type="button"><span><b>Purple</b><small>#8B5CF6</small></span><i class="swatch" style="--swatch:#8B5CF6"></i></button><button class="option" data-accent-option="orange" type="button"><span><b>Orange</b><small>#F59E0B</small></span><i class="swatch" style="--swatch:#F59E0B"></i></button>
+        </div><button id="apply-theme" type="button" class="primary-button" style="margin-top:16px;width:100%" data-template-id="apply-theme-label">立即套用</button>
+       </article>
+       <article class="card card-pad">
+        <h3 data-template-id="theme-preview-title" class="card-title canva-text">Theme Preview</h3>
+        <p data-template-id="theme-preview-subtitle" class="card-caption canva-text">預覽目前套用的介面風格。</p>
+        <div class="theme-preview">
+         <div class="theme-preview-top">
+          <div>
+           <b>健康總覽</b><br><small style="color:var(--text-secondary)">Theme Preview</small>
+          </div><span class="pill">已套用</span>
+         </div>
+         <div class="theme-preview-bars">
+          <div class="theme-preview-bar accent"></div>
+          <div class="theme-preview-bar"></div>
+          <div class="theme-preview-bar"></div>
+         </div>
+        </div>
+        <div class="section-heading" style="margin-top:22px">
+         <div>
+          <h2 data-template-id="connection-title" class="canva-text">資料連線</h2>
+         </div>
+        </div>
+        <div class="option">
+         <span><b>Google Sheets</b><small id="technical-api-status">連線中</small></span><i id="settings-status-dot" class="status-dot connecting"></i>
+        </div><button id="reconnect-button" class="secondary-button" type="button" style="margin-top:10px;width:100%" data-template-id="reconnect-label">重新整理資料</button>
+        <button id="logout-button" class="secondary-button" type="button" style="margin-top:10px;width:100%">登出 Google 帳號</button>
+       </article>
+      </div>
+     </section>
+    </main>
+   </div>
+   <nav class="mobile-nav" aria-label="行動版導覽"><button class="mobile-nav-btn active" data-screen="dashboard-screen" type="button"><i data-lucide="house"></i><span>總覽</span></button> <button class="mobile-nav-btn" data-screen="body-screen" type="button"><i data-lucide="activity"></i><span>數據</span></button> <button id="quick-open" class="add-nav" type="button" aria-label="快速新增"><i data-lucide="plus"></i></button> <button class="mobile-nav-btn" data-screen="nutrition-screen" type="button"><i data-lucide="clipboard-list"></i><span>紀錄</span></button> <button class="mobile-nav-btn" data-screen="settings-screen" type="button"><i data-lucide="user-round"></i><span>我的</span></button>
+   </nav>
+  </div>
+  <div id="sheet-backdrop" class="sheet-backdrop" role="dialog" aria-modal="true" aria-label="快速新增">
+   <div class="sheet">
+    <div class="sheet-handle"></div>
+    <section id="quick-sheet">
+     <h2 data-template-id="quick-sheet-title" class="sheet-title canva-text">快速新增</h2>
+     <p data-template-id="quick-sheet-subtitle" class="sheet-sub canva-text">補上一筆紀錄，讓健康趨勢更完整。</p>
+     <div class="quick-options"><button class="quick-option" data-action="weight" type="button"><i data-lucide="scale"></i><b data-template-id="quick-weight-title" class="canva-text">新增體重</b><span data-template-id="quick-weight-copy" class="canva-text">更新今天的體重</span></button> <button class="quick-option" data-action="bodyfat" type="button"><i data-lucide="circle-gauge"></i><b data-template-id="quick-fat-title" class="canva-text">新增體脂</b><span data-template-id="quick-fat-copy" class="canva-text">記錄最新體脂數據</span></button> <button class="quick-option" data-action="workout" type="button"><i data-lucide="dumbbell"></i><b data-template-id="quick-workout-title" class="canva-text">新增訓練</b><span data-template-id="quick-workout-copy" class="canva-text">開始一段新的訓練</span></button> <button class="quick-option" data-action="meal" type="button"><i data-lucide="utensils"></i><b data-template-id="quick-meal-title" class="canva-text">新增飲食</b><span data-template-id="quick-meal-copy" class="canva-text">補上今天的一餐</span></button> <button class="quick-option" data-action="checkin" type="button"><i data-lucide="heart-handshake"></i><b data-template-id="quick-checkin-title" class="canva-text">新增身體狀態</b><span data-template-id="quick-checkin-copy" class="canva-text">告訴健康陪跑今天的感受</span></button>
+     </div>
+    </section>
+    <form id="weight-form" style="display:none">
+     <h2 data-template-id="weight-sheet-title" class="sheet-title canva-text">新增身體數據</h2><label class="form-label" for="weight-input" data-template-id="weight-input-label">體重（kg）</label><input id="weight-input" class="form-input" type="number" min="0" step=".1" required><label class="form-label" for="fat-input" data-template-id="fat-input-label">體脂率（%，可留白）</label><input id="fat-input" class="form-input" type="number" min="0" step=".1"><button id="weight-save" class="primary-button" style="width:100%;margin-top:16px" type="submit" data-template-id="weight-save-label">儲存身體數據</button>
+    </form>
+    <form id="meal-form" style="display:none">
+     <h2 data-template-id="meal-sheet-title" class="sheet-title canva-text">新增一餐</h2><label class="form-label" for="meal-type">餐別</label><select id="meal-type" class="select-input"><option>早餐</option><option>午餐</option><option>晚餐</option><option>點心</option></select><label class="form-label" for="meal-food">食物名稱</label><input id="meal-food" class="form-input" required><label class="form-label" for="meal-calories">熱量（kcal）</label><input id="meal-calories" class="form-input" type="number" min="0" required>
+     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div>
+       <label class="form-label" for="meal-protein">蛋白質</label><input id="meal-protein" class="form-input" type="number" min="0">
+      </div>
+      <div>
+       <label class="form-label" for="meal-carbs">碳水</label><input id="meal-carbs" class="form-input" type="number" min="0">
+      </div>
+      <div>
+       <label class="form-label" for="meal-fat">脂肪</label><input id="meal-fat" class="form-input" type="number" min="0">
+      </div>
+     </div><button id="meal-save" class="primary-button" style="width:100%;margin-top:16px" type="submit" data-template-id="meal-save-label">加入今日飲食</button>
+    </form>
+    <form id="checkin-form" style="display:none">
+     <h2 data-template-id="checkin-sheet-title" class="sheet-title canva-text">今日身體狀態</h2><label class="form-label" data-template-id="energy-label">精神狀態</label>
+     <div class="choice-row" id="energy-options">
+      <button class="choice" data-score="1" type="button">低</button><button class="choice" data-score="2" type="button">普通</button><button class="choice selected" data-score="3" type="button">良好</button><button class="choice" data-score="4" type="button">很好</button>
+     </div><label class="form-label" data-template-id="fatigue-label">肌肉疲勞</label>
+     <div class="choice-row" id="fatigue-options">
+      <button class="choice" data-score="1" type="button">低</button><button class="choice selected" data-score="2" type="button">中</button><button class="choice" data-score="3" type="button">高</button>
+     </div><label class="form-label" data-template-id="stress-label">壓力程度</label>
+     <div class="choice-row" id="stress-options">
+      <button class="choice selected" data-score="1" type="button">低</button><button class="choice" data-score="2" type="button">中</button><button class="choice" data-score="3" type="button">高</button>
+     </div><label class="form-label" for="checkin-notes" data-template-id="notes-label">備註</label><textarea id="checkin-notes" class="form-input" rows="3"></textarea><button id="checkin-save" class="primary-button" style="width:100%;margin-top:16px" type="submit" data-template-id="checkin-save-label">更新今日狀態</button>
+    </form>
+   </div>
+  </div>
+  <div id="toast" class="toast" aria-live="polite"></div>
+  <script>
+    const CONFIG = {
+      DATA_MODE:"production",
+      API_BASE_URL:"https://script.google.com/macros/s/AKfycbwc9OBZtGgFiXk2n1_bquNZqkFkX9OzgAxlh7rljySrvNiF6ywsxEpBzNv5V4onRv5h/exec",
+      API_TIMEOUT:15000,
+      TIMEZONE:"Asia/Taipei"
+    };
+    let currentUser=null;
+    let sessionToken=null;
+    let exerciseDatabase=[], workoutSession=null;
+    let currentRange=30;
+    const appState={body:[],sleep:[],activity:[],workouts:[],dashboard:null,profile:null};
+
+    function getLocalDateString(date=new Date()){const p=new Intl.DateTimeFormat("en-CA",{timeZone:CONFIG.TIMEZONE,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);const v=Object.fromEntries(p.map(x=>[x.type,x.value]));return `${v.year}-${v.month}-${v.day}`;}
+    function dateDaysAgo(days){const date=new Date(`${getLocalDateString()}T12:00:00+08:00`);date.setDate(date.getDate()-days);return getLocalDateString(date);}
+    function rangeDates(days=currentRange){if(days==="year"){const today=getLocalDateString();return {start:`${today.slice(0,4)}-01-01`,end:today};}return {start:dateDaysAgo(Number(days)-1),end:getLocalDateString()};}
+    function isConfigured(){return CONFIG.API_BASE_URL&&CONFIG.API_BASE_URL!=="YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";}
+    function readableError(error){if(!error)return "目前無法取得健康資料。";if(typeof error === "string")return error;return error.message||error.error?.message||"目前無法取得健康資料。";}
+    function isSessionError(error){return ["UNAUTHORIZED","SESSION_EXPIRED","INVALID_TOKEN"].includes(error?.code)||["UNAUTHORIZED","SESSION_EXPIRED","INVALID_TOKEN"].some(x=>String(error?.message||"").includes(x));}
+    function clearPersonalState(){currentUser=null;sessionToken=null;sessionStorage.removeItem("healthCompanionSessionToken");Object.assign(appState,{body:[],sleep:[],activity:[],workouts:[],dashboard:null,profile:null});["header-greeting","header-date","header-avatar"].forEach(id=>setValue(id,id==="header-avatar"?"—":""));}
+    function valid(v){return v!==null&&v!==undefined&&v!==""&&!Number.isNaN(Number(v));}
+    function num(v){return valid(v)?Number(v):null;}
+    function display(v,suffix=""){return valid(v)?`${v}${suffix}`:"—";}
+    function average(values){const a=values.filter(valid).map(Number);return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;}
+    function formatDuration(minutes){const n=num(minutes);return n===null?"—":`${Math.floor(n/60)}h ${Math.round(n%60)}m`;}
+    function sum(rows,key){return rows.reduce((total,row)=>total+(num(row[key])||0),0);}
+    function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.classList.remove("show"),2800);}
+    function setConnectionState(state){const labels={connected:"已連線",connecting:"連線中",error:"資料載入失敗",notConfigured:"未設定"};["sync-dot","settings-status-dot"].forEach(id=>{const el=document.getElementById(id);if(el)el.className=`status-dot ${state}`;});document.getElementById("connection-label").textContent=labels[state];document.getElementById("technical-api-status").textContent=labels[state];}
+    function unwrapApiResponse(response){if(response&&response.ok===true)return response.data;const error=response?.error;const e=new Error(readableError(error||response?.message));e.code=typeof error==="string"?error:error?.code||response?.code;throw e;}
+    async function sessionPost(action,payload={}){if(!isConfigured())throw new Error("尚未設定資料庫 API");const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CONFIG.API_TIMEOUT);try{const res=await fetch(CONFIG.API_BASE_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,sessionToken,payload}),signal:controller.signal});if(!res.ok)throw new Error(`HTTP ${res.status}`);return unwrapApiResponse(await res.json());}catch(e){if(e.name==="AbortError")throw new Error("資料連線逾時，請稍後重新整理。");if(isSessionError(e)){clearPersonalState();showLogin();}throw e;}finally{clearTimeout(timer)}}
+    async function apiGet(action,params={}){return sessionPost(action,params);}
+    async function apiPost(action,data={}){return sessionPost(action,data);}
+    async function createSession(idToken){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CONFIG.API_TIMEOUT);try{const res=await fetch(CONFIG.API_BASE_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"createSession",idToken}),signal:controller.signal});if(!res.ok)throw new Error(`HTTP ${res.status}`);const data=unwrapApiResponse(await res.json());sessionToken=data.sessionToken;sessionStorage.setItem("healthCompanionSessionToken",sessionToken);return data;}finally{clearTimeout(timer)}}
+    async function logout(){if(sessionToken){try{await sessionPost("logout",{})}catch(e){}}clearPersonalState();showLogin();}
+    const apiService={
+      healthCheck:()=>apiGet("healthCheck"),getUserProfile:()=>apiGet("getUserProfile"),getDashboardData:()=>apiGet("getDashboardData"),
+      getBodyMetrics:(start,end)=>apiGet("getBodyRecords",{startDate:start,endDate:end}),getBodyRecords:(start,end)=>apiGet("getBodyRecords",{startDate:start,endDate:end}),
+      getTrainingRecords:(start,end)=>apiGet("getWorkoutRecords",{startDate:start,endDate:end}),getWorkoutRecords:(start,end)=>apiGet("getWorkoutRecords",{startDate:start,endDate:end}),
+      getSleepData:(start,end)=>apiGet("getSleepRecords",{startDate:start,endDate:end}),getSleepRecords:(start,end)=>apiGet("getSleepRecords",{startDate:start,endDate:end}),
+      getActivityData:(start,end)=>apiGet("getActivityRecords",{startDate:start,endDate:end}),getActivityRecords:(start,end)=>apiGet("getActivityRecords",{startDate:start,endDate:end}),
+      getNutritionData:date=>apiGet("getNutritionRecords",{date}),getNutritionRecords:date=>apiGet("getNutritionRecords",{date}),
+      getNutritionTargets:()=>apiGet("getNutritionTargets"),getExerciseDatabase:()=>apiGet("getExerciseDatabase"),getTodayCheckin:()=>apiGet("getTodayCheckin",{date:getLocalDateString()}),getWeeklyReport:()=>apiGet("getWeeklyReport",{endDate:getLocalDateString()}),
+      addBodyRecord:data=>apiPost("addBodyRecord",data),addWorkoutRecord:data=>apiPost("addWorkoutRecord",data),addMealRecord:data=>apiPost("addMealRecord",data),upsertHealthCheckin:data=>apiPost("upsertHealthCheckin",data)
+    };
+
+    function sparkline(values,color="var(--chart-1)"){const a=values.filter(valid).map(Number);if(a.length<2)return "";const min=Math.min(...a),max=Math.max(...a),r=max-min||1,w=120,h=28,p=2;const pts=a.map((v,i)=>`${p+i*(w-p*2)/(a.length-1)},${h-p-(v-min)/r*(h-p*2)}`).join(" ");return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+    function lineChart(rows,key,color="var(--chart-1)"){const data=rows.map((r,i)=>({value:num(r[key]),label:r.date||r.recordDate||`#${i+1}`})).filter(x=>x.value!==null);if(data.length<2)return `<div class="chart-empty">${data.length?"目前只有一筆紀錄。":"尚無資料 / 等待同步"}</div>`;const w=680,h=220,p=22,min=Math.min(...data.map(x=>x.value)),max=Math.max(...data.map(x=>x.value)),r=max-min||1;const pts=data.map((x,i)=>({x:p+i*(w-p*2)/(data.length-1),y:h-p-(x.value-min)/r*(h-p*2),...x}));return `<div class="chart-tooltip"></div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="var(--border-color)"/><line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="var(--border-color)"/><polyline points="${pts.map(x=>`${x.x},${x.y}`).join(" ")}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${pts.map(x=>`<circle class="chart-point" data-label="${x.label}" data-value="${x.value}" cx="${x.x}" cy="${x.y}" r="4.4" fill="${color}" stroke="var(--bg-card)" stroke-width="2"/>`).join("")}</svg>`;}
+    function barChart(rows,key,color="var(--chart-1)"){const data=rows.map(r=>num(r[key])).filter(v=>v!==null);if(!data.length)return `<div class="chart-empty">尚無資料 / 等待同步</div>`;const w=680,h=220,p=22,max=Math.max(...data,1)*1.15,gap=(w-p*2)/data.length,bw=Math.max(5,gap*.58);return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="var(--border-color)"/>${data.map((v,i)=>{const bh=v/max*(h-p*2);return `<rect x="${p+i*gap+(gap-bw)/2}" y="${h-p-bh}" width="${bw}" height="${bh}" rx="4" fill="${color}"/>`}).join("")}</svg>`;}
+    function bindTooltips(box){box.querySelectorAll(".chart-point").forEach(point=>point.addEventListener("pointerenter",event=>{const tip=box.querySelector(".chart-tooltip");if(!tip)return;tip.innerHTML=`${point.dataset.label}<br><b>${point.dataset.value}</b>`;tip.style.display="block";tip.style.left=`${event.offsetX+10}px`;tip.style.top=`${event.offsetY-8}px`;}));box.addEventListener("pointerleave",()=>{const tip=box.querySelector(".chart-tooltip");if(tip)tip.style.display="none";});}
+    function donut(target,legend,parts,center){const clean=parts.filter(x=>valid(x.value)&&Number(x.value)>0);const el=document.getElementById(target),lg=document.getElementById(legend);document.getElementById(center.id).textContent=center.value;if(!clean.length){el.style.background="conic-gradient(var(--border-color) 0 100%)";lg.innerHTML='<div class="chart-empty">尚無資料</div>';return;}const total=clean.reduce((s,x)=>s+Number(x.value),0);let cursor=0;el.style.background=`conic-gradient(${clean.map(x=>{const from=cursor;cursor+=Number(x.value)/total*100;return `${x.color} ${from}% ${cursor}%`}).join(",")})`;lg.innerHTML=clean.map(x=>`<div class="legend-row"><span class="legend-key"><i class="legend-dot" style="background:${x.color}"></i>${x.label}</span><b>${x.display||x.value}</b></div>`).join("");}
+    function navigate(screen){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));document.getElementById(screen).classList.add("active");document.querySelectorAll("[data-screen]").forEach(x=>x.classList.toggle("active",x.dataset.screen===screen));window.scrollTo({top:0,behavior:"smooth"});if(screen==="report-screen")renderReport().catch(handleScreenError);}
+
+    function setValue(id,value){const el=document.getElementById(id);if(el)el.textContent=value;}
+    function latest(rows,key){for(let i=rows.length-1;i>=0;i--){const v=num(rows[i][key]);if(v!==null)return v;}return null;}
+    function delta(rows,key){const a=rows.map(x=>num(x[key])).filter(v=>v!==null);return a.length>1?a.at(-1)-a[0]:null;}
+    function updateKpi(id,value,detail,chartId,values){setValue(id,value);setValue(detail.id,detail.text);document.getElementById(chartId).innerHTML=sparkline(values);}
+    function renderDashboard(){
+      const d=appState.dashboard||{},today=d.today||{},body=appState.body,sleep=appState.sleep,activity=appState.activity,workouts=appState.workouts;
+      const score=num(today.healthScore);setValue("health-score",score===null?"—":score);document.getElementById("health-ring").style.setProperty("--score",score===null?0:Math.min(100,score));setValue("score-status",today.healthStatus||"等待同步");setValue("today-state",today.healthStatus||"今天的健康狀態");setValue("today-advice",today.recommendation||"持續同步身體、睡眠與活動資料，以建立更完整的健康狀態。");setValue("coach-advice",today.recommendation||"AI 健康分析尚未啟用");
+      const weights=body.map(x=>x.weight),fats=body.map(x=>x.bodyFat??x.bodyFatPercentage),sleepScores=sleep.map(x=>x.sleepScore),sleepMinutes=sleep.map(x=>x.totalSleepMinutes),steps=activity.map(x=>x.steps),sets=workouts.map(x=>x.totalSets);
+      updateKpi("kpi-score",score===null?"—":score,{id:"kpi-score-detail",text:today.healthStatus||"等待同步"},"kpi-score-chart",[]);
+      const weight=latest(body,"weight"),weightDelta=delta(body,"weight");updateKpi("kpi-weight-value",weight===null?"—":`${weight} kg`,{id:"kpi-weight-detail",text:weightDelta===null?"尚無比較資料":`${weightDelta>0?"+":""}${weightDelta.toFixed(1)} kg`},"kpi-weight-chart",weights);
+      const fat=latest(body,"bodyFat")??latest(body,"bodyFatPercentage"),fatDelta=delta(body,"bodyFat")??delta(body,"bodyFatPercentage");updateKpi("kpi-fat-value",fat===null?"—":`${fat}%`,{id:"kpi-fat-detail",text:fatDelta===null?"尚無比較資料":`${fatDelta>0?"+":""}${fatDelta.toFixed(1)}%`},"kpi-fat-chart",fats);
+      const lastSleep=latest(sleep,"totalSleepMinutes"),lastSleepScore=latest(sleep,"sleepScore");updateKpi("kpi-sleep-value",formatDuration(lastSleep),{id:"kpi-sleep-detail",text:lastSleepScore===null?"尚無睡眠分數":`睡眠分數 ${lastSleepScore}`},"kpi-sleep-chart",sleepMinutes);
+      const workoutTotal=sum(workouts,"totalSets");updateKpi("kpi-training-value",workoutTotal?`${workoutTotal} 組`:"—",{id:"kpi-training-detail",text:workouts.length?`${workouts.length} 次訓練`:"尚無訓練資料"},"kpi-training-chart",sets);
+      const chart=document.getElementById("dashboard-weight-chart");chart.innerHTML=lineChart(body,"weight");bindTooltips(chart);setValue("weight-chart-caption",body.length?`${body.length} 筆期間紀錄`:"尚無資料");setValue("weight-change-badge",weightDelta===null?"尚無趨勢":`${weightDelta>0?"+":""}${weightDelta.toFixed(1)} kg`);
+      setValue("composition-weight",weight===null?"—":`${weight} kg`);donut("composition-donut","composition-legend",bodyCompositionParts(body.at(-1)||{}),{id:"composition-weight",value:weight===null?"—":`${weight} kg`});
+      setValue("perf-sets",workoutTotal||"—");setValue("perf-volume",sum(workouts,"totalVolume")?`${sum(workouts,"totalVolume").toLocaleString()} kg`:"—");setValue("perf-steps",average(steps)===null?"—":Math.round(average(steps)).toLocaleString());setValue("perf-calories",average(activity.map(x=>x.activeCalories))===null?"—":`${Math.round(average(activity.map(x=>x.activeCalories)))} kcal`);setValue("perf-sleep",average(sleepMinutes)===null?"—":formatDuration(average(sleepMinutes)));setValue("perf-sleep-score",average(sleepScores)===null?"—":Math.round(average(sleepScores)));
+      [["perf-sets-chart",sets],["perf-volume-chart",workouts.map(x=>x.totalVolume)],["perf-steps-chart",steps],["perf-calories-chart",activity.map(x=>x.activeCalories)],["perf-sleep-chart",sleepMinutes],["perf-sleep-score-chart",sleepScores]].forEach(([id,v])=>document.getElementById(id).innerHTML=sparkline(v));
+    }
+    function bodyCompositionParts(row){return [{label:"肌肉",value:num(row.muscleMass),display:valid(row.muscleMass)?`${row.muscleMass} kg`:"—",color:"var(--chart-2)"},{label:"體脂肪",value:num(row.bodyFatMass),display:valid(row.bodyFatMass)?`${row.bodyFatMass} kg`:"—",color:"var(--chart-5)"},{label:"骨骼肌",value:num(row.skeletalMuscle),display:valid(row.skeletalMuscle)?`${row.skeletalMuscle} kg`:"—",color:"var(--chart-3)"},{label:"水分",value:num(row.water),display:valid(row.water)?`${row.water}`:"—",color:"var(--chart-1)"}];}
+    function renderBody(){const body=appState.body,last=body.at(-1)||{},weight=latest(body,"weight"),fat=latest(body,"bodyFat")??latest(body,"bodyFatPercentage"),bmi=latest(body,"bmi"),muscle=latest(body,"muscleMass");setValue("body-current",weight===null?"—":`${weight} kg`);setValue("body-fat",fat===null?"—":`${fat}%`);setValue("body-bmi",bmi===null?"—":bmi);setValue("body-muscle",muscle===null?"—":`${muscle} kg`);const select=document.getElementById("body-metric-select");const key=select.value;const chart=document.getElementById("body-trend-chart");chart.innerHTML=lineChart(body,key);bindTooltips(chart);setValue("body-donut-value",weight===null?"—":`${weight} kg`);donut("body-donut","body-legend",bodyCompositionParts(last),{id:"body-donut-value",value:weight===null?"—":`${weight} kg`});}
+    function normalizeWorkouts(response){return Array.isArray(response)?response:(response?.records||[]);}
+    function renderTraining(response){const records=normalizeWorkouts(response||appState.workouts),totalSets=response?.totalSets??sum(records,"totalSets"),totalVolume=response?.totalVolume??sum(records,"totalVolume"),duration=response?.durationMinutes??sum(records,"durationMinutes");setValue("training-sets",totalSets||"—");setValue("training-volume",totalVolume?`${Number(totalVolume).toLocaleString()} kg`:"—");setValue("training-sessions",records.length||"—");setValue("training-intensity",totalSets&&duration?`${(totalSets/(duration/60)).toFixed(1)} 組/h`:"—");const muscles=response?.muscleDistribution||response?.muscles||{};const parts=Object.entries(muscles).map(([label,value],i)=>({label,value,display:`${value} 組`,color:["var(--chart-1)","var(--chart-2)","var(--chart-3)","var(--chart-4)","var(--chart-5)"][i%5]}));setValue("muscle-total",totalSets||"—");donut("muscle-donut","muscle-legend",parts,{id:"muscle-total",value:totalSets||"—"});document.getElementById("training-volume-chart").innerHTML=barChart(records,"totalVolume","var(--chart-2)");const tbody=document.getElementById("training-table");tbody.innerHTML=records.length?records.map(row=>`<tr><td>${row.date||"—"}</td><td>${row.muscleGroup||row.bodyPart||"—"}</td><td>${row.exerciseName||row.name||"—"}</td><td>${display(row.totalSets)}</td><td>${display(row.weight," kg")}</td><td>${display(row.reps)}</td><td>${valid(row.totalVolume)?Number(row.totalVolume).toLocaleString()+" kg":"—"}</td></tr>`).join(""):`<tr><td colspan="7">尚無訓練紀錄</td></tr>`;}
+    function renderSleep(){const rows=appState.sleep,last=rows.at(-1)||{},mins=latest(rows,"totalSleepMinutes"),score=latest(rows,"sleepScore");setValue("sleep-last",formatDuration(mins));setValue("sleep-score",score===null?"—":score);setValue("sleep-average7",formatDuration(average(rows.slice(-7).map(x=>x.totalSleepMinutes))));setValue("sleep-average30",formatDuration(average(rows.slice(-30).map(x=>x.totalSleepMinutes))));document.getElementById("sleep-duration-chart").innerHTML=lineChart(rows,"totalSleepMinutes","var(--chart-3)");document.getElementById("sleep-score-chart").innerHTML=lineChart(rows,"sleepScore","var(--chart-1)");}
+    function renderActivity(){const rows=appState.activity,last=rows.at(-1)||{};setValue("activity-steps",valid(last.steps)?Number(last.steps).toLocaleString():"—");setValue("activity-active",display(last.activeCalories," kcal"));setValue("activity-total",display(last.totalCalories," kcal"));setValue("activity-time",formatDuration(last.activeMinutes));document.getElementById("activity-steps-chart").innerHTML=barChart(rows,"steps","var(--chart-2)");document.getElementById("activity-calorie-chart").innerHTML=barChart(rows,"activeCalories","var(--chart-4)");}
+    async function renderNutrition(){const records=await apiService.getNutritionData(getLocalDateString());const meals=Array.isArray(records)?records:[];const total=key=>sum(meals,key);setValue("nutrition-calories",meals.length?`${total("calories").toLocaleString()} kcal`:"—");setValue("nutrition-protein",meals.length?`${total("protein")} g`:"—");setValue("nutrition-carbs",meals.length?`${total("carbs")} g`:"—");setValue("nutrition-fat",meals.length?`${total("fat")} g`:"—");document.getElementById("meal-list").innerHTML=meals.length?meals.map(m=>`<article class="card meal"><div><h3 class="meal-title">${m.foodName||"未命名餐點"}</h3><p class="meal-detail">${m.mealType||"餐點"} · ${m.time||m.createdAt||"—"}</p></div><div class="meal-value">${valid(m.calories)?`${m.calories} kcal`:"—"}<div class="meal-macros">P ${valid(m.protein)?m.protein:"—"} · C ${valid(m.carbs)?m.carbs:"—"} · F ${valid(m.fat)?m.fat:"—"}</div></div></article>`).join(""):`<div class="empty-state">尚無飲食紀錄。可使用「新增飲食」補上今天的餐點。</div>`;}
+    async function renderReport(){const report=await apiService.getWeeklyReport();setValue("report-score",report?.healthScore??"—");setValue("report-period",report?.startDate&&report?.endDate?`${report.startDate} 至 ${report.endDate}`:"本週健康摘要");const weightRows=Array.isArray(report?.weightTrend)?report.weightTrend:[];const trainingRows=Array.isArray(report?.dailyWorkoutSets)?report.dailyWorkoutSets:[];const weightDelta=weightRows.length>1?num(weightRows.at(-1).weight??weightRows.at(-1).value)-num(weightRows[0].weight??weightRows[0].value):null;setValue("report-weight",weightDelta===null?"—":`${weightDelta>0?"+":""}${weightDelta.toFixed(1)} kg`);setValue("report-training",report?.totalSets??(trainingRows.length?sum(trainingRows,"sets"):"—"));setValue("report-sleep",report?.averageSleepMinutes?formatDuration(report.averageSleepMinutes):"—");document.getElementById("report-weight-chart").innerHTML=lineChart(weightRows.map(x=>({...x,weight:x.weight??x.value})),"weight");document.getElementById("report-training-chart").innerHTML=barChart(trainingRows.map(x=>({...x,sets:x.sets??x.value})),"sets","var(--chart-2)");}
+    function handleScreenError(error){toast(error.message||"資料載入失敗，請重新整理。");}
+    async function loadRange(days=currentRange){const {start,end}=rangeDates(days);const [dashboard,profile,body,sleep,activity,workoutResponse]=await Promise.all([apiService.getDashboardData(),apiService.getUserProfile(),apiService.getBodyMetrics(start,end),apiService.getSleepData(start,end),apiService.getActivityData(start,end),apiService.getTrainingRecords(start,end)]);appState.dashboard=dashboard;appState.profile=profile;appState.body=Array.isArray(body)?body:[];appState.sleep=Array.isArray(sleep)?sleep:[];appState.activity=Array.isArray(activity)?activity:[];appState.workouts=normalizeWorkouts(workoutResponse);const name=profile?.nickname||profile?.name||"你";setValue("header-greeting",`嗨，${name} 👋`);setValue("header-avatar",name.slice(0,1));renderDashboard();renderBody();renderTraining(workoutResponse);renderSleep();renderActivity();}
+    function showDashboardError(message){document.getElementById("dashboard-error").innerHTML=`<div class="error-state" style="margin-bottom:14px">資料載入失敗。${message?` ${message}`:""}<br><button id="inline-retry" class="secondary-button" style="margin-top:10px" type="button">重新整理</button></div>`;document.getElementById("inline-retry").onclick=boot;}
+    async function boot(){if(!currentUser||!sessionToken){showLogin();return;}setConnectionState("connecting");document.getElementById("dashboard-error").innerHTML="";try{await apiService.healthCheck();setConnectionState("connected");await Promise.all([loadRange(currentRange),renderNutrition(),buildExerciseSelect()]);}catch(error){setConnectionState("error");showDashboardError(error.message);["dashboard-weight-chart","body-trend-chart","sleep-duration-chart","sleep-score-chart","activity-steps-chart","activity-calorie-chart","training-volume-chart"].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="chart-empty">資料載入失敗</div>';});}}
+    async function buildExerciseSelect(){exerciseDatabase=await apiService.getExerciseDatabase();const select=document.getElementById("exercise-select");select.innerHTML=Array.isArray(exerciseDatabase)&&exerciseDatabase.length?exerciseDatabase.filter(x=>x.active!==false).map(x=>`<option value="${x.exerciseId}">${x.exerciseName} · ${x.muscleGroup||"未分類"}</option>`).join(""):`<option value="">尚無可用訓練動作</option>`;}
+    function showLogin(){let el=document.getElementById("google-login-entry");if(!el){el=document.createElement("div");el.id="google-login-entry";el.style.cssText="position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:var(--bg-primary);";el.innerHTML='<div style="text-align:center"><h1 style="font-family:Fraunces,serif">健康陪跑</h1><p style="color:var(--text-secondary);margin:8px 0 18px">請登入以查看你的健康資料</p><div id="google-login-button"></div><p id="google-login-error" style="color:var(--status-danger);font-size:.8rem;margin-top:12px"></p></div>';document.body.appendChild(el);}el.style.display="grid";if(window.google?.accounts?.id)google.accounts.id.renderButton(document.getElementById("google-login-button"),{theme:"outline",size:"large",text:"signin_with"});}
+    function hideLogin(){const el=document.getElementById("google-login-entry");if(el)el.style.display="none";}
+    async function handleGoogleCredential(response){try{const data=await createSession(response.credential);const user=data.user||data.profile||{};currentUser={userId:user.userId||user.id,email:user.email,name:user.name,displayName:user.displayName||user.name,photoUrl:user.photoUrl||user.picture};hideLogin();await boot();}catch(error){const el=document.getElementById("google-login-error");if(el)el.textContent=readableError(error);}}
+    function loadGoogleIdentity(){return new Promise(resolve=>{if(window.google?.accounts?.id)return resolve();const script=document.createElement("script");script.src="https://accounts.google.com/gsi/client";script.onload=()=>resolve();script.onerror=()=>resolve();document.head.appendChild(script);});}
+    async function initializeSession(){sessionToken=sessionStorage.getItem("healthCompanionSessionToken");if(!sessionToken){await loadGoogleIdentity();if(window.google?.accounts?.id){google.accounts.id.initialize({client_id:"686099401474-v2infa5949657gd3j5d64aoolvnq4421.apps.googleusercontent.com",callback:handleGoogleCredential});}showLogin();return false;}try{const user=await sessionPost("getCurrentUser",{});const profile=user.user||user.profile||user;currentUser={userId:profile.userId||profile.id,email:profile.email,name:profile.name,displayName:profile.displayName||profile.name,photoUrl:profile.photoUrl||profile.picture};return true;}catch(error){clearPersonalState();await loadGoogleIdentity();showLogin();return false;}}
+    function openSheet(view="quick-sheet"){document.getElementById("sheet-backdrop").classList.add("show");["quick-sheet","weight-form","meal-form","checkin-form"].forEach(id=>document.getElementById(id).style.display=id===view?"block":"none");}
+    function closeSheet(){document.getElementById("sheet-backdrop").classList.remove("show");}
+    function setSubmitting(button,on){button.disabled=on;}
+    function createExerciseBlock(exercise){const block=document.createElement("div");block.className="card card-pad";block.style.marginTop="12px";block.dataset.exerciseId=exercise.exerciseId;block.innerHTML=`<b>${exercise.exerciseName} · ${exercise.muscleGroup||"未分類"}</b><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input class="form-input exercise-weight" type="number" min="0" step=".5" placeholder="重量 kg"><input class="form-input exercise-reps" type="number" min="1" placeholder="次數"></div><button class="primary-button complete-set" style="margin-top:9px;width:100%" type="button">完成一組</button><div class="set-log"></div>`;block.querySelector(".complete-set").onclick=()=>{const weight=num(block.querySelector(".exercise-weight").value),reps=num(block.querySelector(".exercise-reps").value);if(weight===null||reps===null||reps<1)return toast("請輸入有效重量與次數。");const item=workoutSession.exercises.find(x=>x.exerciseId===exercise.exerciseId),set={setNumber:item.sets.length+1,weight,reps,volume:weight*reps};item.sets.push(set);block.querySelector(".set-log").insertAdjacentHTML("beforeend",`<div style="display:flex;justify-content:space-between;font-size:.75rem;border-top:1px solid var(--border-color);margin-top:9px;padding-top:8px"><span>第 ${set.setNumber} 組</span><b>${weight} kg × ${reps}</b></div>`);};document.getElementById("exercise-session-list").appendChild(block);}
+    function initTheme(){const mode=localStorage.getItem("themeMode")||"system",accent=localStorage.getItem("themeColor")||"blue";document.documentElement.dataset.accent=accent;applyThemeMode(mode);refreshThemeOptions();}
+    function applyThemeMode(mode){const dark=mode==="dark"||(mode==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=dark?"dark":"light";document.getElementById("header-theme-toggle").innerHTML=dark?'<i data-lucide="sun"></i>':'<i data-lucide="moon"></i>';lucide.createIcons();}
+    function refreshThemeOptions(){const mode=localStorage.getItem("themeMode")||"system",accent=localStorage.getItem("themeColor")||"blue";document.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("active",x.dataset.mode===mode));document.querySelectorAll("[data-accent-option]").forEach(x=>x.classList.toggle("active",x.dataset.accentOption===accent));}
+
+    document.querySelectorAll("[data-screen]").forEach(btn=>btn.addEventListener("click",()=>navigate(btn.dataset.screen)));
+    document.querySelectorAll("[data-screen-link]").forEach(btn=>btn.addEventListener("click",()=>navigate(btn.dataset.screenLink)));
+    document.querySelectorAll(".kpi-card[data-target]").forEach(card=>card.addEventListener("click",()=>navigate(card.dataset.target)));
+    document.getElementById("global-range").addEventListener("change",async e=>{currentRange=e.target.value==="year"?"year":Number(e.target.value);try{await loadRange(currentRange)}catch(error){showDashboardError(error.message);}});
+    document.getElementById("body-metric-select").addEventListener("change",renderBody);
+    document.querySelectorAll("[data-range-area] .range-btn").forEach(btn=>btn.addEventListener("click",async()=>{const area=btn.closest("[data-range-area]"),name=area.dataset.rangeArea;area.querySelectorAll(".range-btn").forEach(x=>x.classList.remove("active"));btn.classList.add("active");if(btn.dataset.days==="custom"){document.getElementById(`${name}-custom-range`)?.classList.add("show");return;}if(name==="body"){currentRange=Number(btn.dataset.days);try{await loadRange(currentRange)}catch(e){handleScreenError(e)}}else{const r=rangeDates(Number(btn.dataset.days));try{const response=await apiService.getTrainingRecords(r.start,r.end);appState.workouts=normalizeWorkouts(response);renderTraining(response)}catch(e){handleScreenError(e)}}}));
+    document.getElementById("apply-body-range").addEventListener("click",async()=>{const start=document.getElementById("body-start").value,end=document.getElementById("body-end").value;if(!start||!end||start>end)return toast("請輸入有效日期區間。");try{appState.body=await apiService.getBodyRecords(start,end);renderBody()}catch(e){handleScreenError(e)}});
+    document.getElementById("quick-open").onclick=()=>openSheet();document.getElementById("add-meal").onclick=()=>openSheet("meal-form");document.getElementById("header-avatar").onclick=()=>navigate("settings-screen");
+    document.getElementById("notification-button").onclick=()=>toast("目前沒有新的通知。");document.getElementById("sheet-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeSheet();};
+    document.querySelectorAll(".quick-option").forEach(btn=>btn.onclick=async()=>{const action=btn.dataset.action;if(action==="workout"){closeSheet();navigate("training-screen");document.getElementById("start-workout").click();return;}if(action==="weight"||action==="bodyfat"){openSheet("weight-form");if(action==="bodyfat")document.getElementById("weight-input").focus();return;}if(action==="meal"){openSheet("meal-form");return;}openSheet("checkin-form");});
+    ["energy-options","fatigue-options","stress-options"].forEach(id=>document.getElementById(id).querySelectorAll(".choice").forEach(btn=>btn.onclick=()=>{btn.parentElement.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));btn.classList.add("selected");}));
+    document.getElementById("weight-form").addEventListener("submit",async e=>{e.preventDefault();const btn=document.getElementById("weight-save");setSubmitting(btn,true);try{const data={date:getLocalDateString(),weight:Number(document.getElementById("weight-input").value),source:"manual"};const fat=num(document.getElementById("fat-input").value);if(fat!==null)data.bodyFat=fat;await apiService.addBodyRecord(data);await loadRange(currentRange);closeSheet();toast("身體數據已紀錄。");}catch(err){toast(err.message||"儲存失敗");}finally{setSubmitting(btn,false)}});
+    document.getElementById("meal-form").addEventListener("submit",async e=>{e.preventDefault();const btn=document.getElementById("meal-save");setSubmitting(btn,true);try{await apiService.addMealRecord({date:getLocalDateString(),mealType:document.getElementById("meal-type").value,foodName:document.getElementById("meal-food").value.trim(),calories:Number(document.getElementById("meal-calories").value),protein:num(document.getElementById("meal-protein").value),carbs:num(document.getElementById("meal-carbs").value),fat:num(document.getElementById("meal-fat").value),source:"manual"});await renderNutrition();closeSheet();toast("餐點已加入今日飲食。");}catch(err){toast(err.message||"儲存失敗");}finally{setSubmitting(btn,false)}});
+    document.getElementById("checkin-form").addEventListener("submit",async e=>{e.preventDefault();const btn=document.getElementById("checkin-save");setSubmitting(btn,true);try{const score=id=>Number(document.querySelector(`#${id} .choice.selected`).dataset.score);await apiService.upsertHealthCheckin({date:getLocalDateString(),energyScore:score("energy-options"),moodScore:score("energy-options"),fatigueScore:score("fatigue-options"),stressScore:score("stress-options"),notes:document.getElementById("checkin-notes").value.trim()});await loadRange(currentRange);closeSheet();toast("今日身體狀態已更新。");}catch(err){toast(err.message||"儲存失敗");}finally{setSubmitting(btn,false)}});
+    document.getElementById("start-workout").onclick=()=>{if(!exerciseDatabase.length)return toast("目前沒有可用訓練動作。");workoutSession={startTime:new Date().toISOString(),exercises:[]};document.getElementById("exercise-session-list").innerHTML="";document.getElementById("training-overview").style.display="none";document.getElementById("workout-session").classList.add("active");const first=exerciseDatabase[0];workoutSession.exercises.push({...first,sets:[]});createExerciseBlock(first);};
+    document.getElementById("back-training").onclick=()=>{document.getElementById("training-overview").style.display="block";document.getElementById("workout-session").classList.remove("active");};
+    document.getElementById("add-exercise").onclick=()=>{const exercise=exerciseDatabase.find(x=>x.exerciseId===document.getElementById("exercise-select").value);if(!exercise||workoutSession.exercises.some(x=>x.exerciseId===exercise.exerciseId))return toast("此動作已在本次訓練中。");workoutSession.exercises.push({...exercise,sets:[]});createExerciseBlock(exercise);};
+    document.getElementById("finish-workout").onclick=async()=>{if(!workoutSession?.exercises.some(x=>x.sets.length))return toast("先完成至少一組，再結束訓練。");const btn=document.getElementById("finish-workout");setSubmitting(btn,true);try{const endTime=new Date().toISOString(),totalSets=workoutSession.exercises.reduce((s,x)=>s+x.sets.length,0),totalVolume=workoutSession.exercises.reduce((s,x)=>s+x.sets.reduce((n,set)=>n+set.volume,0),0);await apiService.addWorkoutRecord({date:getLocalDateString(),startTime:workoutSession.startTime,endTime,durationMinutes:Math.max(1,Math.round((new Date(endTime)-new Date(workoutSession.startTime))/60000)),totalSets,totalVolume,exercises:workoutSession.exercises});await loadRange(currentRange);document.getElementById("back-training").click();toast(`訓練完成：${totalSets} 組已記錄。`);}catch(err){toast(err.message||"儲存失敗");}finally{setSubmitting(btn,false)}};
+    document.querySelectorAll("[data-mode]").forEach(btn=>btn.onclick=()=>{localStorage.setItem("themeMode",btn.dataset.mode);applyThemeMode(btn.dataset.mode);refreshThemeOptions();});
+    document.querySelectorAll("[data-accent-option]").forEach(btn=>btn.onclick=()=>{localStorage.setItem("themeColor",btn.dataset.accentOption);document.documentElement.dataset.accent=btn.dataset.accentOption;refreshThemeOptions();});
+    document.getElementById("apply-theme").onclick=()=>toast("外觀設定已套用。");
+    document.getElementById("header-theme-toggle").onclick=()=>{const current=document.documentElement.dataset.theme==="dark"?"light":"dark";localStorage.setItem("themeMode",current);applyThemeMode(current);refreshThemeOptions();};
+    document.getElementById("reconnect-button").onclick=boot;
+    document.getElementById("logout-button").onclick=logout;
+    document.getElementById("header-date").textContent=`今天是 ${new Intl.DateTimeFormat("zh-TW",{timeZone:CONFIG.TIMEZONE,year:"numeric",month:"2-digit",day:"2-digit",weekday:"long"}).format(new Date())}`;
+    initTheme();lucide.createIcons();initializeSession().then(ok=>{if(ok)boot();});
+  </script>
+ </body>
+</html>
