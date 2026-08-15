@@ -88,6 +88,11 @@ assert.match(html, /trend-scroll-next/);
 assert.match(html, /touchmove/);
 assert.match(html, /passive:false/);
 assert.match(html, /touch-action:pan-y/);
+assert.match(html, /id="muscle-group-select"/);
+assert.match(html, /function exerciseMuscleGroup\(exercise\)/);
+assert.match(html, /function renderExerciseOptions\(group\)/);
+assert.match(html, /function renderMuscleGroupOptions\(\)/);
+assert.match(html, /renderExerciseOptions\(groupSelect\.value\)/);
 assert.match(html, /查看較舊資料/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
@@ -161,5 +166,23 @@ assert.match(longBox.innerHTML, /class="trend-scroll is-scrollable"/);
 assert.match(longBox.innerHTML, /查看較舊資料/);
 assert.match(longBox.innerHTML, /查看較新資料/);
 assert.match(longBox.innerHTML, /width="2056"/);
+
+evaluate(`exerciseDatabase=[
+  {exerciseId:"EX1",exerciseName:"Bench Press",muscleGroup:"Chest",active:true},
+  {exerciseId:"EX2",exerciseName:"Fly",muscleGroup:"Chest",active:true},
+  {exerciseId:"EX3",exerciseName:"Row",muscleGroup:"Back",active:true},
+  {exerciseId:"EX4",exerciseName:"Disabled",muscleGroup:"Chest",active:false}
+]`);
+evaluate('renderMuscleGroupOptions()');
+const groupSelect = document.getElementById('muscle-group-select');
+const exerciseSelect = document.getElementById('exercise-select');
+assert.match(groupSelect.innerHTML, />Chest</);
+assert.match(groupSelect.innerHTML, />Back</);
+assert.match(exerciseSelect.innerHTML, />Bench Press</);
+assert.match(exerciseSelect.innerHTML, />Fly</);
+assert.doesNotMatch(exerciseSelect.innerHTML, /Disabled/);
+evaluate('renderExerciseOptions("Back")');
+assert.match(exerciseSelect.innerHTML, />Row</);
+assert.doesNotMatch(exerciseSelect.innerHTML, /Bench Press/);
 
 console.log('Trend chart unit tests: PASS');
