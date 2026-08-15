@@ -12,6 +12,12 @@
 
 ## LINE LIFF 設定
 
+目前正式環境已連結 Provider「串接測試」中的 LINE OA「生活小幫手」：
+
+- LINE Login Channel ID：`2011116657`
+- LIFF ID：`2011116657-9SpSnQlN`
+- LIFF Endpoint：`https://d0252422-oss.github.io/haelth-companion/`
+
 1. 在 LINE Developers 建立或沿用 Login channel，新增 LIFF app。
 2. Endpoint URL 設為 `https://d0252422-oss.github.io/haelth-companion/`，Scope 至少啟用 `openid` 與 `profile`；若要用驗證後的 email 自動對應既有帳號，再啟用 `email`。
 3. 將 LINE Login Channel ID 寫入 Apps Script 的 Script Property：`LINE_LOGIN_CHANNEL_ID`。
