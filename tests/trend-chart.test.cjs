@@ -96,6 +96,9 @@ assert.strictEqual(evaluate('metricDisplay("steps",11420,{full:false})'), '11.4k
 assert.strictEqual(evaluate('metricDisplay("steps",11420,{full:true})'), '11,420 步');
 assert.strictEqual(evaluate('metricDisplay("sleepDuration",450,{full:true})'), '7.5 hr');
 assert.strictEqual(evaluate('metricDisplay("weight",86.444,{full:true,overrides:{decimalPlaces:2}})'), '86.44 kg');
+assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight").length'), 2);
+assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight",true).length'), 3);
+assert.strictEqual(evaluate('trendViewportWidth({clientWidth:900})'), 334);
 
 const nutrition = evaluate(`dailyNutritionRows([
   {date:"2026-08-14",includedInTotals:true,calories:500,protein:30,carbs:60,fat:15},
@@ -123,6 +126,14 @@ assert.match(bodyBox.innerHTML, />86\.5</);
 assert.match(bodyBox.innerHTML, />86\.4 kg</);
 assert.match(bodyBox.innerHTML, /data-full-value="86\.4 kg"/);
 assert.match(bodyBox.innerHTML, /trend-latest-ring/);
+
+evaluate(`renderTrendChart("body-trend-chart",[
+  {date:"2026-08-09",weight:86.6},
+  {date:"2026-08-10",weight:null},
+  {date:"2026-08-11",weight:88}
+],{metric:"weight"})`);
+assert.strictEqual((bodyBox.innerHTML.match(/class="trend-hit"/g)||[]).length, 2);
+assert.match(bodyBox.innerHTML, /width="334"/);
 
 evaluate('renderTrendChart("body-trend-chart",[{date:"2026-08-15",weight:86.4}],{metric:"weight",targetValue:85,labelFormatter:value=>`值 ${value}`,tooltipFormatter:value=>`${value} 公斤`})');
 assert.match(bodyBox.innerHTML, /值 86\.4/);
