@@ -72,6 +72,8 @@ context.globalThis = context;
 vm.createContext(context);
 
 const html = fs.readFileSync('index.html', 'utf8');
+assert.match(html, /renderTrendChart\("dashboard-weight-chart",body,\{metric:"weight"\}\)/);
+assert.doesNotMatch(html, /renderTrendChart\("dashboard-weight-chart"[^\n]*showDataLabels:false/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .find(value => value.trim());
