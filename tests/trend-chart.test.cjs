@@ -82,10 +82,13 @@ assert.match(html, /renderTrendChart\("dashboard-weight-chart",weightTrendRows,\
 assert.doesNotMatch(html, /renderTrendChart\("dashboard-weight-chart"[^\n]*showDataLabels:false/);
 assert.match(html, /function positionTrendAtLatest\(scroll\)/);
 assert.match(html, /function bindTrendDrag\(scroll\)/);
+assert.match(html, /function bindTrendNavigation\(box,scroll\)/);
+assert.match(html, /trend-scroll-prev/);
+assert.match(html, /trend-scroll-next/);
 assert.match(html, /touchmove/);
 assert.match(html, /passive:false/);
 assert.match(html, /touch-action:pan-y/);
-assert.match(html, /左右滑動查看全部/);
+assert.match(html, /查看較舊資料/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .find(value => value.trim());
@@ -153,8 +156,10 @@ const thirtyDays = Array.from({ length: 30 }, (_, index) => ({
 }));
 context.__thirtyDays = thirtyDays;
 evaluate('renderTrendChart("nutrition-trend-chart",__thirtyDays,{metric:"calories"})');
-assert.match(longBox.innerHTML, /左右滑動查看全部 30 筆資料/);
+assert.match(longBox.innerHTML, /全部 30 筆/);
 assert.match(longBox.innerHTML, /class="trend-scroll is-scrollable"/);
+assert.match(longBox.innerHTML, /查看較舊資料/);
+assert.match(longBox.innerHTML, /查看較新資料/);
 assert.match(longBox.innerHTML, /width="2056"/);
 
 console.log('Trend chart unit tests: PASS');
