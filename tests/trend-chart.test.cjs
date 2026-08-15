@@ -76,7 +76,8 @@ assert.match(html, /--font-ui:"Microsoft JhengHei","微軟正黑體","Noto Sans 
 assert.match(html, /family=Noto\+Sans\+TC/);
 assert.doesNotMatch(html, /DM Sans|Fraunces/);
 assert.match(html, /svg text\{font-family:var\(--font-ui\)\}/);
-assert.match(html, /renderTrendChart\("dashboard-weight-chart",body,\{metric:"weight"\}\)/);
+assert.match(html, /weightTrendRows=body\.filter\(row=>num\(row\.weight\)!==null\)\.slice\(-7\)/);
+assert.match(html, /renderTrendChart\("dashboard-weight-chart",weightTrendRows,\{metric:"weight",compact:true\}\)/);
 assert.doesNotMatch(html, /renderTrendChart\("dashboard-weight-chart"[^\n]*showDataLabels:false/);
 assert.match(html, /function positionTrendAtLatest\(scroll\)/);
 assert.match(html, /預設顯示最新資料/);
