@@ -81,6 +81,10 @@ assert.doesNotMatch(html, /weightTrendRows=body\.filter\([^\n]+\.slice\(-7\)/);
 assert.match(html, /renderTrendChart\("dashboard-weight-chart",weightTrendRows,\{metric:"weight",compact:true\}\)/);
 assert.doesNotMatch(html, /renderTrendChart\("dashboard-weight-chart"[^\n]*showDataLabels:false/);
 assert.match(html, /function positionTrendAtLatest\(scroll\)/);
+assert.match(html, /function bindTrendDrag\(scroll\)/);
+assert.match(html, /touchmove/);
+assert.match(html, /passive:false/);
+assert.match(html, /touch-action:pan-y/);
 assert.match(html, /左右滑動查看全部/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
