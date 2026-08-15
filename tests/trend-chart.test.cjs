@@ -76,11 +76,12 @@ assert.match(html, /--font-ui:"Microsoft JhengHei","微軟正黑體","Noto Sans 
 assert.match(html, /family=Noto\+Sans\+TC/);
 assert.doesNotMatch(html, /DM Sans|Fraunces/);
 assert.match(html, /svg text\{font-family:var\(--font-ui\)\}/);
-assert.match(html, /weightTrendRows=body\.filter\(row=>num\(row\.weight\)!==null\)\.slice\(-7\)/);
+assert.match(html, /weightTrendRows=body\.filter\(row=>num\(row\.weight\)!==null\)/);
+assert.doesNotMatch(html, /weightTrendRows=body\.filter\([^\n]+\.slice\(-7\)/);
 assert.match(html, /renderTrendChart\("dashboard-weight-chart",weightTrendRows,\{metric:"weight",compact:true\}\)/);
 assert.doesNotMatch(html, /renderTrendChart\("dashboard-weight-chart"[^\n]*showDataLabels:false/);
 assert.match(html, /function positionTrendAtLatest\(scroll\)/);
-assert.match(html, /預設顯示最新資料/);
+assert.match(html, /左右滑動查看全部/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .find(value => value.trim());
@@ -148,7 +149,8 @@ const thirtyDays = Array.from({ length: 30 }, (_, index) => ({
 }));
 context.__thirtyDays = thirtyDays;
 evaluate('renderTrendChart("nutrition-trend-chart",__thirtyDays,{metric:"calories"})');
-assert.match(longBox.innerHTML, /左右滑動 · 預設顯示最新資料/);
+assert.match(longBox.innerHTML, /左右滑動查看全部 30 筆資料/);
+assert.match(longBox.innerHTML, /class="trend-scroll is-scrollable"/);
 assert.match(longBox.innerHTML, /width="2056"/);
 
 console.log('Trend chart unit tests: PASS');
