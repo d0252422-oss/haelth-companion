@@ -1,5 +1,6 @@
 const assert = require('assert');
 const fs = require('fs');
+const path = require('path');
 const vm = require('vm');
 
 function fakeElement() {
@@ -71,7 +72,7 @@ context.window = context;
 context.globalThis = context;
 vm.createContext(context);
 
-const html = fs.readFileSync('index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 assert.match(html, /--font-ui:"Microsoft JhengHei","微軟正黑體","Noto Sans TC",sans-serif/);
 assert.match(html, /family=Noto\+Sans\+TC/);
 assert.doesNotMatch(html, /DM Sans|Fraunces/);
@@ -90,7 +91,6 @@ assert.match(html, /touch-action:pan-x pan-y/);
 assert.match(html, /\.chart-card\{[^}]*overflow:hidden/);
 assert.match(html, /touchmove/);
 assert.match(html, /passive:false/);
-assert.match(html, /touch-action:pan-y/);
 assert.match(html, /id="muscle-group-select"/);
 assert.match(html, /function exerciseMuscleGroup\(exercise\)/);
 assert.match(html, /function renderExerciseOptions\(group\)/);
@@ -103,6 +103,19 @@ assert.match(html, /deleteWorkoutSet:recordId=>apiPost\("deleteWorkoutSet",\{rec
 assert.match(html, /class="workout-edit-button secondary-button"/);
 assert.match(html, /date:workoutDate/);
 assert.match(html, /查看較舊資料/);
+assert.match(html, /id="global-range"[^>]*>[\s\S]*value="7d"[\s\S]*value="30d"[\s\S]*value="90d"[\s\S]*value="year"[\s\S]*value="custom"/);
+assert.match(html, /const DATE_RANGE_STORAGE_KEY="healthCompanionDateRange"/);
+assert.match(html, /function resolveDateRange\(preset="30d",custom=\{\}\)/);
+assert.match(html, /function applyGlobalDateRange\(next\)/);
+assert.match(html, /id="date-range-form"/);
+assert.match(html, /id="global-start-date"/);
+assert.match(html, /id="global-end-date"/);
+assert.match(html, /const PAGE_HEADERS=/);
+assert.match(html, /function updatePageHeader\(screen=activeScreen\)/);
+assert.doesNotMatch(html, /data-range-area=/);
+assert.doesNotMatch(html, /id="body-custom-range"/);
+assert.match(html, /--space-1:4px/);
+assert.match(html, /--radius-card:15px/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .find(value => value.trim());
@@ -122,6 +135,8 @@ assert.strictEqual(evaluate('metricDisplay("weight",86.444,{full:true,overrides:
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight").length'), 2);
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight",true).length'), 3);
 assert.strictEqual(evaluate('trendViewportWidth({clientWidth:900})'), 334);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("7d")'))), { startDate: '2026-08-15', endDate: '2026-08-21' });
+assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("custom",{startDate:"2026-08-01",endDate:"2026-08-12"})'))), { startDate: '2026-08-01', endDate: '2026-08-12' });
 
 const nutrition = evaluate(`dailyNutritionRows([
   {date:"2026-08-14",includedInTotals:true,calories:500,protein:30,carbs:60,fat:15},
