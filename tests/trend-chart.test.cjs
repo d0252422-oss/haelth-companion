@@ -93,6 +93,12 @@ assert.match(html, /function exerciseMuscleGroup\(exercise\)/);
 assert.match(html, /function renderExerciseOptions\(group\)/);
 assert.match(html, /function renderMuscleGroupOptions\(\)/);
 assert.match(html, /renderExerciseOptions\(groupSelect\.value\)/);
+assert.match(html, /id="workout-date"/);
+assert.match(html, /id="workout-edit-form"/);
+assert.match(html, /updateWorkoutSet:data=>apiPost\("updateWorkoutSet",data\)/);
+assert.match(html, /deleteWorkoutSet:recordId=>apiPost\("deleteWorkoutSet",\{recordId\}\)/);
+assert.match(html, /class="workout-edit-button secondary-button"/);
+assert.match(html, /date:workoutDate/);
 assert.match(html, /查看較舊資料/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
