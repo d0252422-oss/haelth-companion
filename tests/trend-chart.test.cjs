@@ -59,6 +59,8 @@ const context = {
   Map,
   Set,
   Promise,
+  performance: { now: () => 0 },
+  Blob,
   setTimeout: () => 1,
   clearTimeout() {},
   requestAnimationFrame(callback) { callback(); },
@@ -77,10 +79,13 @@ assert.match(html, /--font-ui:"Microsoft JhengHei","微軟正黑體","Noto Sans 
 assert.match(html, /family=Noto\+Sans\+TC/);
 assert.doesNotMatch(html, /DM Sans|Fraunces/);
 assert.match(html, /svg text\{font-family:var\(--font-ui\)\}/);
-assert.match(html, /weightTrendRows=body\.filter\(row=>num\(row\.weight\)!==null\)/);
-assert.doesNotMatch(html, /weightTrendRows=body\.filter\([^\n]+\.slice\(-7\)/);
-assert.match(html, /renderTrendChart\("dashboard-weight-chart",weightTrendRows,\{metric:"weight",compact:true\}\)/);
-assert.doesNotMatch(html, /renderTrendChart\("dashboard-weight-chart"[^\n]*showDataLabels:false/);
+assert.match(html, /const DEFAULT_SHARED_METRICS=\["weight","fatMass","sleepHours","trainingSets","caloriesBurned","caloriesIntake"\]/);
+assert.match(html, /function renderSharedHealthTrends\(force=false\)/);
+assert.match(html, /function bindSharedTrendInteraction\(\)/);
+assert.match(html, /function normalizeHealthTimeline\(payload\)/);
+assert.match(html, /getHealthTimeline:\(start,end\)=>apiGet\("getHealthTimeline"/);
+assert.match(html, /const DASHBOARD_CACHE_SCHEMA="v3"/);
+assert.match(html, /function dedupedRequest\(key,load\)/);
 assert.match(html, /function positionTrendAtLatest\(scroll\)/);
 assert.match(html, /function bindTrendDrag\(scroll\)/);
 assert.match(html, /function bindTrendNavigation\(box,scroll\)/);
@@ -131,12 +136,28 @@ assert.strictEqual(evaluate('metricDisplay("fatMass",24.744,{full:true})'), '24.
 assert.strictEqual(evaluate('metricDisplay("steps",11420,{full:false})'), '11.4k');
 assert.strictEqual(evaluate('metricDisplay("steps",11420,{full:true})'), '11,420 步');
 assert.strictEqual(evaluate('metricDisplay("sleepDuration",450,{full:true})'), '7.5 hr');
+assert.strictEqual(evaluate('metricDisplay("sleepHours",7.5,{full:true})'), '7.5 hr');
 assert.strictEqual(evaluate('metricDisplay("weight",86.444,{full:true,overrides:{decimalPlaces:2}})'), '86.44 kg');
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight").length'), 2);
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight",true).length'), 3);
 assert.strictEqual(evaluate('trendViewportWidth({clientWidth:900})'), 334);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("7d")'))), { startDate: '2026-08-15', endDate: '2026-08-21' });
 assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("custom",{startDate:"2026-08-01",endDate:"2026-08-12"})'))), { startDate: '2026-08-01', endDate: '2026-08-12' });
+
+const timeline = evaluate(`normalizeHealthTimeline({timeline:[
+  {date:"2026-08-14",weight:86.5,bodyFatPercentage:28,sleepHours:null,trainingSets:0,caloriesIntake:null},
+  {date:"2026-08-15",weight:86.4,bodyFatPercentage:28.5,sleepHours:7.5,trainingSets:12,caloriesIntake:1900}
+]})`);
+assert.strictEqual(timeline.length, 2);
+assert.strictEqual(timeline[0].fatMass, 24.22);
+assert.strictEqual(timeline[0].trainingSets, 0);
+assert.strictEqual(timeline[0].caloriesIntake, null);
+context.__timeline = timeline;
+evaluate('appState.healthTimeline=__timeline;selectedHealthDate="2026-08-15";sharedTrendMetrics=["weight","sleepHours","trainingSets","caloriesIntake"];renderSharedHealthTrends(true)');
+assert.match(document.getElementById('shared-health-trends').innerHTML, /data-metric="weight"/);
+assert.match(document.getElementById('shared-health-trends').innerHTML, /data-metric="sleepHours"/);
+assert.match(document.getElementById('shared-health-trends').innerHTML, /shared-cursor/);
+assert.match(document.getElementById('daily-detail-grid').innerHTML, /熱量平衡/);
 
 const nutrition = evaluate(`dailyNutritionRows([
   {date:"2026-08-14",includedInTotals:true,calories:500,protein:30,carbs:60,fat:15},
