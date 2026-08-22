@@ -28,10 +28,15 @@ vm.runInContext([
   line(/function healthDomainMetadata\([^\n]+/, 'domain metadata'),
 ].join('\n'), context);
 
-assert.strictEqual(vm.runInContext('formatHealthCompleteness(0.85)', context), '85%');
-assert.strictEqual(vm.runInContext('formatHealthCompleteness(85)', context), '85%');
+[
+  [0, '0%'], [0.25, '25%'], [0.5, '50%'], [0.85, '85%'], [1, '100%'],
+  [25, '25%'], [85, '85%'], [100, '100%'], [101, '100%'], [8500, '100%'],
+  [-1, '0%'], ['85', '85%'], [null, '—'], [undefined, '—'], [NaN, '—'], [Infinity, '—'], [[], '—'], [{}, '—'],
+].forEach(([input, expected]) => {
+  context.completenessInput = input;
+  assert.strictEqual(vm.runInContext('formatHealthCompleteness(completenessInput)', context), expected, `Unexpected completeness for ${String(input)}`);
+});
 assert.strictEqual(vm.runInContext('formatHealthCompleteness(1.3)', context), '1%');
-assert.strictEqual(vm.runInContext('formatHealthCompleteness(-0.5)', context), '0%');
 assert.ok(warnings.length >= 3, 'Legacy, overflow, and negative values must produce telemetry warnings');
 
 context.today = {
@@ -63,5 +68,15 @@ assert.match(html, /sleep:"睡眠"/);
 assert.match(html, /bodyComposition:"身體組成"/);
 assert.match(html, /domainMetadata\.partial\.length\?"所有領域皆可計分":"資料完整"/);
 assert.doesNotMatch(html, /Object\.entries\(today\.scoreMissingData/);
+
+context.today = {
+  sleepSystemScore: null, recoveryScore: null, fatigueIndex: null, activityScore: null,
+  trainingScore: null, nutritionScore: null, bodyCompositionScore: null,
+  scoreAvailableDomains: [], scoreMissingDomains: [], scorePartialDomains: [],
+};
+const emptyMetadata = vm.runInContext('healthDomainMetadata(today)', context);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(emptyMetadata.available)), []);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(emptyMetadata.partial)), []);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(emptyMetadata.missing)), ['sleep', 'recovery', 'fatigue', 'activity', 'training', 'nutrition', 'bodyComposition']);
 
 console.log('Health score completeness UI tests: PASS');
