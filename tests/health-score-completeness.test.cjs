@@ -1,0 +1,67 @@
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+function line(pattern, label) {
+  const match = html.match(pattern);
+  assert.ok(match, `${label} must exist`);
+  return match[0];
+}
+
+const warnings = [];
+const context = {
+  console: { warn: (...args) => warnings.push(args) },
+  Set, Number, Math, Object, Array, String,
+};
+vm.createContext(context);
+vm.runInContext([
+  line(/function valid\([^\n]+/, 'valid'),
+  line(/function num\([^\n]+/, 'num'),
+  line(/const HEALTH_DOMAIN_LABELS=[^\n]+/, 'domain labels'),
+  line(/const healthCompletenessWarnings=[^\n]+/, 'warning cache'),
+  line(/function normalizeHealthCompleteness\([^\n]+/, 'completeness normalizer'),
+  line(/function formatHealthCompleteness\([^\n]+/, 'completeness formatter'),
+  line(/function normalizeHealthConfidence\([^\n]+/, 'confidence normalizer'),
+  line(/function healthDomainMetadata\([^\n]+/, 'domain metadata'),
+].join('\n'), context);
+
+assert.strictEqual(vm.runInContext('formatHealthCompleteness(0.85)', context), '85%');
+assert.strictEqual(vm.runInContext('formatHealthCompleteness(85)', context), '85%');
+assert.strictEqual(vm.runInContext('formatHealthCompleteness(1.3)', context), '1%');
+assert.strictEqual(vm.runInContext('formatHealthCompleteness(-0.5)', context), '0%');
+assert.ok(warnings.length >= 3, 'Legacy, overflow, and negative values must produce telemetry warnings');
+
+context.today = {
+  sleepSystemScore: 91,
+  recoveryScore: 73,
+  fatigueIndex: 17,
+  activityScore: 99,
+  trainingScore: 49,
+  nutritionScore: null,
+  bodyCompositionScore: 98,
+  dataCompleteness: 85,
+  scoreConfidence: 'HIGH',
+  scoreMissingData: {
+    sleep: ['deep'], recovery: ['hrv'], fatigue: ['hrvSuppression'], activity: [], training: [],
+    nutrition: ['calories'], bodyComposition: ['goalProgress'], health: ['nutrition'],
+  },
+};
+const metadata = vm.runInContext('healthDomainMetadata(today)', context);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(metadata.missing)), ['nutrition']);
+assert.ok(!metadata.missing.includes('sleep'));
+assert.ok(!metadata.missing.includes('activity'));
+assert.ok(!metadata.missing.includes('training'));
+assert.ok(!metadata.missing.includes('health'));
+assert.deepStrictEqual(JSON.parse(JSON.stringify(metadata.partial)), ['sleep', 'recovery', 'fatigue', 'bodyComposition']);
+assert.strictEqual(vm.runInContext('normalizeHealthConfidence("HIGH",0.4,5)', context), 'LOW');
+assert.strictEqual(vm.runInContext('normalizeHealthConfidence("HIGH",null,0)', context), '—');
+
+assert.match(html, /sleep:"睡眠"/);
+assert.match(html, /bodyComposition:"身體組成"/);
+assert.match(html, /domainMetadata\.partial\.length\?"所有領域皆可計分":"資料完整"/);
+assert.doesNotMatch(html, /Object\.entries\(today\.scoreMissingData/);
+
+console.log('Health score completeness UI tests: PASS');
