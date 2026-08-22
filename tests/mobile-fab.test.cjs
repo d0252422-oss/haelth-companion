@@ -18,10 +18,15 @@ assert.match(html, /function closeSheet\(\)\{setOverlayOpen\(document\.getElemen
 assert.match(html, /function refreshInBackground\(label,task\)/);
 assert.doesNotMatch(html, /await refreshAfterRecordMutation\(/);
 assert.doesNotMatch(html, /await loadRange\(globalDateRange,\{force:true\}\);closeSheet\(\)/);
-assert.match(html, /upsertBodyRecord\(data\);closeSheet\(\);toast/);
+assert.match(html, /upsertBodyRecord\(data\);setSubmitting\(btn,false\);closeSheet\(\);toast/);
 assert.match(html, /upsertHealthCheckin\([\s\S]*?\);closeSheet\(\);toast\("身體狀態已更新。"\)/);
 assert.match(html, /start-workout"\)\.onclick=\(\)=>\{workoutSession=/);
 assert.match(html, /UI_TEST_MODE=/);
 assert.match(html, /document\.elementFromPoint\(event\.clientX,event\.clientY\)/);
+assert.match(html, /function optimisticUpsertMeals\(records\)/);
+assert.match(html, /function revalidateNutritionDate\(date\)/);
+assert.match(html, /clientRequestId:mutationRequestId\(form\)/);
+assert.match(html, /setSubmitting\(btn,false\);closeSheet\(\);optimisticUpsertMeals/);
+assert.doesNotMatch(html, /refreshInBackground\("nutrition",\(\)=>refreshAfterRecordMutation\("nutrition"\)\)/);
 
 console.log('Mobile FAB regression tests: PASS');
