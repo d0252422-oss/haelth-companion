@@ -84,7 +84,7 @@ assert.match(html, /function renderSharedHealthTrends\(force=false\)/);
 assert.match(html, /function bindSharedTrendInteraction\(\)/);
 assert.match(html, /function normalizeHealthTimeline\(payload\)/);
 assert.match(html, /getHealthTimeline:\(start,end\)=>apiGet\("getHealthTimeline"/);
-assert.match(html, /const DASHBOARD_CACHE_SCHEMA="v3"/);
+assert.match(html, /const DASHBOARD_CACHE_SCHEMA="v4"/);
 assert.match(html, /function dedupedRequest\(key,load\)/);
 assert.match(html, /function positionTrendAtLatest\(scroll\)/);
 assert.match(html, /function bindTrendDrag\(scroll\)/);
@@ -141,7 +141,9 @@ assert.strictEqual(evaluate('metricDisplay("weight",86.444,{full:true,overrides:
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight").length'), 2);
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight",true).length'), 3);
 assert.strictEqual(evaluate('trendViewportWidth({clientWidth:900})'), 334);
-assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("7d")'))), { startDate: '2026-08-15', endDate: '2026-08-21' });
+const sevenDayRange = JSON.parse(JSON.stringify(evaluate('resolveDateRange("7d")')));
+assert.strictEqual(sevenDayRange.endDate, evaluate('getLocalDateString()'));
+assert.strictEqual((new Date(`${sevenDayRange.endDate}T12:00:00Z`) - new Date(`${sevenDayRange.startDate}T12:00:00Z`)) / 86400000, 6);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("custom",{startDate:"2026-08-01",endDate:"2026-08-12"})'))), { startDate: '2026-08-01', endDate: '2026-08-12' });
 
 const timeline = evaluate(`normalizeHealthTimeline({timeline:[
