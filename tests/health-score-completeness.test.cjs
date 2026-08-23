@@ -66,8 +66,19 @@ assert.strictEqual(vm.runInContext('normalizeHealthConfidence("HIGH",null,0)', c
 
 assert.match(html, /sleep:"睡眠"/);
 assert.match(html, /bodyComposition:"身體組成"/);
-assert.match(html, /domainMetadata\.partial\.length\?"所有領域皆可計分":"資料完整"/);
+assert.match(html, /分數依據與健康資料覆蓋率/);
+assert.match(html, /健康資料覆蓋率：/);
+assert.doesNotMatch(html, /資料完整度：/);
+assert.match(html, /domainMetadata\.partial\.length\?"所有領域皆可計分":"所有領域資料完整"/);
 assert.doesNotMatch(html, /Object\.entries\(today\.scoreMissingData/);
+
+context.today = {
+  sleepSystemScore: 91, recoveryScore: 73, fatigueIndex: 0, activityScore: 99,
+  trainingScore: [], nutritionScore: 80, bodyCompositionScore: 82,
+};
+const invalidArrayMetadata = vm.runInContext('healthDomainMetadata(today)', context);
+assert.ok(invalidArrayMetadata.available.includes('fatigue'), 'A legitimate zero remains available');
+assert.ok(invalidArrayMetadata.missing.includes('training'), 'An array is not a valid domain score');
 
 context.today = {
   sleepSystemScore: null, recoveryScore: null, fatigueIndex: null, activityScore: null,
