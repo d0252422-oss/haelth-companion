@@ -26,7 +26,7 @@ assert.match(html, /document\.elementFromPoint\(event\.clientX,event\.clientY\)/
 assert.match(html, /function optimisticUpsertMeals\(records\)/);
 assert.match(html, /function revalidateNutritionDate\(date\)/);
 assert.match(html, /clientRequestId:mutationRequestId\(form\)/);
-assert.match(html, /setSubmitting\(btn,false\);closeSheet\(\);optimisticUpsertMeals/);
+assert.match(html, /function completeMealSave\([\s\S]*?closeSheet\(\);optimisticUpsertMeals/);
 assert.doesNotMatch(html, /refreshInBackground\("nutrition",\(\)=>refreshAfterRecordMutation\("nutrition"\)\)/);
 
 console.log('Mobile FAB regression tests: PASS');
