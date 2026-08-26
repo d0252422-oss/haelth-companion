@@ -138,6 +138,12 @@ assert.strictEqual(evaluate('metricDisplay("steps",11420,{full:true})'), '11,420
 assert.strictEqual(evaluate('metricDisplay("sleepDuration",450,{full:true})'), '7.5 hr');
 assert.strictEqual(evaluate('metricDisplay("sleepHours",7.5,{full:true})'), '7.5 hr');
 assert.strictEqual(evaluate('metricDisplay("weight",86.444,{full:true,overrides:{decimalPlaces:2}})'), '86.44 kg');
+assert.strictEqual(evaluate('normalizePercentage(0)'), 0);
+assert.strictEqual(evaluate('normalizePercentage(0.8,"FRACTION")'), 80);
+assert.strictEqual(evaluate('normalizePercentage(80)'), 80);
+assert.strictEqual(evaluate('normalizePercentage(100)'), 100);
+assert.strictEqual(evaluate('normalizePercentage(1,"PERCENT")'), 1);
+assert.ok(html.includes('today.scoreFreshness==="STALE"?"待重新計算"'));
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight").length'), 2);
 assert.strictEqual(evaluate('normalizeTrendData([{date:"2026-08-09",weight:86.6},{date:"2026-08-10",weight:null},{date:"2026-08-11",weight:88}],"weight",true).length'), 3);
 assert.strictEqual(evaluate('trendViewportWidth({clientWidth:900})'), 334);
