@@ -75,9 +75,12 @@ Scoped commits created after path verification:
 - `7e3e4a2 feat(ios): add HealthKit sync helper foundation` — 33 isolated files.
 - `1c2d567 feat(backend): wire mobile health reconciliation runtime` — 8 isolated files.
 - `docs(ios): add Mac handoff and change inventory` — 8 isolated files; use `git log -1` for its final hash because this inventory is part of that commit.
+- `b85b3bf fix(ios): rotate sessions and harden runtime errors` — 8 previously isolated files only.
 
 `SAFE_SCOPED_COMMITS_CREATED = YES`  
 `SCOPED_COMMITTED_FILES = 49`  
 `PREEXISTING_OR_MIXED_FILES_COMMITTED = 0`
+
+After scoped commits, `git status --short` reports 133 entries because previously collapsed untracked directories now show their remaining pre-existing children separately. This is a display/granularity change, not evidence that 21 additional human files were modified. The original 112-entry baseline remains preserved and unstaged.
 
 Only exact listed paths may be staged. `git add .`, `git add -A`, broad directories outside `ios-helper/`, and all six mixed-ownership files are forbidden for this scoped commit.
