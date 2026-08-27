@@ -3,7 +3,7 @@
 Run these steps on a Mac with a current supported Xcode. Expected results are explicit so an operator can stop safely when reality differs.
 
 1. **Install/open Xcode.** Install Xcode from Apple, launch it once, accept its license, then run `xcodebuild -version`. Expected: Xcode and build-version output; no account is needed merely to inspect source.
-2. **Generate/open the project.** Install the free development-only XcodeGen **2.43.0**, then run `cd <repo>/ios-helper` and `xcodegen generate --spec project.yml`; run `open HealthSyncHelper.xcodeproj`. Expected: one app and one unit-test target. If policy disallows XcodeGen, create an iOS App target in Xcode and add the same source/configuration directories without changing runtime architecture.
+2. **Run the Cloud Mac gate.** Connect the repository to Codemagic, select branch `feat/ios-healthkit-helper-beta`, and manually start the root workflow `ios-xcode-gate`. It checks for XcodeGen, generates `ios-helper/HealthSyncHelper.xcodeproj`, verifies the app scheme and unit-test target, then runs Simulator XCTest. Expected: the retained project listing names `HealthSyncHelper` and `HealthSyncHelperTests`, and the XCTest result bundle passes. Do not add production signing credentials to this verification workflow.
 3. **Set Team and Bundle Identifier.** In Signing & Capabilities select the owner-approved Team and replace `tw.lifehelper.healthsync` only if that identifier is not registered. Expected: Xcode resolves a development provisioning profile; do not borrow an unrelated Team.
 4. **Enable HealthKit.** Add HealthKit capability and enable Background Delivery. Expected: entitlements contain `com.apple.developer.healthkit` and `com.apple.developer.healthkit.background-delivery`; no HealthKit write permission is added.
 5. **Verify entitlements.** Compare Xcode-generated entitlements with `Configuration/HealthSyncHelper.entitlements`. Expected: HealthKit and one approved `applinks:<host>` entry; placeholders are gone.
@@ -26,4 +26,3 @@ Run these steps on a Mac with a current supported Xcode. Expected results are ex
 22. **Prepare TestFlight.** Increment version/build, archive, validate, and upload only after separate release authorization. Expected: build enters App Store Connect processing; this document does not authorize submission or production cutover.
 
 `MAC_XCODE_VERIFICATION_REQUIRED = YES` until steps 1–20 pass on a real iPhone.
-
