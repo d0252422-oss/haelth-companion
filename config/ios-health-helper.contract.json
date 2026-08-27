@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "hdl-v2.health-ingestion.v1",
+  "platform": "ios",
+  "installClaim": {
+    "ttlSeconds": 300,
+    "singleUse": true,
+    "transport": "verified-universal-link-fragment",
+    "exchangePath": "/v1/mobile/install-claims/exchange"
+  },
+  "ingestion": {
+    "path": "/v1/health/ingestion/batches",
+    "maximumBatchRecords": 250,
+    "canonicalUserDerivedFromSession": true
+  },
+  "healthKitReadTypes": [
+    "HKQuantityTypeIdentifierStepCount",
+    "HKQuantityTypeIdentifierHeartRate",
+    "HKCategoryTypeIdentifierSleepAnalysis"
+  ],
+  "healthKitWriteTypes": []
+}
+
