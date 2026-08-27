@@ -1,0 +1,19 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "REPLACE_TEAM_ID.tw.lifehelper.healthsync"
+        ],
+        "components": [
+          {
+            "/": "/health-sync/bootstrap",
+            "comment": "One-time iOS health helper bootstrap only"
+          }
+        ]
+      }
+    ]
+  }
+}
+
