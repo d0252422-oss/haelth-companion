@@ -41,6 +41,7 @@ test('runtime registers claim, exchange, ingestion, and revocation routes', () =
     'POST /v1/health/ingestion/batches',
     'POST /v1/mobile/install-claims',
     'POST /v1/mobile/install-claims/exchange',
+    'POST /v1/mobile/sessions/refresh',
   ].sort());
 });
 
@@ -69,8 +70,31 @@ test('HTTP E2E binds web user, exchanges signed claim, reconciles updates/delete
   });
   assert.equal(exchanged.status, 200);
   assert.equal(exchanged.body.canonical_user_id, userA);
-  const authHeaders = {
+  const exchangeReplay = await request(origin, '/v1/mobile/install-claims/exchange', 'POST', {
+    claim,
+    installation_public_key: publicDer.toString('base64'),
+    signature: crypto.sign('sha256', Buffer.from(claim), keys.privateKey).toString('base64'),
+  });
+  assert.equal(exchangeReplay.status, 409);
+  assert.equal(exchangeReplay.body.error, 'REPLAYED_CLAIM');
+  const refreshMessage = `${exchanged.body.session_id}\x1f${exchanged.body.refresh_token}`;
+  const refreshed = await request(origin, '/v1/mobile/sessions/refresh', 'POST', {
+    session_id: exchanged.body.session_id,
+    refresh_token: exchanged.body.refresh_token,
+    signature: crypto.sign('sha256', Buffer.from(refreshMessage), keys.privateKey).toString('base64'),
+  });
+  assert.equal(refreshed.status, 200);
+  assert.notEqual(refreshed.body.access_token, exchanged.body.access_token);
+  assert.notEqual(refreshed.body.refresh_token, exchanged.body.refresh_token);
+
+  const oldToken = await ingest(origin, {
     authorization: `Bearer ${exchanged.body.access_token}`,
+    'x-app-session-id': exchanged.body.session_id,
+  }, mutation(1));
+  assert.equal(oldToken.status, 401);
+
+  const authHeaders = {
+    authorization: `Bearer ${refreshed.body.access_token}`,
     'x-app-session-id': exchanged.body.session_id,
   };
 

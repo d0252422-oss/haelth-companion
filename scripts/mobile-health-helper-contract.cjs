@@ -91,6 +91,7 @@ class InstallClaimRegistry {
     this.sessions.set(sessionId, {
       canonicalUserId: row.canonicalUserId,
       installationKeyFingerprint: fingerprint,
+      publicKey,
       accessTokenDigest: sha256(accessToken), refreshTokenDigest: sha256(refreshToken),
       revokedAt: null,
     });
@@ -105,6 +106,23 @@ class InstallClaimRegistry {
     }
     if (session.canonicalUserId !== canonicalUserId) throw new Error('CROSS_USER_UPLOAD');
     return true;
+  }
+
+  refresh({ sessionId, refreshToken, signature }) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.revokedAt) throw new Error('REVOKED_SESSION');
+    if (!crypto.timingSafeEqual(Buffer.from(session.refreshTokenDigest), Buffer.from(sha256(refreshToken)))) {
+      throw new Error('INVALID_REFRESH_TOKEN');
+    }
+    const message = `${sessionId}\x1f${refreshToken}`;
+    if (!crypto.verify('sha256', Buffer.from(message), session.publicKey, signature)) {
+      throw new Error('INVALID_SIGNATURE');
+    }
+    const accessToken = crypto.randomBytes(32).toString('base64url');
+    const nextRefreshToken = crypto.randomBytes(48).toString('base64url');
+    session.accessTokenDigest = sha256(accessToken);
+    session.refreshTokenDigest = sha256(nextRefreshToken);
+    return { sessionId, canonicalUserId: session.canonicalUserId, accessToken, refreshToken: nextRefreshToken };
   }
 
   revoke(sessionId, now = Date.now()) {

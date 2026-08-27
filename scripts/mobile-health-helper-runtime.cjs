@@ -82,11 +82,14 @@ function createMobileHealthRuntime(options = {}) {
   const routes = new Map();
   route('POST', '/v1/mobile/install-claims', async (request, response, body) => {
     const canonicalUserId = await authenticateWebRequest(request);
-    const claim = claims.issue({
-      canonicalUserId,
-      platform: body.platform,
-      installationKeyFingerprint: body.installation_key_fingerprint,
-    });
+    let claim;
+    try {
+      claim = claims.issue({
+        canonicalUserId,
+        platform: body.platform,
+        installationKeyFingerprint: body.installation_key_fingerprint,
+      });
+    } catch { throw codeError('INVALID_INSTALL_BINDING', 400); }
     json(response, 201, {
       continuation_url: `${continuationOrigin}/health-sync/bootstrap#claim=${encodeURIComponent(claim)}`,
       expires_in: 300,
@@ -95,11 +98,18 @@ function createMobileHealthRuntime(options = {}) {
 
   route('POST', '/v1/mobile/install-claims/exchange', async (_request, response, body) => {
     const publicKey = Buffer.from(body.installation_public_key || '', 'base64');
-    const session = claims.exchange({
-      claim: body.claim,
-      publicKeyPem: { key: publicKey, format: 'der', type: 'spki' },
-      signature: Buffer.from(body.signature || '', 'base64'),
-    });
+    let session;
+    try {
+      session = claims.exchange({
+        claim: body.claim,
+        publicKeyPem: { key: publicKey, format: 'der', type: 'spki' },
+        signature: Buffer.from(body.signature || '', 'base64'),
+      });
+    } catch (error) {
+      const code = error.message || 'INVALID_CLAIM';
+      const status = code === 'REPLAYED_CLAIM' ? 409 : code === 'EXPIRED_CLAIM' ? 410 : 400;
+      throw codeError(code, status);
+    }
     json(response, 200, {
       canonical_user_id: session.canonicalUserId,
       access_token: session.accessToken,
@@ -128,6 +138,26 @@ function createMobileHealthRuntime(options = {}) {
       }
     }
     json(response, receipt.rejected.length ? 207 : 200, receipt);
+  });
+
+  route('POST', '/v1/mobile/sessions/refresh', async (_request, response, body) => {
+    let session;
+    try {
+      session = claims.refresh({
+        sessionId: body.session_id,
+        refreshToken: body.refresh_token,
+        signature: Buffer.from(body.signature || '', 'base64'),
+      });
+    } catch (error) {
+      throw codeError(error.message || 'INVALID_REFRESH_TOKEN', 401);
+    }
+    json(response, 200, {
+      canonical_user_id: session.canonicalUserId,
+      access_token: session.accessToken,
+      refresh_token: session.refreshToken,
+      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      session_id: session.sessionId,
+    });
   });
 
   route('DELETE', '/v1/mobile/sessions/current', async (request, response) => {

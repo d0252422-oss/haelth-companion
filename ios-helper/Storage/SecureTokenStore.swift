@@ -2,6 +2,7 @@ import Foundation
 import Security
 
 struct AppSession: Codable, Equatable, Sendable {
+    let sessionID: UUID
     let canonicalUserID: UUID
     let accessToken: String
     let refreshToken: String
@@ -77,4 +78,3 @@ extension JSONDecoder {
         return decoder
     }()
 }
-

@@ -15,16 +15,30 @@ struct ClaimExchangeRequest: Codable {
 }
 
 struct ClaimExchangeResponse: Codable {
+    let sessionID: UUID
     let canonicalUserID: UUID
     let accessToken: String
     let refreshToken: String
     let expiresAt: Date
 
     enum CodingKeys: String, CodingKey {
+        case sessionID = "session_id"
         case canonicalUserID = "canonical_user_id"
         case accessToken = "access_token"
         case refreshToken = "refresh_token"
         case expiresAt = "expires_at"
+    }
+}
+
+struct SessionRefreshRequest: Codable {
+    let sessionID: UUID
+    let refreshToken: String
+    let signature: String
+
+    enum CodingKeys: String, CodingKey {
+        case sessionID = "session_id"
+        case refreshToken = "refresh_token"
+        case signature
     }
 }
 
@@ -39,7 +53,11 @@ actor SessionManager {
         self.installationKeyStore = installationKeyStore
     }
 
-    func currentSession() throws -> AppSession? { try tokenStore.load() }
+    func currentSession() async throws -> AppSession? {
+        guard let session = try tokenStore.load() else { return nil }
+        if session.expiresAt <= Date(timeIntervalSinceNow: 60) { return try await refresh(session) }
+        return session
+    }
 
     func exchange(_ claim: InstallClaim) async throws -> AppSession {
         let publicKey = try installationKeyStore.subjectPublicKeyInfoData()
@@ -55,6 +73,7 @@ actor SessionManager {
             body: request
         )
         let session = AppSession(
+            sessionID: response.sessionID,
             canonicalUserID: response.canonicalUserID,
             accessToken: response.accessToken,
             refreshToken: response.refreshToken,
@@ -62,6 +81,30 @@ actor SessionManager {
         )
         try tokenStore.save(session)
         return session
+    }
+
+    private func refresh(_ session: AppSession) async throws -> AppSession {
+        let message = "\(session.sessionID.uuidString.lowercased())\u{001F}\(session.refreshToken)"
+        let request = SessionRefreshRequest(
+            sessionID: session.sessionID,
+            refreshToken: session.refreshToken,
+            signature: try installationKeyStore.sign(Data(message.utf8)).base64EncodedString()
+        )
+        let response: ClaimExchangeResponse = try await api.send(
+            path: "/v1/mobile/sessions/refresh",
+            body: request
+        )
+        guard response.sessionID == session.sessionID,
+              response.canonicalUserID == session.canonicalUserID else { throw APIError.forbidden }
+        let refreshed = AppSession(
+            sessionID: response.sessionID,
+            canonicalUserID: response.canonicalUserID,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+            expiresAt: response.expiresAt
+        )
+        try tokenStore.save(refreshed)
+        return refreshed
     }
 
     func revokeLocalSession() throws { try tokenStore.clear() }

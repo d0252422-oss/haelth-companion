@@ -18,7 +18,8 @@ struct APIClient: Sendable {
         path: String,
         method: String = "POST",
         body: Request,
-        bearerToken: String? = nil
+        bearerToken: String? = nil,
+        headers: [String: String] = [:]
     ) async throws -> Response {
         guard baseURL.scheme == "https", let url = URL(string: path, relativeTo: baseURL) else {
             throw APIError.invalidConfiguration
@@ -28,6 +29,9 @@ struct APIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let bearerToken { request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization") }
+        for (name, value) in headers where name.caseInsensitiveCompare("Authorization") != .orderedSame {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         request.httpBody = try JSONEncoder.canonical.encode(body)
 
         let data: Data
@@ -48,4 +52,3 @@ struct APIClient: Sendable {
         catch { throw APIError.malformedResponse }
     }
 }
-

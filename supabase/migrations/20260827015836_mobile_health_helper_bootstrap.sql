@@ -29,6 +29,7 @@ create table private.mobile_app_sessions (
   canonical_user_id uuid not null references public.users(id) on delete cascade,
   platform text not null check (platform in ('android', 'ios')),
   installation_key_fingerprint text not null check (installation_key_fingerprint ~ '^[0-9a-f]{64}$'),
+  installation_public_key_spki bytea not null,
   access_token_digest text not null unique check (access_token_digest ~ '^[0-9a-f]{64}$'),
   refresh_token_digest text not null unique check (refresh_token_digest ~ '^[0-9a-f]{64}$'),
   access_expires_at timestamptz not null,

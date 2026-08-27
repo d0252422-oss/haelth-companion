@@ -36,7 +36,8 @@ struct HealthIngestionClient: Sendable {
                 canonicalUserID: session.canonicalUserID,
                 mutations: records
             ),
-            bearerToken: session.accessToken
+            bearerToken: session.accessToken,
+            headers: ["X-App-Session-ID": session.sessionID.uuidString.lowercased()]
         )
     }
 }
