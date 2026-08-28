@@ -195,10 +195,13 @@ test('background callbacks use isolated one-shot lifecycle ownership', () => {
 
   assert.match(background, /@MainActor\s+final class BackgroundHealthSync/u);
   assert.doesNotMatch(background, /processing\.setTaskCompleted[\s\S]*Task\s*\{/u);
-  assert.match(lifecycle, /actor BackgroundTaskLifecycle/u);
+  assert.match(lifecycle, /@MainActor\s+final class BackgroundTaskLifecycle/u);
   assert.match(lifecycle, /guard !didComplete else \{ return \}/u);
   assert.match(lifecycle, /operation\?\.cancel\(\)/u);
-  assert.match(observer, /actor HealthKitObserverCompletion/u);
-  assert.match(observer, /self\.completion = nil/u);
+  assert.match(background, /using: DispatchQueue\.main/u);
+  assert.match(background, /MainActor\.assumeIsolated/u);
+  assert.match(observer, /struct HealthKitObserverCallbackBridge: Sendable/u);
+  assert.match(observer, /defer \{ completion\(\) \}/u);
+  assert.match(observer, /continuation\.yield\(\(\)\)/u);
   assert.doesNotMatch(source, /nonisolated\(unsafe\)|unsafeBitCast|@unchecked Sendable/u);
 });

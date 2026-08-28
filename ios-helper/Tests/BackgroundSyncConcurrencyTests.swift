@@ -1,15 +1,16 @@
 import XCTest
 @testable import HealthSyncHelper
 
+@MainActor
 final class BackgroundSyncConcurrencyTests: XCTestCase {
     func testBackgroundSyncSuccessCompletesExactlyOnce() async {
-        let lifecycle = BackgroundTaskLifecycle(task: FakeBackgroundTask())
+        var completions: [Bool] = []
+        let lifecycle = BackgroundTaskLifecycle { completions.append($0) }
 
         let result = await lifecycle.run { true }
         lifecycle.requestExpiration()
-        await Task.yield()
         let repeatedResult = await lifecycle.run { false }
-        let snapshot = await lifecycle.snapshot()
+        let snapshot = lifecycle.snapshot()
 
         XCTAssertTrue(result)
         XCTAssertFalse(repeatedResult)
@@ -22,22 +23,26 @@ final class BackgroundSyncConcurrencyTests: XCTestCase {
                 expired: false
             )
         )
+        XCTAssertEqual(completions, [true])
     }
 
     func testBackgroundSyncFailureCompletesExactlyOnce() async {
-        let lifecycle = BackgroundTaskLifecycle(task: FakeBackgroundTask())
+        var completions: [Bool] = []
+        let lifecycle = BackgroundTaskLifecycle { completions.append($0) }
 
         let result = await lifecycle.run { false }
-        let snapshot = await lifecycle.snapshot()
+        let snapshot = lifecycle.snapshot()
 
         XCTAssertFalse(result)
         XCTAssertEqual(snapshot.completionResult, false)
         XCTAssertEqual(snapshot.completionInvocationCount, 1)
+        XCTAssertEqual(completions, [false])
     }
 
     func testExpirationCancelsOperationAndCompletesOnce() async {
         let cancellation = CancellationObservation()
-        let lifecycle = BackgroundTaskLifecycle(task: FakeBackgroundTask())
+        var completions: [Bool] = []
+        let lifecycle = BackgroundTaskLifecycle { completions.append($0) }
         let running = Task {
             await lifecycle.run {
                 await cancellation.markStarted()
@@ -51,60 +56,65 @@ final class BackgroundSyncConcurrencyTests: XCTestCase {
         lifecycle.requestExpiration()
         let result = await running.value
         let cancellationObserved = await cancellation.wasObserved()
-        let snapshot = await lifecycle.snapshot()
+        let snapshot = lifecycle.snapshot()
 
         XCTAssertFalse(result)
         XCTAssertTrue(cancellationObserved)
         XCTAssertEqual(snapshot.completionInvocationCount, 1)
         XCTAssertEqual(snapshot.completionResult, false)
+        XCTAssertEqual(completions, [false])
     }
 
     func testCancellationBeforeStartFailsClosed() async {
-        let lifecycle = BackgroundTaskLifecycle(task: FakeBackgroundTask())
+        var completions: [Bool] = []
+        let lifecycle = BackgroundTaskLifecycle { completions.append($0) }
 
-        await lifecycle.cancel()
+        lifecycle.cancel()
         let result = await lifecycle.run { true }
-        let snapshot = await lifecycle.snapshot()
+        let snapshot = lifecycle.snapshot()
 
         XCTAssertFalse(result)
         XCTAssertEqual(snapshot.completionInvocationCount, 1)
         XCTAssertEqual(snapshot.completionResult, false)
+        XCTAssertEqual(completions, [false])
     }
 
     func testHealthKitCallbackSuccessCompletesOnce() async {
-        let completion = HealthKitObserverCompletion({})
+        let (events, continuation) = AsyncStream.makeStream(of: Void.self)
+        let bridge = HealthKitObserverCallbackBridge(continuation: continuation)
+        var completionCount = 0
 
-        await HealthKitObserverCallbackBridge.run(completion: completion) {}
-        let invocationCount = await completion.completedInvocationCount()
+        let enqueued = bridge.receive(error: nil) { completionCount += 1 }
+        var iterator = events.makeAsyncIterator()
+        let event = await iterator.next()
 
-        XCTAssertEqual(invocationCount, 1)
+        XCTAssertTrue(enqueued)
+        XCTAssertNotNil(event)
+        XCTAssertEqual(completionCount, 1)
     }
 
     func testHealthKitCallbackFailureStillCompletesOnce() async {
-        let completion = HealthKitObserverCompletion({})
+        let (_, continuation) = AsyncStream.makeStream(of: Void.self)
+        let bridge = HealthKitObserverCallbackBridge(continuation: continuation)
+        var completionCount = 0
 
-        await HealthKitObserverCallbackBridge.run(completion: completion) {
-            throw CallbackTestError.expected
+        let enqueued = bridge.receive(error: CallbackTestError.expected) {
+            completionCount += 1
         }
-        let invocationCount = await completion.completedInvocationCount()
 
-        XCTAssertEqual(invocationCount, 1)
+        XCTAssertFalse(enqueued)
+        XCTAssertEqual(completionCount, 1)
     }
 
     func testHealthKitCallbackCannotCompleteTwice() async {
-        let completion = HealthKitObserverCompletion({})
+        let (_, continuation) = AsyncStream.makeStream(of: Void.self)
+        let bridge = HealthKitObserverCallbackBridge(continuation: continuation)
+        var completionCount = 0
 
-        await completion.finish()
-        await completion.finish()
-        let invocationCount = await completion.completedInvocationCount()
+        _ = bridge.receive(error: nil) { completionCount += 1 }
 
-        XCTAssertEqual(invocationCount, 1)
+        XCTAssertEqual(completionCount, 1)
     }
-}
-
-private final class FakeBackgroundTask: BackgroundTaskCompleting {
-    var expirationHandler: (() -> Void)?
-    func setTaskCompleted(success _: Bool) {}
 }
 
 private actor CancellationObservation {

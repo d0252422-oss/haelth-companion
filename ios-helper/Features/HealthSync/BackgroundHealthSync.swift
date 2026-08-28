@@ -1,4 +1,5 @@
 import BackgroundTasks
+import Dispatch
 import HealthKit
 
 @MainActor
@@ -7,6 +8,7 @@ final class BackgroundHealthSync {
     private let store: HKHealthStore
     private let coordinator: HealthSyncCoordinator
     private var observerQueries: [HKObserverQuery] = []
+    private var observerTasks: [Task<Void, Never>] = []
     private var observersEnabled = false
     private let retryPolicy = RetryPolicy()
     private let defaults = UserDefaults.standard
@@ -17,19 +19,35 @@ final class BackgroundHealthSync {
     }
 
     func register() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.taskIdentifier, using: nil) { [weak self] task in
-            guard let processing = task as? BGProcessingTask else {
-                task.setTaskCompleted(success: false)
-                return
-            }
-            let lifecycle = BackgroundTaskLifecycle(task: processing)
-            Task { @MainActor [weak self] in
-                guard let self else {
-                    await lifecycle.cancel()
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: Self.taskIdentifier,
+            using: DispatchQueue.main
+        ) { [weak self] task in
+            MainActor.assumeIsolated {
+                guard let self, let processing = task as? BGProcessingTask else {
+                    task.setTaskCompleted(success: false)
                     return
                 }
-                await self.run(lifecycle: lifecycle)
+                self.start(processingTask: processing)
             }
+        }
+    }
+
+    private func start(processingTask: BGProcessingTask) {
+        let lifecycle = BackgroundTaskLifecycle { success in
+            processingTask.setTaskCompleted(success: success)
+        }
+        processingTask.expirationHandler = { [weak lifecycle] in
+            Task { @MainActor in
+                lifecycle?.requestExpiration()
+            }
+        }
+        Task { @MainActor [weak self] in
+            guard let self else {
+                lifecycle.cancel()
+                return
+            }
+            await self.run(lifecycle: lifecycle)
         }
     }
 
@@ -63,15 +81,18 @@ final class BackgroundHealthSync {
         observersEnabled = true
         let coordinator = self.coordinator
         for type in HealthKitAuthorization.readTypes.compactMap({ $0 as? HKSampleType }) {
+            let (events, continuation) = AsyncStream.makeStream(
+                of: Void.self,
+                bufferingPolicy: .bufferingNewest(1)
+            )
+            let bridge = HealthKitObserverCallbackBridge(continuation: continuation)
+            observerTasks.append(Task {
+                for await _ in events {
+                    try? await coordinator.synchronize()
+                }
+            })
             let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
-                guard error == nil else {
-                    completion()
-                    return
-                }
-                let oneShotCompletion = HealthKitObserverCompletion(completion)
-                HealthKitObserverCallbackBridge.start(completion: oneShotCompletion) {
-                    try await coordinator.synchronize()
-                }
+                bridge.receive(error: error, completion: completion)
             }
             store.execute(query)
             store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }

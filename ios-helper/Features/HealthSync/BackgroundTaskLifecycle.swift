@@ -1,12 +1,3 @@
-import BackgroundTasks
-
-protocol BackgroundTaskCompleting: AnyObject {
-    var expirationHandler: (() -> Void)? { get set }
-    func setTaskCompleted(success: Bool)
-}
-
-extension BGProcessingTask: BackgroundTaskCompleting {}
-
 struct BackgroundTaskLifecycleSnapshot: Equatable, Sendable {
     let completed: Bool
     let completionResult: Bool?
@@ -14,26 +5,23 @@ struct BackgroundTaskLifecycleSnapshot: Equatable, Sendable {
     let expired: Bool
 }
 
-actor BackgroundTaskLifecycle {
-    private var task: (any BackgroundTaskCompleting)?
+@MainActor
+final class BackgroundTaskLifecycle {
+    private var completion: (@MainActor (Bool) -> Void)?
     private var operation: Task<Bool, Never>?
     private var didComplete = false
     private var didExpire = false
     private var completionResult: Bool?
     private var completionInvocationCount = 0
 
-    init(task: sending any BackgroundTaskCompleting) {
-        self.task = task
+    init(completion: @escaping @MainActor (Bool) -> Void) {
+        self.completion = completion
     }
 
     func run(
         operation: sending @escaping @Sendable () async -> Bool
     ) async -> Bool {
-        guard !didComplete, operation == nil, let task else { return false }
-
-        task.expirationHandler = { [weak self] in
-            self?.requestExpiration()
-        }
+        guard !didComplete, operation == nil else { return false }
 
         let work = Task { await operation() }
         self.operation = work
@@ -46,8 +34,8 @@ actor BackgroundTaskLifecycle {
         return success
     }
 
-    nonisolated func requestExpiration() {
-        Task { await expire() }
+    func requestExpiration() {
+        expire()
     }
 
     func cancel() {
@@ -76,9 +64,8 @@ actor BackgroundTaskLifecycle {
         completionResult = success
         completionInvocationCount += 1
 
-        let ownedTask = task
-        task = nil
-        ownedTask?.expirationHandler = nil
-        ownedTask?.setTaskCompleted(success: success)
+        let ownedCompletion = completion
+        completion = nil
+        ownedCompletion?(success)
     }
 }
