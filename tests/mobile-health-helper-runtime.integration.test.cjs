@@ -46,8 +46,10 @@ test('runtime registers claim, exchange, ingestion, and revocation routes', () =
 });
 
 test('HTTP E2E binds web user, exchanges signed claim, reconciles updates/deletes, and revokes', async (t) => {
+  const auditEvents = [];
   const runtime = createMobileHealthRuntime({
     continuationOrigin: 'https://sync.example.com',
+    audit: (event) => auditEvents.push(event),
     authenticateWebRequest: async (request) => request.headers.authorization === 'Bearer verified-web-session' ? userA : Promise.reject(Object.assign(new Error(), { code: 'WEB_SESSION_REQUIRED', status: 401 })),
   });
   const server = http.createServer(runtime.handler);
@@ -125,6 +127,20 @@ test('HTTP E2E binds web user, exchanges signed claim, reconciles updates/delete
   const afterRevoke = await ingest(origin, authHeaders, mutation(4));
   assert.equal(afterRevoke.status, 401);
   assert.equal(afterRevoke.body.error, 'REVOKED_SESSION');
+
+  assert.ok(auditEvents.some((event) => event.event === 'INSTALL_CLAIM_ISSUED'));
+  assert.ok(auditEvents.some((event) => event.event === 'APP_SESSION_ISSUED'));
+  assert.ok(auditEvents.some((event) => event.event === 'APP_SESSION_REFRESHED'));
+  assert.ok(auditEvents.some((event) => event.event === 'APP_SESSION_REVOKED'));
+  assert.ok(auditEvents.some((event) => event.ingestion_result === 'CREATED'));
+  assert.ok(auditEvents.some((event) => event.dedupe_result === 'DUPLICATE'));
+  assert.ok(auditEvents.some((event) => event.stale_update_decision === 'REJECTED_STALE'));
+  assert.ok(auditEvents.some((event) => event.event === 'REQUEST_REJECTED'));
+  const serializedAudit = JSON.stringify(auditEvents);
+  assert.doesNotMatch(serializedAudit, new RegExp(exchanged.body.access_token, 'u'));
+  assert.doesNotMatch(serializedAudit, new RegExp(exchanged.body.refresh_token, 'u'));
+  assert.doesNotMatch(serializedAudit, new RegExp(claim, 'u'));
+  assert.doesNotMatch(serializedAudit, /"(?:access_token|refresh_token|claim|health_value|raw_payload)"/u);
 });
 
 async function ingest(origin, headers, item) {

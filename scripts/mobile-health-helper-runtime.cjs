@@ -75,6 +75,7 @@ function validateMutation(mutation, canonicalUserId) {
 function createMobileHealthRuntime(options = {}) {
   const claims = options.claimRegistry || new InstallClaimRegistry();
   const reconciler = options.reconciler || new SourceRecordReconciler();
+  const audit = typeof options.audit === 'function' ? options.audit : () => {};
   const authenticateWebRequest = options.authenticateWebRequest || (async () => { throw codeError('WEB_SESSION_REQUIRED', 401); });
   const continuationOrigin = options.continuationOrigin;
   if (!continuationOrigin || new URL(continuationOrigin).protocol !== 'https:') throw new Error('HTTPS_CONTINUATION_ORIGIN_REQUIRED');
@@ -90,6 +91,12 @@ function createMobileHealthRuntime(options = {}) {
         installationKeyFingerprint: body.installation_key_fingerprint,
       });
     } catch { throw codeError('INVALID_INSTALL_BINDING', 400); }
+    emitAudit(audit, {
+      event: 'INSTALL_CLAIM_ISSUED',
+      canonical_user_hash: sha256(canonicalUserId),
+      installation_hash: sha256(body.installation_key_fingerprint),
+      http_status: 201,
+    });
     json(response, 201, {
       continuation_url: `${continuationOrigin}/health-sync/bootstrap#claim=${encodeURIComponent(claim)}`,
       expires_in: 300,
@@ -110,6 +117,12 @@ function createMobileHealthRuntime(options = {}) {
       const status = code === 'REPLAYED_CLAIM' ? 409 : code === 'EXPIRED_CLAIM' ? 410 : 400;
       throw codeError(code, status);
     }
+    emitAudit(audit, {
+      event: 'APP_SESSION_ISSUED',
+      canonical_user_hash: sha256(session.canonicalUserId),
+      session_hash: sha256(session.sessionId),
+      http_status: 200,
+    });
     json(response, 200, {
       canonical_user_id: session.canonicalUserId,
       access_token: session.accessToken,
@@ -136,6 +149,20 @@ function createMobileHealthRuntime(options = {}) {
       } else {
         receipt.accepted_idempotency_keys.push(mutation.idempotency_key);
       }
+      emitAudit(audit, {
+        event: 'HEALTH_MUTATION_RECONCILED',
+        canonical_user_hash: sha256(canonicalUserId),
+        session_hash: sha256(sessionId),
+        sample_type: mutation.domain,
+        source_app: mutation.source_app,
+        source_record_hash: sha256(mutation.source_record_id),
+        idempotency_hash: sha256(mutation.idempotency_key),
+        sync_operation: mutation.operation,
+        dedupe_result: result.duplicate === true ? 'DUPLICATE' : 'NOT_DUPLICATE',
+        stale_update_decision: result.action === 'STALE_REJECTED' ? 'REJECTED_STALE' : 'NOT_STALE',
+        ingestion_result: result.action,
+        http_status: result.accepted ? 200 : 207,
+      });
     }
     json(response, receipt.rejected.length ? 207 : 200, receipt);
   });
@@ -151,6 +178,12 @@ function createMobileHealthRuntime(options = {}) {
     } catch (error) {
       throw codeError(error.message || 'INVALID_REFRESH_TOKEN', 401);
     }
+    emitAudit(audit, {
+      event: 'APP_SESSION_REFRESHED',
+      canonical_user_hash: sha256(session.canonicalUserId),
+      session_hash: sha256(session.sessionId),
+      http_status: 200,
+    });
     json(response, 200, {
       canonical_user_id: session.canonicalUserId,
       access_token: session.accessToken,
@@ -167,6 +200,12 @@ function createMobileHealthRuntime(options = {}) {
     const canonicalUserId = request.headers['x-canonical-user-id'];
     authorizeSession(claims, { sessionId, accessToken, canonicalUserId });
     claims.revoke(sessionId);
+    emitAudit(audit, {
+      event: 'APP_SESSION_REVOKED',
+      canonical_user_hash: sha256(canonicalUserId),
+      session_hash: sha256(sessionId),
+      http_status: 204,
+    });
     response.writeHead(204).end();
   });
 
@@ -180,11 +219,29 @@ function createMobileHealthRuntime(options = {}) {
       const body = request.method === 'GET' || request.method === 'DELETE' ? {} : await readJSON(request);
       await matched(request, response, body);
     } catch (error) {
+      emitAudit(audit, {
+        event: 'REQUEST_REJECTED',
+        route: `${request.method} ${new URL(request.url, 'http://runtime.local').pathname}`,
+        error_code: error.code || 'INTERNAL_ERROR',
+        http_status: error.status || 500,
+      });
       json(response, error.status || 500, { error: error.code || 'INTERNAL_ERROR' });
     }
   }
 
   return { handler, routes: Object.freeze([...routes.keys()]), claimRegistry: claims, reconciler };
+}
+
+function emitAudit(audit, event) {
+  try {
+    audit(Object.freeze({
+      schema_version: 'IOS_SYNC_AUDIT_V1',
+      timestamp: new Date().toISOString(),
+      ...event,
+    }));
+  } catch {
+    // Audit collection must never expose request data or change request behavior.
+  }
 }
 
 async function readJSON(request) {
