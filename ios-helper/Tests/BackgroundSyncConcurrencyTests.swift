@@ -86,7 +86,7 @@ final class BackgroundSyncConcurrencyTests: XCTestCase {
 
         let enqueued = bridge.receive(error: nil) { completionCount += 1 }
         var iterator = events.makeAsyncIterator()
-        let event = await iterator.next()
+        let event: Void? = await iterator.next()
 
         XCTAssertTrue(enqueued)
         XCTAssertNotNil(event)
