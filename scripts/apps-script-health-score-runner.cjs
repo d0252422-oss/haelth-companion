@@ -18,9 +18,7 @@ const FUNCTIONS = {
 };
 
 function runFixture(fixture) {
-  const functionName = FUNCTIONS[fixture.domain];
-  if (!functionName || typeof context[functionName] !== 'function') throw new Error(`UNSUPPORTED_DOMAIN:${fixture.domain}`);
-  const result = context[functionName](fixture.canonical_inputs);
+  const result = runDomain(fixture.domain, fixture.canonical_inputs);
   const reason = result.dependencyAdjustment && result.dependencyAdjustment !== 'NONE'
     ? [result.dependencyAdjustment] : [];
   return {
@@ -31,6 +29,12 @@ function runFixture(fixture) {
     expected_reason_codes: reason,
     algorithm_version: context.HEALTH_SCORING_CONFIG.algorithmVersion,
   };
+}
+
+function runDomain(domain, canonicalInputs) {
+  const functionName = FUNCTIONS[domain];
+  if (!functionName || typeof context[functionName] !== 'function') throw new Error(`UNSUPPORTED_DOMAIN:${domain}`);
+  return context[functionName](canonicalInputs);
 }
 
 function main(argv) {
@@ -45,4 +49,4 @@ function main(argv) {
 }
 
 if (require.main === module) main(process.argv.slice(2));
-module.exports = { runFixture };
+module.exports = { runDomain, runFixture };
