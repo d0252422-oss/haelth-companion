@@ -47,11 +47,10 @@ enum IdempotencyKey {
 }
 
 extension ISO8601DateFormatter {
-    static let canonical: ISO8601DateFormatter = {
+    static var canonical: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter
-    }()
+    }
 }
-

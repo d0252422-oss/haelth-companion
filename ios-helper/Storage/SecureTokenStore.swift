@@ -63,18 +63,18 @@ final class KeychainTokenStore: SecureTokenStore, @unchecked Sendable {
 }
 
 extension JSONEncoder {
-    static let canonical: JSONEncoder = {
+    static var canonical: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         return encoder
-    }()
+    }
 }
 
 extension JSONDecoder {
-    static let canonical: JSONDecoder = {
+    static var canonical: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
-    }()
+    }
 }

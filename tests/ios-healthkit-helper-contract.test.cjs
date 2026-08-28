@@ -173,3 +173,15 @@ test('private mobile credential tables deny anonymous/authenticated access', () 
   assert.match(migration, /access_token_digest/iu);
   assert.match(migration, /claim_digest/iu);
 });
+
+test('Swift 6 helpers do not share mutable formatter or coder instances', () => {
+  const root = path.resolve(__dirname, '..', 'ios-helper');
+  const idempotency = fs.readFileSync(path.join(root, 'Models', 'IdempotencyKey.swift'), 'utf8');
+  const tokenStore = fs.readFileSync(path.join(root, 'Storage', 'SecureTokenStore.swift'), 'utf8');
+  const source = `${idempotency}\n${tokenStore}`;
+
+  assert.doesNotMatch(source, /static\s+let\s+canonical\s*:\s*(?:ISO8601DateFormatter|JSONEncoder|JSONDecoder)/u);
+  assert.match(idempotency, /static\s+var\s+canonical\s*:\s*ISO8601DateFormatter/u);
+  assert.match(tokenStore, /static\s+var\s+canonical\s*:\s*JSONEncoder/u);
+  assert.match(tokenStore, /static\s+var\s+canonical\s*:\s*JSONDecoder/u);
+});
