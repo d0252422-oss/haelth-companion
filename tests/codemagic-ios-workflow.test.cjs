@@ -5,7 +5,9 @@ const test = require('node:test');
 
 const repositoryRoot = path.resolve(__dirname, '..');
 const workflowPath = path.join(repositoryRoot, 'codemagic.yaml');
+const projectSpecPath = path.join(repositoryRoot, 'ios-helper', 'project.yml');
 const workflow = fs.readFileSync(workflowPath, 'utf8');
+const projectSpec = fs.readFileSync(projectSpecPath, 'utf8');
 
 test('Codemagic iOS gate is root-scoped, bounded, and unsigned', () => {
   assert.match(workflow, /^workflows:\s*$/m);
@@ -26,6 +28,10 @@ test('Codemagic gate generates and verifies the declared project contract', () =
   assert.match(workflow, /xcodebuild -list -project HealthSyncHelper\.xcodeproj/);
   assert.match(workflow, /expected_targets = \{"HealthSyncHelper", "HealthSyncHelperTests"\}/);
   assert.match(workflow, /expected_schemes = \{"HealthSyncHelper"\}/);
+  assert.match(
+    projectSpec,
+    /HealthSyncHelperTests:[\s\S]*GENERATE_INFOPLIST_FILE: "YES"/,
+  );
 });
 
 test('Codemagic gate runs only simulator tests and exports diagnostics', () => {

@@ -38,4 +38,6 @@ targets:
       - Tests
     dependencies:
       - target: HealthSyncHelper
-
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
