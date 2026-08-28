@@ -185,3 +185,20 @@ test('Swift 6 helpers do not share mutable formatter or coder instances', () => 
   assert.match(tokenStore, /static\s+var\s+canonical\s*:\s*JSONEncoder/u);
   assert.match(tokenStore, /static\s+var\s+canonical\s*:\s*JSONDecoder/u);
 });
+
+test('background callbacks use isolated one-shot lifecycle ownership', () => {
+  const root = path.resolve(__dirname, '..', 'ios-helper');
+  const background = fs.readFileSync(path.join(root, 'Features', 'HealthSync', 'BackgroundHealthSync.swift'), 'utf8');
+  const lifecycle = fs.readFileSync(path.join(root, 'Features', 'HealthSync', 'BackgroundTaskLifecycle.swift'), 'utf8');
+  const observer = fs.readFileSync(path.join(root, 'Features', 'HealthSync', 'HealthKitObserverCallbackBridge.swift'), 'utf8');
+  const source = `${background}\n${lifecycle}\n${observer}`;
+
+  assert.match(background, /@MainActor\s+final class BackgroundHealthSync/u);
+  assert.doesNotMatch(background, /processing\.setTaskCompleted[\s\S]*Task\s*\{/u);
+  assert.match(lifecycle, /actor BackgroundTaskLifecycle/u);
+  assert.match(lifecycle, /guard !didComplete else \{ return \}/u);
+  assert.match(lifecycle, /operation\?\.cancel\(\)/u);
+  assert.match(observer, /actor HealthKitObserverCompletion/u);
+  assert.match(observer, /self\.completion = nil/u);
+  assert.doesNotMatch(source, /nonisolated\(unsafe\)|unsafeBitCast|@unchecked Sendable/u);
+});
