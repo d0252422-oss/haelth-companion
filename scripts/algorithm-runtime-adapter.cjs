@@ -62,7 +62,8 @@ class AppsScriptRuntimeAdapter {
 }
 
 function pythonExecutable() {
-  return process.env.ALGORITHM_PYTHON || path.resolve('.venv', 'Scripts', 'python.exe');
+  return process.env.ALGORITHM_PYTHON || (process.platform === 'win32'
+    ? path.resolve('.venv', 'Scripts', 'python.exe') : 'python3');
 }
 
 class PythonRuntimeAdapter {

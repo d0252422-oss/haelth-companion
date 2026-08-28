@@ -44,7 +44,7 @@ test('persistent runtime starts once, serves all 28 fixtures, and shuts down cle
       assert.equal(candidate.pid, pid);
     }
   } finally { await candidate.close(); }
-  assert.equal(candidate.health, 'UNAVAILABLE');
+  assert.equal(candidate.health, 'STOPPED');
 });
 
 test('shadow integration preserves current raw response and makes zero writes', async () => {
@@ -107,6 +107,16 @@ test('candidate not running fails closed while SHADOW still returns current', as
   assert.equal(result.telemetry.fallback_used, true);
   assert.equal(result.telemetry.error_class, 'CANDIDATE_NOT_RUNNING');
   assert.ok(result.userResult);
+});
+
+test('pending request limit rejects excess work without changing formulas', async () => {
+  const candidate = fake('hang', { maxPendingRequests: 1, requestTimeoutMs: 50 });
+  try {
+    await candidate.start();
+    const first = candidate.execute(requestFor(fixtures[0], { request_id: 'queue-first' })).catch((error) => error.message);
+    await assert.rejects(candidate.execute(requestFor(fixtures[0], { request_id: 'queue-second' })), /CANDIDATE_QUEUE_FULL/u);
+    assert.equal(await first, 'CANDIDATE_TIMEOUT');
+  } finally { await candidate.close(); }
 });
 
 test('startup failure and wrong version become unavailable/incompatible', async () => {

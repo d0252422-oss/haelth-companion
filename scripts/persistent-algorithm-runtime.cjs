@@ -25,16 +25,19 @@ class PersistentPythonRuntimeAdapter {
   constructor(options = {}) {
     this.name = 'PYTHON_PERSISTENT_CANDIDATE';
     this.computeOnly = true;
-    this.executable = options.executable || process.env.ALGORITHM_PYTHON || path.resolve('.venv', 'Scripts', 'python.exe');
+    this.executable = options.executable || process.env.ALGORITHM_PYTHON || (process.platform === 'win32'
+      ? path.resolve('.venv', 'Scripts', 'python.exe') : 'python3');
     this.args = options.args || [path.resolve('scripts', 'python-algorithm-worker.py')];
     this.cwd = options.cwd || path.resolve('.');
     this.startupTimeoutMs = options.startupTimeoutMs || 5000;
     this.requestTimeoutMs = options.requestTimeoutMs || 3000;
-    this.health = 'UNAVAILABLE';
+    this.maxPendingRequests = options.maxPendingRequests || 64;
+    this.health = 'STOPPED';
     this.child = null;
     this.pending = new Map();
     this.startPromise = null;
     this.handshake = null;
+    this.stopping = false;
   }
 
   get pid() { return this.child?.pid || null; }
@@ -43,12 +46,14 @@ class PersistentPythonRuntimeAdapter {
     if (this.health === 'HEALTHY' && this.child) return this.handshake;
     if (this.startPromise) return this.startPromise;
     this.health = 'DEGRADED';
+    this.stopping = false;
     this.startPromise = new Promise((resolve, reject) => {
       let settled = false;
       const fail = (errorClass) => {
         if (settled) return;
         settled = true;
-        this.health = 'UNAVAILABLE';
+        this.health = this.stopping ? 'STOPPED' : 'UNAVAILABLE';
+        this.stopping = false;
         this.startPromise = null;
         reject(new Error(errorClass));
       };
@@ -62,7 +67,8 @@ class PersistentPythonRuntimeAdapter {
       child.once('exit', () => {
         clearTimeout(timeout);
         this.child = null;
-        this.health = 'UNAVAILABLE';
+        this.health = this.stopping ? 'STOPPED' : 'UNAVAILABLE';
+        this.stopping = false;
         this.startPromise = null;
         for (const pending of this.pending.values()) {
           clearTimeout(pending.timeout);
@@ -125,6 +131,7 @@ class PersistentPythonRuntimeAdapter {
     if (!this.child || this.health !== 'HEALTHY') throw new Error(this.health === 'INCOMPATIBLE' ? 'CANDIDATE_WRONG_VERSION' : 'CANDIDATE_NOT_RUNNING');
     const requestId = String(request.request_id || randomUUID());
     if (requestId.length > 128) throw new Error('INVALID_REQUEST_ID');
+    if (this.pending.size >= this.maxPendingRequests) throw new Error('CANDIDATE_QUEUE_FULL');
     const envelope = { ...request, request_id: requestId };
     const serializationStartedAt = performance.now();
     const encodedEnvelope = JSON.stringify(envelope);
@@ -145,13 +152,14 @@ class PersistentPythonRuntimeAdapter {
     });
   }
 
-  async restart() { await this.close(); return this.start(); }
+  async restart() { this.health = 'RESTARTING'; await this.close(); return this.start(); }
 
   async close() {
     const child = this.child;
-    if (!child) { this.health = 'UNAVAILABLE'; this.startPromise = null; return; }
+    if (!child) { this.health = 'STOPPED'; this.startPromise = null; return; }
     this.child = null;
-    this.health = 'UNAVAILABLE';
+    this.health = 'STOPPED';
+    this.stopping = true;
     this.startPromise = null;
     child.stdin.end();
     await new Promise((resolve) => {
@@ -163,7 +171,7 @@ class PersistentPythonRuntimeAdapter {
 
 function errorClass(error) {
   const value = error instanceof Error ? error.message : String(error);
-  const allowed = new Set(['CANDIDATE_NOT_RUNNING', 'CANDIDATE_STARTUP_FAILURE', 'CANDIDATE_STARTUP_TIMEOUT', 'CANDIDATE_CRASH', 'CANDIDATE_TIMEOUT', 'CANDIDATE_INVALID_JSON', 'CANDIDATE_PARTIAL_OUTPUT', 'CANDIDATE_WRONG_VERSION', 'CANDIDATE_TRANSPORT_FAILURE', 'UNKNOWN_ALGORITHM_ID', 'UNKNOWN_ALGORITHM_VERSION', 'INVALID_CANONICAL_INPUTS', 'INVALID_REQUEST_ID']);
+  const allowed = new Set(['CANDIDATE_NOT_RUNNING', 'CANDIDATE_STARTUP_FAILURE', 'CANDIDATE_STARTUP_TIMEOUT', 'CANDIDATE_CRASH', 'CANDIDATE_TIMEOUT', 'CANDIDATE_INVALID_JSON', 'CANDIDATE_PARTIAL_OUTPUT', 'CANDIDATE_WRONG_VERSION', 'CANDIDATE_TRANSPORT_FAILURE', 'CANDIDATE_QUEUE_FULL', 'UNKNOWN_ALGORITHM_ID', 'UNKNOWN_ALGORITHM_VERSION', 'INVALID_CANONICAL_INPUTS', 'INVALID_REQUEST_ID']);
   return allowed.has(value) ? value : 'CANDIDATE_RUNTIME_FAILURE';
 }
 
