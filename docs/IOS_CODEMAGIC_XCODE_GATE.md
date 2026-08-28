@@ -9,7 +9,7 @@ workflow performs one bounded, unsigned Simulator gate:
 2. reuse XcodeGen when installed, or install it once with Homebrew;
 3. generate `ios-helper/HealthSyncHelper.xcodeproj` from `project.yml`;
 4. inspect the generated project and assert the app scheme and test target;
-5. compile the app/test bundle and run the seven Swift XCTest cases in an
+5. compile the app/test bundle and run the fourteen Swift XCTest cases in an
    available iPhone Simulator;
 6. retain the project listing, result bundle, and Xcode activity logs.
 
@@ -44,3 +44,14 @@ Its hard duration limit is 30 minutes, below the 100-minute run budget.
 5. A passing Simulator run closes compilation/XCTest only. HealthKit runtime,
    signing, Universal Links, background delivery, and real-device acceptance
    remain separate Mac/iPhone gates.
+
+## Verified gate evidence
+
+- Verified commit: `de5bd0bff67d312085de3af9bea7f9384241070b`
+- Codemagic build: `6a915c828a685d04485758f6`
+- Result: XcodeGen, project/scheme inspection, Simulator build and XCTest passed.
+- XCTest: 14 executed, 14 passed, 0 failed, 0 skipped, 0 hung.
+- Swift 6 strict-concurrency regression: the former
+  `BackgroundHealthSync.swift` line 25 and line 71 diagnostics did not recur.
+- Retained artifact: project listing, `.xcactivitylog`, and `tests.xcresult`.
+- Production signing, archive, deployment and production writes were not performed.
