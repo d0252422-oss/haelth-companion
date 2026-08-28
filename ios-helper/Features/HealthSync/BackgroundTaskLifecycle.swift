@@ -21,7 +21,7 @@ final class BackgroundTaskLifecycle {
     func run(
         operation: sending @escaping @Sendable () async -> Bool
     ) async -> Bool {
-        guard !didComplete, operation == nil else { return false }
+        guard !didComplete, self.operation == nil else { return false }
 
         let work = Task { await operation() }
         self.operation = work

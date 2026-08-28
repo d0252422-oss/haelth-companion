@@ -196,6 +196,7 @@ test('background callbacks use isolated one-shot lifecycle ownership', () => {
   assert.match(background, /@MainActor\s+final class BackgroundHealthSync/u);
   assert.doesNotMatch(background, /processing\.setTaskCompleted[\s\S]*Task\s*\{/u);
   assert.match(lifecycle, /@MainActor\s+final class BackgroundTaskLifecycle/u);
+  assert.match(lifecycle, /guard !didComplete, self\.operation == nil else \{ return false \}/u);
   assert.match(lifecycle, /guard !didComplete else \{ return \}/u);
   assert.match(lifecycle, /operation\?\.cancel\(\)/u);
   assert.match(background, /using: DispatchQueue\.main/u);
