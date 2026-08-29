@@ -10,6 +10,8 @@ const { AppsScriptRuntimeAdapter, compareResults } = require('../scripts/algorit
 const { AsyncAlgorithmRuntimeRouter, PersistentPythonRuntimeAdapter } = require('../scripts/persistent-algorithm-runtime.cjs');
 
 const fixtures = JSON.parse(fs.readFileSync('fixtures/algorithm-golden/health-score-v1.0.json', 'utf8')).fixtures;
+const pythonExecutable = process.env.ALGORITHM_PYTHON
+  || (process.platform === 'win32' ? path.resolve('.venv', 'Scripts', 'python.exe') : 'python3');
 
 function requestFor(fixture, overrides = {}) {
   return {
@@ -133,7 +135,7 @@ test('startup failure and wrong version become unavailable/incompatible', async 
 });
 
 test('worker rejects invalid JSON and oversized transport frames', async () => {
-  const child = spawn(path.resolve('.venv', 'Scripts', 'python.exe'), [path.resolve('scripts/python-algorithm-worker.py')], {
+  const child = spawn(pythonExecutable, [path.resolve('scripts/python-algorithm-worker.py')], {
     cwd: path.resolve('.'), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, PYTHONPATH: path.resolve('.') },
   });
   child.stderr.resume();
