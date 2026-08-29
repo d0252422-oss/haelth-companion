@@ -1,0 +1,327 @@
+import { withSupabase } from "@supabase/server";
+
+const webAuthVerifyUrl = Deno.env.get("BETA_WEB_AUTH_VERIFY_URL") ?? "";
+const allowedOrigin = Deno.env.get("BETA_ALLOWED_ORIGIN") ?? "";
+const encoder = new TextEncoder();
+const MAX_BODY_BYTES = 1024 * 1024;
+const DOMAINS = new Set([
+  "steps", "heart_rate", "resting_heart_rate", "sleep", "sleep_stage",
+  "weight", "workout", "hrv", "spo2",
+]);
+type Json = Record<string, unknown>;
+
+export default {
+  fetch: withSupabase({ auth: "none" }, async (request, ctx) => {
+    const origin = request.headers.get("origin") ?? "";
+    if (request.method === "OPTIONS") {
+      if (!origin || origin !== allowedOrigin) return json(403, { error: "ORIGIN_REJECTED" });
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+    try {
+      assertConfigured();
+      if (origin && origin !== allowedOrigin) throw failure("ORIGIN_REJECTED", 403);
+      const path = relativePath(new URL(request.url).pathname);
+      if (request.method === "GET" && path === "/health") {
+        return json(200, { status: "ok", environment: "beta" }, origin);
+      }
+      if (request.method === "POST" && path === "/v1/mobile/install-claims") {
+        return await issueClaim(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "POST" && path === "/v1/mobile/install-claims/exchange") {
+        return await exchangeClaim(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "POST" && ["/v1/health/ingestion/batches", "/v1/connectors/ios-shortcut/ingest"].includes(path)) {
+        return await ingest(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "POST" && path === "/v1/mobile/connectors/status") {
+        return await reportStatus(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "GET" && path === "/v1/mobile/connectors/status") {
+        return await getStatus(request, ctx.supabaseAdmin, origin);
+      }
+      throw failure("NOT_FOUND", 404);
+    } catch (error) {
+      const safe = error instanceof SafeError ? error : failure("INTERNAL_ERROR", 500);
+      return json(safe.status, { error: safe.code }, origin);
+    }
+  }),
+};
+
+async function issueClaim(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  if (body.environment !== "beta" || body.binding_method !== "ONE_TIME_CODE" || !["android", "ios"].includes(String(body.platform))) {
+    throw failure("INVALID_INSTALL_BINDING", 400);
+  }
+  const subject = await verifyWebSession(bearer(request));
+  const subjectHash = await sha256(subject);
+  const claim = randomToken(32);
+  const { error } = await admin.rpc("beta_issue_install_claim", {
+    p_canonical_user_id: uuidFromHash(subjectHash),
+    p_external_subject_hash: subjectHash,
+    p_platform: body.platform,
+    p_claim_digest: await sha256(claim),
+    p_expires_at: new Date(Date.now() + 300_000).toISOString(),
+    p_binding_method: "ONE_TIME_CODE",
+  });
+  if (error) throw databaseFailure(error);
+  return json(201, { claim_code: claim, expires_in: 300, environment: "beta" }, origin);
+}
+
+async function exchangeClaim(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  const claim = requiredString(body.claim, "INVALID_CLAIM");
+  const publicKeyBytes = decodeBase64(requiredString(body.installation_public_key, "INVALID_PUBLIC_KEY"));
+  const signatureDer = decodeBase64(requiredString(body.signature, "INVALID_SIGNATURE"));
+  const publicKey = await crypto.subtle.importKey(
+    "spki", publicKeyBytes, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"],
+  ).catch(() => { throw failure("INVALID_PUBLIC_KEY", 400); });
+  const verified = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" }, publicKey, derEcdsaToRaw(signatureDer, 32), encoder.encode(claim),
+  ).catch(() => false);
+  if (!verified) throw failure("INVALID_SIGNATURE", 400);
+
+  const accessToken = randomToken(32);
+  const refreshToken = randomToken(48);
+  const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+  const { data, error } = await admin.rpc("beta_exchange_install_claim", {
+    p_claim_digest: await sha256(claim),
+    p_installation_key_fingerprint: await sha256(publicKeyBytes),
+    p_installation_public_key_spki: `\\x${bytesToHex(publicKeyBytes)}`,
+    p_access_token_digest: await sha256(accessToken),
+    p_refresh_token_digest: await sha256(refreshToken),
+    p_access_expires_at: expiresAt,
+    p_refresh_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+  });
+  if (error) throw databaseFailure(error);
+  const session = Array.isArray(data) ? data[0] as Json : null;
+  if (!session) throw failure("INVALID_CLAIM", 400);
+  return json(200, {
+    canonical_user_id: session.canonical_user_id,
+    session_id: session.session_id,
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: expiresAt,
+    environment: "beta",
+  }, origin);
+}
+
+async function ingest(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  if (body.environment !== "beta") throw failure("WRONG_ENVIRONMENT", 400);
+  const session = await authorizeSession(request, admin);
+  if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!Array.isArray(body.mutations) || body.mutations.length > 250) throw failure("INVALID_BATCH", 400);
+  const receipt: Json = { accepted_idempotency_keys: [], duplicate_idempotency_keys: [], rejected: [] };
+  for (const candidate of body.mutations) {
+    const mutation = validateMutation(candidate as Json, String(session.canonical_user_id));
+    const { data, error } = await admin.rpc("beta_ingest_health_mutation", {
+      p_canonical_user_id: session.canonical_user_id,
+      p_platform: mutation.platform,
+      p_domain: mutation.domain,
+      p_source_app: mutation.source_app,
+      p_source_record_id: mutation.source_record_id,
+      p_source_revision: mutation.source_revision,
+      p_source_updated_at: mutation.source_updated_at || null,
+      p_source_content_hash: mutation.source_content_hash,
+      p_operation: mutation.operation,
+      p_idempotency_key: mutation.idempotency_key,
+      p_record: mutation.operation === "UPSERT" ? mutation.record : null,
+      p_affected_local_dates: mutation.affected_local_dates ?? [],
+    });
+    if (error) throw databaseFailure(error);
+    const action = String(data);
+    if (["CREATED", "UPDATED", "DELETED"].includes(action)) {
+      (receipt.accepted_idempotency_keys as unknown[]).push(mutation.idempotency_key);
+    } else if (action === "REPLAYED") {
+      (receipt.duplicate_idempotency_keys as unknown[]).push(mutation.idempotency_key);
+    } else {
+      (receipt.rejected as unknown[]).push({ idempotency_key: mutation.idempotency_key, error_code: action });
+    }
+  }
+  return json((receipt.rejected as unknown[]).length ? 207 : 200, receipt, origin);
+}
+
+async function reportStatus(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  const session = await authorizeSession(request, admin);
+  if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
+  const { error } = await admin.rpc("beta_report_connector_status", {
+    p_canonical_user_id: session.canonical_user_id,
+    p_platform: body.platform,
+    p_connector_type: body.connector_type,
+    p_connector_version: body.connector_version,
+    p_last_attempt_at: body.last_attempt_at || null,
+    p_last_success_at: body.last_success_at || null,
+    p_last_result: body.last_result || "UNKNOWN",
+    p_available_domains: Array.isArray(body.available_domains) ? body.available_domains : [],
+    p_permission_state: body.permission_state_if_known || "UNKNOWN",
+  });
+  if (error) throw databaseFailure(error);
+  return json(200, { status: "RECORDED" }, origin);
+}
+
+async function getStatus(request: Request, admin: any, origin: string): Promise<Response> {
+  const subject = await verifyWebSession(bearer(request));
+  const userId = uuidFromHash(await sha256(subject));
+  const { data, error } = await admin.from("beta_connector_status")
+    .select("platform,connector_type,connector_version,last_attempt_at,last_success_at,last_result,available_domains,permission_state")
+    .eq("canonical_user_id", userId);
+  if (error) throw databaseFailure(error);
+  return json(200, { connectors: data ?? [] }, origin);
+}
+
+async function authorizeSession(request: Request, admin: any): Promise<Json> {
+  const sessionId = request.headers.get("x-app-session-id") ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
+  const { data, error } = await admin.rpc("beta_authorize_app_session", {
+    p_session_id: sessionId,
+    p_access_token_digest: await sha256(bearer(request)),
+  });
+  if (error) throw databaseFailure(error);
+  const session = Array.isArray(data) ? data[0] as Json : null;
+  if (!session) throw failure("INVALID_SESSION", 401);
+  return session;
+}
+
+async function verifyWebSession(token: string): Promise<string> {
+  if (!webAuthVerifyUrl.startsWith("https://")) throw failure("WEB_AUTH_NOT_CONFIGURED", 503);
+  const upstream = await fetch(webAuthVerifyUrl, {
+    method: "POST",
+    headers: { "content-type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "getCurrentUser", sessionToken: token, payload: {} }),
+  });
+  if (!upstream.ok) throw failure("WEB_SESSION_REQUIRED", 401);
+  const raw = await upstream.json().catch(() => null) as Json | null;
+  const data = (raw?.data ?? raw?.result ?? raw) as Json | null;
+  const profile = (data?.profile ?? data) as Json | null;
+  const subject = profile?.UserID ?? profile?.userId ?? profile?.id;
+  if (typeof subject !== "string" || subject.length < 1 || subject.length > 256) throw failure("WEB_SESSION_REQUIRED", 401);
+  return subject;
+}
+
+function validateMutation(mutation: Json, userId: string): Json {
+  if (mutation.canonical_user_id !== userId) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!["android", "ios"].includes(String(mutation.platform))) throw failure("PLATFORM_MISMATCH", 400);
+  if (!DOMAINS.has(String(mutation.domain))) throw failure("UNSUPPORTED_DOMAIN", 400);
+  if (!["UPSERT", "DELETE"].includes(String(mutation.operation))) throw failure("INVALID_OPERATION", 400);
+  if (!Number.isSafeInteger(mutation.source_revision) || Number(mutation.source_revision) < 1) throw failure("INVALID_SOURCE_REVISION", 400);
+  for (const field of ["source_content_hash", "idempotency_key"]) {
+    if (!/^[0-9a-f]{64}$/.test(String(mutation[field] ?? ""))) throw failure("INVALID_HASH", 400);
+  }
+  requiredString(mutation.source_app, "MISSING_SOURCE_IDENTITY");
+  requiredString(mutation.source_record_id, "MISSING_SOURCE_IDENTITY");
+  if (mutation.operation === "UPSERT") validateRecord(mutation.record as Json, userId);
+  if (mutation.operation === "DELETE" && mutation.record != null) throw failure("DELETE_CONTAINS_RECORD", 400);
+  return mutation;
+}
+
+function validateRecord(record: Json, userId: string): void {
+  if (!record || record.canonical_user_id !== userId) throw failure("CROSS_USER_UPLOAD", 403);
+  if (record.schema_version !== "hdl-v2.health-ingestion.v1") throw failure("SCHEMA_VERSION_MISMATCH", 400);
+  if (!Number.isFinite(Date.parse(String(record.recorded_at)))) throw failure("MALFORMED_TIMESTAMP", 400);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(record.local_date ?? ""))) throw failure("MALFORMED_LOCAL_DATE", 400);
+  if (typeof record.timezone !== "string" || !record.timezone) throw failure("MISSING_TIMEZONE", 400);
+  if (typeof record.value !== "number" || !Number.isFinite(record.value)) throw failure("MALFORMED_VALUE", 400);
+}
+
+async function readJson(request: Request): Promise<Json> {
+  const content = await request.text();
+  if (encoder.encode(content).byteLength > MAX_BODY_BYTES) throw failure("BODY_TOO_LARGE", 413);
+  try { return JSON.parse(content || "{}") as Json; } catch { throw failure("MALFORMED_JSON", 400); }
+}
+
+function bearer(request: Request): string {
+  const header = request.headers.get("authorization") ?? "";
+  if (!header.startsWith("Bearer ") || header.length < 16) throw failure("AUTH_REQUIRED", 401);
+  return header.slice(7);
+}
+
+function relativePath(pathname: string): string {
+  const marker = "/mobile-health-beta";
+  const index = pathname.indexOf(marker);
+  return index >= 0 ? pathname.slice(index + marker.length) || "/" : pathname;
+}
+
+function json(status: number, body: Json, origin = ""): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...corsHeaders(origin) },
+  });
+}
+
+function corsHeaders(origin: string): Record<string, string> {
+  return origin && origin === allowedOrigin ? {
+    "access-control-allow-origin": origin,
+    "access-control-allow-headers": "authorization, content-type, x-app-session-id, x-canonical-user-id",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "vary": "Origin",
+  } : {};
+}
+
+function assertConfigured(): void {
+  if (!allowedOrigin.startsWith("https://") || !webAuthVerifyUrl.startsWith("https://")) {
+    throw failure("BETA_RUNTIME_NOT_CONFIGURED", 503);
+  }
+}
+
+async function sha256(value: string | Uint8Array): Promise<string> {
+  const bytes = typeof value === "string" ? encoder.encode(value) : value;
+  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+}
+
+function uuidFromHash(hash: string): string {
+  const chars = hash.slice(0, 32).split("");
+  chars[12] = "5";
+  chars[16] = ((parseInt(chars[16], 16) & 3) | 8).toString(16);
+  const value = chars.join("");
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+function randomToken(size: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(size));
+  let binary = "";
+  bytes.forEach((byte) => binary += String.fromCharCode(byte));
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function decodeBase64(value: string): Uint8Array {
+  try { return Uint8Array.from(atob(value), (char) => char.charCodeAt(0)); }
+  catch { throw failure("MALFORMED_BASE64", 400); }
+}
+
+function derEcdsaToRaw(der: Uint8Array, width: number): Uint8Array {
+  if (der.length < 8 || der[0] !== 0x30) throw failure("INVALID_SIGNATURE", 400);
+  let offset = der[1] & 0x80 ? 2 + (der[1] & 0x7f) : 2;
+  if (der[offset++] !== 0x02) throw failure("INVALID_SIGNATURE", 400);
+  const rLength = der[offset++];
+  const r = der.slice(offset, offset + rLength); offset += rLength;
+  if (der[offset++] !== 0x02) throw failure("INVALID_SIGNATURE", 400);
+  const sLength = der[offset++];
+  const s = der.slice(offset, offset + sLength);
+  const raw = new Uint8Array(width * 2);
+  raw.set(r.slice(Math.max(0, r.length - width)), width - Math.min(width, r.length));
+  raw.set(s.slice(Math.max(0, s.length - width)), width * 2 - Math.min(width, s.length));
+  return raw;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function requiredString(value: unknown, code: string): string {
+  if (typeof value !== "string" || !value) throw failure(code, 400);
+  return value;
+}
+
+function databaseFailure(error: { message?: string }): SafeError {
+  const message = String(error?.message ?? "");
+  for (const code of ["INVALID_CLAIM", "REPLAYED_CLAIM", "EXPIRED_CLAIM", "REVOKED_CLAIM", "WRONG_ENVIRONMENT", "CANONICAL_IDENTITY_CONFLICT"]) {
+    if (message.includes(code)) return failure(code, code === "REPLAYED_CLAIM" ? 409 : code === "EXPIRED_CLAIM" ? 410 : 400);
+  }
+  return failure("DATABASE_OPERATION_FAILED", 500);
+}
+
+class SafeError extends Error {
+  constructor(readonly code: string, readonly status: number) { super(code); }
+}
+function failure(code: string, status: number): SafeError { return new SafeError(code, status); }

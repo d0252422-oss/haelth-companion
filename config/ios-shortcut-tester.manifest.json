@@ -2,7 +2,7 @@
   "schema_version": "ios-shortcut-tester.v1",
   "name": "健康資料同步",
   "environment": "beta",
-  "ingestion_base_url": "",
+  "ingestion_base_url": "https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta",
   "ingestion_path": "/v1/connectors/ios-shortcut/ingest",
   "ingestion_schema": "hdl-v2.connector-ingestion.v1",
   "authentication": "short_lived_single_use_beta_setup_code_then_user_scoped_session",
@@ -10,5 +10,7 @@
   "connector_type": "ios_shortcut",
   "read_only_domains": ["steps", "heart_rate", "resting_heart_rate", "sleep", "sleep_stage", "weight", "workout", "hrv", "spo2"],
   "max_records_per_batch": 250,
-  "share_url": ""
+  "share_url": "",
+  "runtime_status": "READY_BETA_HTTPS",
+  "share_link_status": "BLOCKED_HUMAN_SHARE_LINK_ONLY"
 }

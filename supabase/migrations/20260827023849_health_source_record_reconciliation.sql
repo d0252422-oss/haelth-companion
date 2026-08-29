@@ -9,7 +9,10 @@ create table private.health_source_record_state (
   id uuid primary key default gen_random_uuid(),
   canonical_user_id uuid not null references public.users(id) on delete cascade,
   platform text not null check (platform in ('android', 'ios')),
-  domain text not null check (domain in ('steps', 'heart_rate', 'sleep')),
+  domain text not null check (domain in (
+    'steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage',
+    'weight', 'workout', 'hrv', 'spo2'
+  )),
   source_system text not null,
   source_record_id text not null,
   source_revision bigint not null check (source_revision > 0),
@@ -73,7 +76,10 @@ declare
   recompute boolean := false;
 begin
   if p_platform not in ('android', 'ios')
-     or p_domain not in ('steps', 'heart_rate', 'sleep')
+     or p_domain not in (
+       'steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage',
+       'weight', 'workout', 'hrv', 'spo2'
+     )
      or p_operation not in ('UPSERT', 'DELETE')
      or p_source_revision <= 0
      or p_content_hash !~ '^[0-9a-f]{64}$' then

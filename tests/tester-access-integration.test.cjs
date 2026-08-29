@@ -25,7 +25,7 @@ test('Web tester UI has manual selection, config-driven links, and no fake href'
   assert.match(html, /IOS_SHORTCUT_SHARE_URL:""/u);
   assert.match(html, /window\.HEALTH_CONNECTOR_CONFIG/u);
   assert.match(html, /binding_method:"ONE_TIME_CODE"/u);
-  assert.match(html, /BETA_INGESTION_BASE_URL:""/u);
+  assert.match(html, /BETA_INGESTION_BASE_URL:"https:\/\/uavimjgccigpbwqmfkhh\.supabase\.co\/functions\/v1\/mobile-health-beta"/u);
   assert.match(html, /一次性連接碼/u);
   assert.doesNotMatch(html, /href="[^"]*(?:\.apk|icloud\.com\/shortcuts)/iu);
 });
