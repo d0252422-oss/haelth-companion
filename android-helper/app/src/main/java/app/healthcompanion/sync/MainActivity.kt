@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,7 +30,7 @@ class MainActivity : ComponentActivity() {
         health = HealthConnectGateway(this)
         identity = IdentityBootstrap(this, BuildConfig.API_BASE_URL)
         if (health.availability == HealthConnectClient.SDK_AVAILABLE) {
-            permissionLauncher = registerForActivityResult(health.client.permissionController.createRequestPermissionResultContract()) { granted ->
+            permissionLauncher = registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
                 status.text = if (granted.containsAll(health.readPermissions)) "已授權，正在首次同步" else "需要允許健康資料讀取"
                 if (granted.containsAll(health.readPermissions)) firstSync()
             }
