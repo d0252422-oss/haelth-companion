@@ -21,7 +21,7 @@ test('Web tester UI has manual selection, config-driven links, and no fake href'
   const html = fs.readFileSync('index.html', 'utf8');
   assert.match(html, /data-connector-platform="ANDROID"/u);
   assert.match(html, /data-connector-platform="IOS"/u);
-  assert.match(html, /ANDROID_BETA_APK_URL:""/u);
+  assert.match(html, /ANDROID_BETA_APK_URL:"https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\/android-beta-v0\.1\.0-beta\.1\/health-sync-companion-beta-0\.1\.0\.apk"/u);
   assert.match(html, /IOS_SHORTCUT_SHARE_URL:""/u);
   assert.match(html, /window\.HEALTH_CONNECTOR_CONFIG/u);
   assert.match(html, /binding_method:"ONE_TIME_CODE"/u);

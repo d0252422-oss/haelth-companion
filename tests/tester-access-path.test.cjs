@@ -61,6 +61,9 @@ test('distribution config and Shortcut manifest contain no credential or fabrica
   const shortcut = fs.readFileSync('config/ios-shortcut-tester.manifest.json', 'utf8');
   assert.doesNotMatch(`${config}\n${shortcut}`, /(?:access_token|refresh_token|service_role|client_secret|password)/iu);
   assert.equal(JSON.parse(shortcut).share_url, '');
+  const beta = JSON.parse(config).beta;
+  assert.match(beta.ANDROID_BETA_APK_URL, /^https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\//u);
+  assert.match(beta.ANDROID_BETA_APK_SHA256, /^[0-9a-f]{64}$/u);
 });
 
 test('prepared Beta claim persistence is environment-scoped and keeps credentials hashed', () => {
