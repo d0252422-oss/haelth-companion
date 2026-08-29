@@ -61,8 +61,26 @@ test('HTTP E2E binds web user, exchanges signed claim, reconciles updates/delete
   const keys = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   const publicDer = keys.publicKey.export({ type: 'spki', format: 'der' });
 
+  const wrongEnvironment = await request(origin, '/v1/mobile/install-claims', 'POST', {
+    platform: 'android', environment: 'production', binding_method: 'ONE_TIME_CODE',
+  }, { authorization: 'Bearer verified-web-session' });
+  assert.equal(wrongEnvironment.status, 400);
+  assert.equal(wrongEnvironment.body.error, 'WRONG_ENVIRONMENT');
+
+  const manualIssued = await request(origin, '/v1/mobile/install-claims', 'POST', {
+    platform: 'android', environment: 'beta', binding_method: 'ONE_TIME_CODE',
+  }, { authorization: 'Bearer verified-web-session' });
+  assert.equal(manualIssued.status, 201);
+  assert.match(manualIssued.body.claim_code, /^[A-Za-z0-9_-]{40,80}$/u);
+  const manualExchange = await request(origin, '/v1/mobile/install-claims/exchange', 'POST', {
+    claim: manualIssued.body.claim_code,
+    installation_public_key: publicDer.toString('base64'),
+    signature: crypto.sign('sha256', Buffer.from(manualIssued.body.claim_code), keys.privateKey).toString('base64'),
+  });
+  assert.equal(manualExchange.status, 200);
+
   const issued = await request(origin, '/v1/mobile/install-claims', 'POST', {
-    platform: 'ios', installation_key_fingerprint: sha256(publicDer),
+    platform: 'ios', environment: 'beta', installation_key_fingerprint: sha256(publicDer),
   }, { authorization: 'Bearer verified-web-session' });
   assert.equal(issued.status, 201);
   const claim = new URL(issued.body.continuation_url).hash.slice('#claim='.length);
@@ -117,7 +135,7 @@ test('HTTP E2E binds web user, exchanges signed claim, reconciles updates/delete
   assert.equal(runtime.reconciler.invalidations.length, 2);
 
   const crossUser = await request(origin, '/v1/health/ingestion/batches', 'POST', {
-    canonical_user_id: userB, mutations: [{ ...mutation(4), canonical_user_id: userB }],
+    environment: 'beta', canonical_user_id: userB, mutations: [{ ...mutation(4), canonical_user_id: userB }],
   }, authHeaders);
   assert.equal(crossUser.status, 403);
   assert.equal(crossUser.body.error, 'CROSS_USER_UPLOAD');
@@ -142,11 +160,12 @@ test('HTTP E2E binds web user, exchanges signed claim, reconciles updates/delete
   assert.doesNotMatch(serializedAudit, new RegExp(exchanged.body.access_token, 'u'));
   assert.doesNotMatch(serializedAudit, new RegExp(exchanged.body.refresh_token, 'u'));
   assert.doesNotMatch(serializedAudit, new RegExp(claim, 'u'));
+  assert.doesNotMatch(serializedAudit, new RegExp(manualIssued.body.claim_code, 'u'));
   assert.doesNotMatch(serializedAudit, /"(?:access_token|refresh_token|claim|health_value|raw_payload)"/u);
 });
 
 async function ingest(origin, headers, item) {
-  return request(origin, '/v1/health/ingestion/batches', 'POST', { canonical_user_id: userA, mutations: [item] }, headers);
+  return request(origin, '/v1/health/ingestion/batches', 'POST', { environment: 'beta', canonical_user_id: userA, mutations: [item] }, headers);
 }
 
 async function request(origin, path, method, body, headers = {}) {

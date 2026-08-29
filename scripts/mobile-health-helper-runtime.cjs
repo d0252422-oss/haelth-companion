@@ -80,28 +80,35 @@ function createMobileHealthRuntime(options = {}) {
   const audit = typeof options.audit === 'function' ? options.audit : () => {};
   const authenticateWebRequest = options.authenticateWebRequest || (async () => { throw codeError('WEB_SESSION_REQUIRED', 401); });
   const continuationOrigin = options.continuationOrigin;
+  const environment = options.environment || 'beta';
+  if (environment !== 'beta') throw new Error('BETA_RUNTIME_REQUIRED');
   if (!continuationOrigin || new URL(continuationOrigin).protocol !== 'https:') throw new Error('HTTPS_CONTINUATION_ORIGIN_REQUIRED');
 
   const routes = new Map();
   route('POST', '/v1/mobile/install-claims', async (request, response, body) => {
     const canonicalUserId = await authenticateWebRequest(request);
+    if (body.environment !== environment) throw codeError('WRONG_ENVIRONMENT', 400);
+    const manualCode = body.binding_method === 'ONE_TIME_CODE';
     let claim;
     try {
       claim = claims.issue({
         canonicalUserId,
         platform: body.platform,
-        installationKeyFingerprint: body.installation_key_fingerprint,
+        environment,
+        installationKeyFingerprint: manualCode ? null : body.installation_key_fingerprint,
       });
     } catch { throw codeError('INVALID_INSTALL_BINDING', 400); }
     emitAudit(audit, {
       event: 'INSTALL_CLAIM_ISSUED',
       canonical_user_hash: sha256(canonicalUserId),
-      installation_hash: sha256(body.installation_key_fingerprint),
+      installation_hash: manualCode ? 'PENDING_FIRST_EXCHANGE' : sha256(body.installation_key_fingerprint),
       http_status: 201,
     });
     json(response, 201, {
       continuation_url: `${continuationOrigin}/health-sync/bootstrap#claim=${encodeURIComponent(claim)}`,
+      claim_code: manualCode ? claim : undefined,
       expires_in: 300,
+      environment,
     });
   });
 
@@ -139,7 +146,8 @@ function createMobileHealthRuntime(options = {}) {
     const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
     const sessionId = request.headers['x-app-session-id'];
     const canonicalUserId = body.canonical_user_id;
-    authorizeSession(claims, { sessionId, accessToken, canonicalUserId });
+    if (body.environment !== environment) throw codeError('WRONG_ENVIRONMENT', 400);
+    authorizeSession(claims, { sessionId, accessToken, canonicalUserId, environment });
     if (!Array.isArray(body.mutations) || body.mutations.length > 250) throw codeError('INVALID_BATCH', 400);
     const receipt = { accepted_idempotency_keys: [], duplicate_idempotency_keys: [], rejected: [] };
     for (const mutation of body.mutations) {

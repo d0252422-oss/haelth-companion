@@ -10,6 +10,8 @@ Beta path: `authenticated Web/LINE → 健康資料同步 Shortcut → Apple Hea
 4. In Shortcuts, choose **Share → Copy iCloud Link**.
 5. Put that HTTPS URL into the beta runtime configuration key `IOS_SHORTCUT_SHARE_URL`. Do not commit it as a credential; the share URL is distribution configuration.
 
+Authentication is separate from distribution. At run time the tester signs in to the Web/LINE app, requests a five-minute single-use Beta setup code, and pastes it into the Shortcut prompt. The code is exchanged server-side for a user- and environment-scoped session; the iCloud share URL never contains a credential.
+
 Expected result: the Web/LINE settings screen changes from **iPhone 健康同步捷徑準備中** to **加入健康同步捷徑**. A real permission/API/HDL result belongs to Phase 4B and must not be inferred from the link alone.
 
 ## Tester flow

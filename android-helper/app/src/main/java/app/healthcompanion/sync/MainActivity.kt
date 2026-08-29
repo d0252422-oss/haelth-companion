@@ -3,6 +3,7 @@ package app.healthcompanion.sync
 import android.os.Bundle
 import android.content.Intent
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -38,9 +39,11 @@ class MainActivity : ComponentActivity() {
         val title = TextView(this).apply { text = "生活小助手\n健康資料同步"; textSize = 24f }
         status = TextView(this).apply { text = "正在檢查 Health Connect"; textSize = 16f }
         val setup = Button(this).apply { text = "繼續安全設定"; setOnClickListener { runCatching { startActivity(identity.setupIntent()) }.onFailure { status.text = "Beta 伺服器尚未設定" } } }
+        val claimCode = EditText(this).apply { hint = "一次性連接碼"; isSingleLine = true }
+        val connectCode = Button(this).apply { text = "連接健康管理帳號"; setOnClickListener { consumeManualClaim(claimCode.text?.toString().orEmpty()) } }
         val allow = Button(this).apply { text = "允許健康資料存取"; setOnClickListener { if (::permissionLauncher.isInitialized) permissionLauncher.launch(health.readPermissions) else status.text = "此裝置無法啟動 Health Connect 權限" } }
         val sync = Button(this).apply { text = "重新同步"; setOnClickListener { firstSync() } }
-        setContentView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 80, 48, 48); addView(title); addView(status); addView(setup); addView(allow); addView(sync) })
+        setContentView(LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 80, 48, 48); addView(title); addView(status); addView(setup); addView(claimCode); addView(connectCode); addView(allow); addView(sync) })
         consumeClaim(intent)
         when (health.availability) {
             HealthConnectClient.SDK_AVAILABLE -> scope.launch { status.text = if (health.hasAllPermissions()) "已連線" else "待授權"; if (health.hasAllPermissions()) firstSync() }
@@ -53,6 +56,16 @@ class MainActivity : ComponentActivity() {
 
     private fun consumeClaim(intent: Intent?) {
         val claim = identity.claimFrom(intent) ?: return
+        exchangeClaim(claim)
+    }
+
+    private fun consumeManualClaim(rawClaim: String) {
+        val claim = rawClaim.trim()
+        if (!claim.matches(Regex("^[A-Za-z0-9_-]{40,80}$"))) { status.text = "一次性連接碼格式不正確"; return }
+        exchangeClaim(claim)
+    }
+
+    private fun exchangeClaim(claim: String) {
         status.text = "正在完成安全綁定"
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { identity.exchange(claim) } }
@@ -67,7 +80,12 @@ class MainActivity : ComponentActivity() {
         status.text = "同步中"
         runCatching {
             val records = withContext(Dispatchers.IO) { health.readBounded(Instant.now().minus(30, ChronoUnit.DAYS), Instant.now()) }
-            withContext(Dispatchers.IO) { IngestionClient(BuildConfig.API_BASE_URL).upload(session, records) }
+            withContext(Dispatchers.IO) {
+                val client = IngestionClient(BuildConfig.API_BASE_URL)
+                val code = client.upload(session, records)
+                if (code in 200..299) client.reportStatus(session, records, "SYNCED")
+                code
+            }
         }.onSuccess { code -> status.text = if (code in 200..299) "健康資料同步已啟用" else "同步暫時失敗（HTTP $code）" }
             .onFailure { status.text = if (it.message == "STAGING_ENDPOINT_NOT_CONFIGURED") "Beta 伺服器尚未設定" else "同步暫時失敗，稍後會再試" }
     }

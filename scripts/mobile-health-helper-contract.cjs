@@ -65,11 +65,12 @@ class InstallClaimRegistry {
     this.sessions = new Map();
   }
 
-  issue({ canonicalUserId, platform = 'ios', installationKeyFingerprint, now = Date.now(), ttlSeconds = CLAIM_TTL_SECONDS }) {
-    if (!canonicalUserId || !/^[0-9a-f]{64}$/u.test(installationKeyFingerprint)) throw new Error('INVALID_BINDING');
+  issue({ canonicalUserId, platform = 'ios', installationKeyFingerprint = null, environment = 'beta', now = Date.now(), ttlSeconds = CLAIM_TTL_SECONDS }) {
+    if (!canonicalUserId || !PLATFORMS.has(platform) || environment !== 'beta') throw new Error('INVALID_BINDING');
+    if (installationKeyFingerprint != null && !/^[0-9a-f]{64}$/u.test(installationKeyFingerprint)) throw new Error('INVALID_BINDING');
     const claim = crypto.randomBytes(32).toString('base64url');
     this.claims.set(sha256(claim), {
-      canonicalUserId, platform, installationKeyFingerprint,
+      canonicalUserId, platform, environment, installationKeyFingerprint,
       expiresAt: now + ttlSeconds * 1000, consumedAt: null, revokedAt: null,
     });
     return claim;
@@ -83,7 +84,7 @@ class InstallClaimRegistry {
     if (row.expiresAt <= now) throw new Error('EXPIRED_CLAIM');
     const publicKey = publicKeyPem?.type === 'public' ? publicKeyPem : crypto.createPublicKey(publicKeyPem);
     const fingerprint = sha256(publicKey.export({ type: 'spki', format: 'der' }));
-    if (fingerprint !== row.installationKeyFingerprint) throw new Error('WRONG_INSTALLATION_KEY');
+    if (row.installationKeyFingerprint && fingerprint !== row.installationKeyFingerprint) throw new Error('WRONG_INSTALLATION_KEY');
     if (!crypto.verify('sha256', Buffer.from(claim), publicKey, signature)) throw new Error('INVALID_SIGNATURE');
     row.consumedAt = now;
     const accessToken = crypto.randomBytes(32).toString('base64url');
@@ -91,6 +92,7 @@ class InstallClaimRegistry {
     const sessionId = crypto.randomUUID();
     this.sessions.set(sessionId, {
       canonicalUserId: row.canonicalUserId,
+      environment: row.environment,
       installationKeyFingerprint: fingerprint,
       publicKey,
       accessTokenDigest: sha256(accessToken), refreshTokenDigest: sha256(refreshToken),
@@ -99,13 +101,14 @@ class InstallClaimRegistry {
     return { sessionId, canonicalUserId: row.canonicalUserId, accessToken, refreshToken };
   }
 
-  authorizeUpload({ sessionId, accessToken, canonicalUserId }) {
+  authorizeUpload({ sessionId, accessToken, canonicalUserId, environment = 'beta' }) {
     const session = this.sessions.get(sessionId);
     if (!session || session.revokedAt) throw new Error('REVOKED_SESSION');
     if (!crypto.timingSafeEqual(Buffer.from(session.accessTokenDigest), Buffer.from(sha256(accessToken)))) {
       throw new Error('INVALID_SESSION');
     }
     if (session.canonicalUserId !== canonicalUserId) throw new Error('CROSS_USER_UPLOAD');
+    if (session.environment !== environment) throw new Error('WRONG_ENVIRONMENT');
     return true;
   }
 

@@ -66,6 +66,17 @@ test('expired install claim is rejected', () => {
   assert.throws(() => registry.exchange({ claim, publicKeyPem: key.publicKey, signature, now: 1_001 }), /EXPIRED_CLAIM/);
 });
 
+test('beta one-time code binds on first signed exchange and rejects wrong environment', () => {
+  const key = keys();
+  const registry = new InstallClaimRegistry();
+  const claim = registry.issue({ canonicalUserId: userA, platform: 'android', environment: 'beta' });
+  const session = registry.exchange({ claim, publicKeyPem: key.publicKey, signature: crypto.sign('sha256', Buffer.from(claim), key.privateKey) });
+  assert.equal(registry.authorizeUpload({ sessionId: session.sessionId, accessToken: session.accessToken, canonicalUserId: userA, environment: 'beta' }), true);
+  assert.throws(() => registry.authorizeUpload({ sessionId: session.sessionId, accessToken: session.accessToken, canonicalUserId: userA, environment: 'production' }), /WRONG_ENVIRONMENT/);
+  assert.throws(() => registry.exchange({ claim, publicKeyPem: key.publicKey, signature: crypto.sign('sha256', Buffer.from(claim), key.privateKey) }), /REPLAYED_CLAIM/);
+  assert.throws(() => registry.issue({ canonicalUserId: userA, platform: 'android', environment: 'production' }), /INVALID_BINDING/);
+});
+
 test('wrong installation key and invalid signature are rejected', () => {
   const expected = keys();
   const attacker = keys();

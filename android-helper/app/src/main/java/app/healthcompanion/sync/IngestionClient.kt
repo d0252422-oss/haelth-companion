@@ -9,9 +9,33 @@ class IngestionClient(private val baseUrl: String) {
     fun upload(session: AppSession, records: List<CanonicalHealthRecord>): Int {
         require(baseUrl.startsWith("https://") && !baseUrl.endsWith(".invalid")) { "STAGING_ENDPOINT_NOT_CONFIGURED" }
         val mutations = JSONArray(records.map { record -> mutation(session.canonicalUserId, record) })
-        val body = JSONObject().put("canonical_user_id", session.canonicalUserId).put("mutations", mutations).toString()
+        val body = JSONObject().put("environment", "beta").put("canonical_user_id", session.canonicalUserId).put("mutations", mutations).toString()
         val connection = (URL("$baseUrl/v1/health/ingestion/batches").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 30_000; doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Authorization", "Bearer ${session.accessToken}")
+            setRequestProperty("X-App-Session-Id", session.sessionId)
+        }
+        connection.outputStream.use { it.write(body.toByteArray()) }
+        return connection.responseCode
+    }
+
+    fun reportStatus(session: AppSession, records: List<CanonicalHealthRecord>, result: String): Int {
+        require(baseUrl.startsWith("https://") && !baseUrl.endsWith(".invalid")) { "STAGING_ENDPOINT_NOT_CONFIGURED" }
+        val now = java.time.Instant.now().toString()
+        val body = JSONObject()
+            .put("canonical_user_id", session.canonicalUserId)
+            .put("platform", "android")
+            .put("connector_type", "android_helper")
+            .put("connector_version", BuildConfig.VERSION_NAME)
+            .put("last_attempt_at", now)
+            .put("last_success_at", if (result == "SYNCED") now else JSONObject.NULL)
+            .put("last_result", result)
+            .put("available_domains", JSONArray(records.map { it.domain }.distinct()))
+            .put("permission_state_if_known", "GRANTED")
+            .toString()
+        val connection = (URL("$baseUrl/v1/mobile/connectors/status").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 15_000; doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Authorization", "Bearer ${session.accessToken}")
             setRequestProperty("X-App-Session-Id", session.sessionId)

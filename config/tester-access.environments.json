@@ -8,6 +8,7 @@
     "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
   },
   "beta": {
+    "BETA_INGESTION_BASE_URL": "",
     "ANDROID_BETA_APK_URL": "",
     "ANDROID_BETA_APK_VERSION": "0.1.0-beta.1",
     "IOS_SHORTCUT_SHARE_URL": "",
@@ -15,6 +16,7 @@
     "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
   },
   "production": {
+    "BETA_INGESTION_BASE_URL": "",
     "ANDROID_BETA_APK_URL": "",
     "ANDROID_BETA_APK_VERSION": "disabled",
     "IOS_SHORTCUT_SHARE_URL": "",

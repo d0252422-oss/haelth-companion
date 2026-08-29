@@ -2,6 +2,8 @@
 
 Thin companion only: secure canonical-user bootstrap, Health Connect read permission, bounded read, authenticated HDL v2 upload. It contains no primary dashboard and no production credential.
 
+For Friends & Family Beta, a tester can paste a five-minute, single-use, beta-scoped connection code from the authenticated Web/LINE app. The app signs the exchange with its Android Keystore installation key. This closed-beta fallback avoids making a purchased domain or verified App Link a Phase 4B prerequisite; verified App Links remain the future primary continuation path.
+
 ## Configuration
 
 The debug artifact deliberately defaults to non-routable `https://beta.invalid`. A usable staging build must inject:

@@ -62,3 +62,11 @@ test('distribution config and Shortcut manifest contain no credential or fabrica
   assert.doesNotMatch(`${config}\n${shortcut}`, /(?:access_token|refresh_token|service_role|client_secret|password)/iu);
   assert.equal(JSON.parse(shortcut).share_url, '');
 });
+
+test('prepared Beta claim persistence is environment-scoped and keeps credentials hashed', () => {
+  const migration = fs.readFileSync('supabase/migrations/20260829045359_add_beta_manual_claim_binding.sql', 'utf8');
+  assert.match(migration, /environment text not null default 'beta'/u);
+  assert.match(migration, /check \(environment = 'beta'\)/u);
+  assert.match(migration, /ONE_TIME_CODE/u);
+  assert.doesNotMatch(migration, /(?:access_token|refresh_token|claim)\s+text/iu);
+});
