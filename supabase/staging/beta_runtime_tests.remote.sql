@@ -10,8 +10,28 @@ declare
   refresh_digest text := repeat('c', 64);
   session_row record;
   result text;
+  score_generation bigint;
+  score_result text;
+  score_bundle jsonb;
   caught boolean;
 begin
+  if exists (
+    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname in ('public', 'private')
+      and c.relname in ('beta_health_records', 'beta_health_scores', 'beta_connector_status', 'beta_score_recompute_queue')
+      and not c.relrowsecurity
+  ) then raise exception 'BETA_RLS_DISABLED'; end if;
+  if has_table_privilege('anon', 'public.beta_health_records', 'SELECT')
+     or has_table_privilege('anon', 'public.beta_health_scores', 'SELECT')
+     or has_table_privilege('anon', 'public.beta_connector_status', 'SELECT')
+     or has_table_privilege('authenticated', 'public.beta_health_scores', 'SELECT') then
+    raise exception 'DIRECT_CLIENT_TABLE_GRANT_PRESENT';
+  end if;
+  if has_function_privilege('anon', 'public.beta_get_score_generation(uuid,date)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.beta_persist_score_bundle(uuid,date,bigint,text,timestamptz,timestamptz,jsonb)', 'EXECUTE') then
+    raise exception 'DIRECT_CLIENT_SCORE_RPC_GRANT_PRESENT';
+  end if;
+
   perform public.beta_issue_install_claim(
     user_a, repeat('1', 64), 'android', claim_digest,
     now() + interval '5 minutes', 'ONE_TIME_CODE'
@@ -108,6 +128,48 @@ begin
     select 1 from public.beta_health_records
     where canonical_user_id = user_b and source_record_id = 'record-1'
   ) then raise exception 'CROSS_USER_ISOLATION_FAILED'; end if;
+
+  select generation into score_generation
+  from public.beta_get_score_generation(user_a, '2026-08-29'::date);
+  if score_generation is null then raise exception 'SCORE_DIRTY_TRIGGER_MISSING'; end if;
+  score_bundle := (
+    select jsonb_agg(jsonb_build_object(
+      'score_type', score_type, 'score', case when score_type = 'activity' then 80 else null end,
+      'completeness', case when score_type = 'activity' then 0.7 else 0 end,
+      'confidence', case when score_type = 'activity' then 'MEDIUM' else 'LOW' end,
+      'status', case when score_type = 'activity' then 'ACTIVE' else 'NO_DATA' end,
+      'missing_components', '[]'::jsonb, 'algorithm_version', 'health-score-v1.0',
+      'safe_output', '{}'::jsonb
+    ) order by score_type)
+    from unnest(array['sleep','activity','training','nutrition','body_composition','recovery','fatigue','health_overall']) score_type
+  );
+  score_result := public.beta_persist_score_bundle(
+    user_a, '2026-08-29'::date, score_generation, repeat('f', 64), now(), now(), score_bundle
+  );
+  if score_result <> 'PERSISTED' then raise exception 'SCORE_PERSIST_FAILED'; end if;
+  if (select count(*) from public.beta_health_scores where canonical_user_id = user_a and score_date = '2026-08-29') <> 8 then
+    raise exception 'SCORE_BUNDLE_COUNT_MISMATCH';
+  end if;
+  if exists (select 1 from public.beta_health_scores where canonical_user_id = user_b) then
+    raise exception 'CROSS_USER_SCORE_WRITE';
+  end if;
+
+  result := public.beta_ingest_health_mutation(
+    user_a, 'android', 'steps', 'test.origin', 'date-moving-record', 1,
+    '2026-08-28T12:00:00Z', repeat('1', 64), 'UPSERT', repeat('2', 64),
+    jsonb_build_object('schema_version','hdl-v2.health-ingestion.v1','canonical_user_id',user_a),
+    array['2026-08-28'::date]
+  );
+  result := public.beta_ingest_health_mutation(
+    user_a, 'android', 'steps', 'test.origin', 'date-moving-record', 2,
+    '2026-08-29T12:00:00Z', repeat('3', 64), 'UPSERT', repeat('4', 64),
+    jsonb_build_object('schema_version','hdl-v2.health-ingestion.v1','canonical_user_id',user_a),
+    array['2026-08-29'::date]
+  );
+  if not exists (
+    select 1 from public.beta_get_score_generation(user_a, '2026-08-28'::date)
+    where status = 'DIRTY'
+  ) then raise exception 'OLD_SCORE_DATE_NOT_DIRTIED'; end if;
 end
 $test$;
 

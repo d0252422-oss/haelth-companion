@@ -8,7 +8,9 @@
     "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
   },
   "beta": {
+    "BETA_WEB_URL": "https://d0252422-oss.github.io/health-companion-beta/",
     "BETA_INGESTION_BASE_URL": "https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta",
+    "BETA_SCORE_API_PATH": "/v1/scores/daily",
     "ANDROID_BETA_APK_URL": "https://github.com/d0252422-oss/haelth-companion/releases/download/android-beta-v0.1.0-beta.2/health-sync-companion-beta-0.1.0-beta.2.apk",
     "ANDROID_BETA_APK_VERSION": "0.1.0-beta.2",
     "ANDROID_BETA_APK_SIZE_BYTES": 10994852,
@@ -18,7 +20,9 @@
     "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
   },
   "production": {
+    "BETA_WEB_URL": "",
     "BETA_INGESTION_BASE_URL": "",
+    "BETA_SCORE_API_PATH": "",
     "ANDROID_BETA_APK_URL": "",
     "ANDROID_BETA_APK_VERSION": "disabled",
     "IOS_SHORTCUT_SHARE_URL": "",

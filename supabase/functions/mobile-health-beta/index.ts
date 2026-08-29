@@ -1,4 +1,5 @@
 import { withSupabase } from "@supabase/server";
+import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 
 const webAuthVerifyUrl = Deno.env.get("BETA_WEB_AUTH_VERIFY_URL") ?? "";
 const allowedOrigin = Deno.env.get("BETA_ALLOWED_ORIGIN") ?? "";
@@ -49,6 +50,9 @@ export default {
       }
       if (request.method === "GET" && path === "/v1/mobile/connectors/status") {
         return await getStatus(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "GET" && path === "/v1/scores/daily") {
+        return await getScores(request, ctx.supabaseAdmin, origin);
       }
       throw failure("NOT_FOUND", 404);
     } catch (error) {
@@ -115,6 +119,7 @@ async function ingestShortcut(request: Request, admin: any, origin: string): Pro
   if (!Array.isArray(body.records) || body.records.length > 250) throw failure("INVALID_BATCH", 400);
 
   const receipt: Json = { accepted_idempotency_keys: [], duplicate_idempotency_keys: [], rejected: [] };
+  const affectedDates = new Set<string>();
   for (const candidate of body.records) {
     const mutation = await shortcutRecordToMutation(candidate as Json, String(session.canonical_user_id));
     const { data, error } = await admin.rpc("beta_ingest_health_mutation", {
@@ -132,6 +137,7 @@ async function ingestShortcut(request: Request, admin: any, origin: string): Pro
       p_affected_local_dates: mutation.affected_local_dates,
     });
     if (error) throw databaseFailure(error);
+    for (const date of mutation.affected_local_dates as string[]) affectedDates.add(date);
     const action = String(data);
     if (["CREATED", "UPDATED"].includes(action)) {
       (receipt.accepted_idempotency_keys as unknown[]).push(mutation.idempotency_key);
@@ -141,6 +147,7 @@ async function ingestShortcut(request: Request, admin: any, origin: string): Pro
       (receipt.rejected as unknown[]).push({ idempotency_key: mutation.idempotency_key, error_code: action });
     }
   }
+  await recomputeDates(admin, String(session.canonical_user_id), affectedDates);
   return json((receipt.rejected as unknown[]).length ? 207 : 200, receipt, origin);
 }
 
@@ -226,6 +233,7 @@ async function ingest(request: Request, admin: any, origin: string): Promise<Res
   if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
   if (!Array.isArray(body.mutations) || body.mutations.length > 250) throw failure("INVALID_BATCH", 400);
   const receipt: Json = { accepted_idempotency_keys: [], duplicate_idempotency_keys: [], rejected: [] };
+  const affectedDates = new Set<string>();
   for (const candidate of body.mutations) {
     const mutation = validateMutation(candidate as Json, String(session.canonical_user_id));
     const { data, error } = await admin.rpc("beta_ingest_health_mutation", {
@@ -243,6 +251,7 @@ async function ingest(request: Request, admin: any, origin: string): Promise<Res
       p_affected_local_dates: mutation.affected_local_dates ?? [],
     });
     if (error) throw databaseFailure(error);
+    for (const date of (mutation.affected_local_dates ?? []) as string[]) affectedDates.add(date);
     const action = String(data);
     if (["CREATED", "UPDATED", "DELETED"].includes(action)) {
       (receipt.accepted_idempotency_keys as unknown[]).push(mutation.idempotency_key);
@@ -252,6 +261,7 @@ async function ingest(request: Request, admin: any, origin: string): Promise<Res
       (receipt.rejected as unknown[]).push({ idempotency_key: mutation.idempotency_key, error_code: action });
     }
   }
+  await recomputeDates(admin, String(session.canonical_user_id), affectedDates);
   return json((receipt.rejected as unknown[]).length ? 207 : 200, receipt, origin);
 }
 
@@ -282,6 +292,19 @@ async function getStatus(request: Request, admin: any, origin: string): Promise<
     .eq("canonical_user_id", userId);
   if (error) throw databaseFailure(error);
   return json(200, { connectors: data ?? [] }, origin);
+}
+
+async function getScores(request: Request, admin: any, origin: string): Promise<Response> {
+  const subject = await verifyWebSession(bearer(request));
+  const userId = uuidFromHash(await sha256(subject));
+  const date = new URL(request.url).searchParams.get("date") ?? undefined;
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw failure("INVALID_SCORE_DATE", 400);
+  return json(200, await readBetaScores(admin, userId, date), origin);
+}
+
+async function recomputeDates(admin: any, userId: string, dates: Set<string>): Promise<void> {
+  if (dates.size > 31) throw failure("SCORE_RECOMPUTE_BOUND_EXCEEDED", 400);
+  for (const date of [...dates].sort()) await recomputeBetaScore(admin, userId, date);
 }
 
 async function authorizeSession(request: Request, admin: any): Promise<Json> {

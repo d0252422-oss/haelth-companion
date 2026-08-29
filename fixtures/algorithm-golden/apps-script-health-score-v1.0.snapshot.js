@@ -429,3 +429,17 @@ function calculateHealthScore(input) {
   result.explanation = '總健康分數由可取得的睡眠、恢復、活動、訓練、營養與身體組成分項整合；恢復已使用睡眠或訓練時會降低重疊權重。';
   return result;
 }
+
+// Transport-only export used by the isolated Beta Edge runtime. The frozen
+// functions/config above remain byte-for-byte formula-equivalent to Apps Script.
+globalThis.HEALTH_SCORE_V1_RUNTIME = Object.freeze({
+  algorithmVersion: HEALTH_SCORING_CONFIG.algorithmVersion,
+  calculateSleepScore: calculateSleepScore,
+  calculateActivityScore: calculateActivityScore,
+  calculateTrainingScore: calculateTrainingScore,
+  calculateNutritionScore: calculateNutritionScore,
+  calculateBodyCompositionScore: calculateBodyCompositionScore,
+  calculateRecoveryScore: calculateRecoveryScore,
+  calculateFatigueIndex: calculateFatigueIndex,
+  calculateHealthScore: calculateHealthScore
+});

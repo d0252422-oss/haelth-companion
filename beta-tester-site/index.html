@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>健康陪跑 Beta 測試入口</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root{color-scheme:light;--ink:#19322c;--muted:#667a74;--line:#d9e5e1;--brand:#167d68;--soft:#edf8f5;--danger:#a13434}*{box-sizing:border-box}body{margin:0;background:#f5f8f7;color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Noto Sans TC",sans-serif}.shell{width:min(880px,100%);margin:auto;padding:28px 16px 64px}.hero,.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px rgba(25,50,44,.06)}.hero{padding:24px;margin-bottom:14px}.hero h1{margin:5px 0 4px;font-size:1.7rem}.tag{display:inline-block;padding:4px 9px;border-radius:999px;background:#fff2cf;color:#795b00;font-size:.75rem;font-weight:800}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}.card{padding:18px}.card h2{margin:0 0 5px;font-size:1.08rem}.button{display:block;width:100%;margin-top:12px;border:0;border-radius:11px;padding:12px 14px;text-align:center;background:var(--brand);color:#fff;font-weight:800;text-decoration:none;cursor:pointer}.button.secondary{background:var(--soft);color:var(--brand);border:1px solid #b9ded5}.button:disabled{opacity:.5;cursor:not-allowed}.code{display:none;margin-top:12px;padding:14px;border:1px dashed var(--brand);border-radius:11px;background:var(--soft);font:800 1.15rem ui-monospace,monospace;overflow-wrap:anywhere;user-select:all}.status{padding:10px 12px;border-radius:10px;background:var(--soft);color:var(--muted);font-size:.85rem}.scores{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.score{padding:10px;border:1px solid var(--line);border-radius:10px}.score span{display:block;color:var(--muted);font-size:.75rem}.score b{font-size:1.1rem}.wide{grid-column:1/-1}.error{color:var(--danger)}ol{padding-left:20px}code{font-size:.76rem}footer{margin-top:18px;color:var(--muted);font-size:.75rem}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <section class="hero">
+    <span class="tag">FRIENDS &amp; FAMILY BETA · NON-PRODUCTION</span>
+    <h1>健康陪跑 Beta 測試入口</h1>
+    <p class="muted">登入只用來確認你的既有健康管理帳號；所有 Helper / Shortcut 健康資料與衍生分數只寫入獨立 Beta project。</p>
+    <div id="auth-status" class="status">請先登入，再產生五分鐘內有效的一次性連接碼。</div>
+    <div id="google-login" style="margin-top:12px"></div>
+  </section>
+
+  <section class="grid">
+    <article class="card">
+      <h2>Android + Health Connect</h2>
+      <p class="muted">版本 0.1.0-beta.2 · 約 10.5 MB · 測試版</p>
+      <ol><li>下載並安裝 APK</li><li>在此產生一次性碼</li><li>APK 貼上代碼並授權 Health Connect</li><li>同步後回此頁查看分數</li></ol>
+      <a class="button" href="https://github.com/d0252422-oss/haelth-companion/releases/download/android-beta-v0.1.0-beta.2/health-sync-companion-beta-0.1.0-beta.2.apk" rel="noopener">下載 Android Beta</a>
+      <button id="android-claim" class="button secondary" type="button" disabled>產生 Android 一次性連接碼</button>
+      <div id="android-code" class="code" aria-live="polite"></div>
+      <p class="muted"><code>SHA-256 304b65675c7d…</code></p>
+    </article>
+
+    <article class="card">
+      <h2>iPhone + Apple Health Shortcut</h2>
+      <p class="muted">工程接線已完成；目前等待真人從 iPhone 建立並分享 iCloud Shortcut link。</p>
+      <button class="button" type="button" disabled>等待 iPhone 分享捷徑連結</button>
+      <button id="ios-claim" class="button secondary" type="button" disabled>產生 iPhone 一次性連接碼</button>
+      <div id="ios-code" class="code" aria-live="polite"></div>
+    </article>
+
+    <article class="card wide">
+      <h2>Beta 健康分數</h2>
+      <div id="score-status" class="status">登入後可讀取自己的 Beta 分數。</div>
+      <div id="scores" class="scores"></div>
+      <button id="refresh" class="button secondary" type="button" disabled>重新整理同步狀態與分數</button>
+      <p id="score-meta" class="muted"></p>
+    </article>
+  </section>
+  <footer>Beta data target: <code>uavimjgccigpbwqmfkhh</code> · Algorithm: <code>health-score-v1.0</code> · 此頁不提供 production 資料寫入功能。</footer>
+</main>
+<script>
+  const CONFIG=Object.freeze({
+    authUrl:"https://script.google.com/macros/s/AKfycbwc9OBZtGgFiXk2n1_bquNZqkFkX9OzgAxlh7rljySrvNiF6ywsxEpBzNv5V4onRv5h/exec",
+    betaUrl:"https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta",
+    googleClientId:"686099401474-v2infa5949657gd3j5d64aoolvnq4421.apps.googleusercontent.com"
+  });
+  const labels={sleep:"睡眠",activity:"活動",training:"訓練",nutrition:"營養",body_composition:"身體組成",recovery:"恢復",fatigue:"疲勞",health_overall:"整體健康"};
+  let sessionToken=sessionStorage.getItem("healthCompanionBetaSession")||"";
+  const setText=(id,text)=>document.getElementById(id).textContent=text;
+  const unwrap=(value)=>value?.data??value?.result??value;
+  async function authRequest(action,extra={}){
+    const response=await fetch(CONFIG.authUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,sessionToken,...extra})});
+    if(!response.ok)throw new Error("AUTH_SERVICE_ERROR");
+    const payload=unwrap(await response.json());
+    if(payload?.success===false)throw new Error(payload.error?.code||"AUTH_REJECTED");
+    return unwrap(payload);
+  }
+  async function betaRequest(path,options={}){
+    if(!sessionToken)throw new Error("LOGIN_REQUIRED");
+    const response=await fetch(`${CONFIG.betaUrl}${path}`,{...options,headers:{"Content-Type":"application/json","Authorization":`Bearer ${sessionToken}`,...options.headers}});
+    const payload=await response.json().catch(()=>({error:"INVALID_RESPONSE"}));
+    if(!response.ok)throw new Error(payload.error||`HTTP_${response.status}`);
+    return payload;
+  }
+  function setAuthenticated(authenticated){
+    document.querySelectorAll("#android-claim,#ios-claim,#refresh").forEach(button=>button.disabled=!authenticated);
+    setText("auth-status",authenticated?"已登入。可產生一次性碼，或查看自己的 Beta 同步狀態與分數。":"請先登入，再產生五分鐘內有效的一次性連接碼。");
+  }
+  async function handleGoogleCredential(result){
+    try{
+      const payload=await authRequest("createSession",{idToken:result.credential});
+      sessionToken=payload.sessionToken;
+      if(!sessionToken)throw new Error("SESSION_NOT_ISSUED");
+      sessionStorage.setItem("healthCompanionBetaSession",sessionToken);
+      setAuthenticated(true);await refreshBeta();
+    }catch(error){setText("auth-status",`登入失敗：${error.message}`);document.getElementById("auth-status").classList.add("error")}
+  }
+  async function validateStoredSession(){
+    if(!sessionToken)return false;
+    try{await authRequest("getCurrentUser");setAuthenticated(true);return true}catch{sessionToken="";sessionStorage.removeItem("healthCompanionBetaSession");return false}
+  }
+  async function issueClaim(platform){
+    const output=document.getElementById(`${platform}-code`);output.style.display="none";
+    try{
+      const payload=await betaRequest("/v1/mobile/install-claims",{method:"POST",body:JSON.stringify({platform,environment:"beta",binding_method:"ONE_TIME_CODE"})});
+      output.textContent=payload.claim_code;output.style.display="block";
+      setTimeout(()=>{output.textContent="";output.style.display="none"},300000);
+    }catch(error){output.textContent=`無法產生：${error.message}`;output.style.display="block"}
+  }
+  function renderScores(payload){
+    const target=document.getElementById("scores"),scores=payload.scores||{};
+    target.innerHTML=Object.entries(labels).map(([type,label])=>{const row=scores[type]||{};const value=row.score==null?"—":Math.round(Number(row.score));return `<div class="score"><span>${label}</span><b>${value}</b><small class="muted">${row.status||"NOT_AVAILABLE"} · ${row.confidence||"—"}</small></div>`}).join("");
+    const overall=scores.health_overall||{};const missing=Array.isArray(overall.missing_components)?overall.missing_components:[];
+    setText("score-status",payload.local_date?`${payload.local_date} · Overall ${overall.score==null?"—":Math.round(Number(overall.score))}`:"尚無 Beta 分數；完成首次健康資料同步後會自動計算。");
+    setText("score-meta",`Completeness ${overall.completeness==null?"—":Math.round(Number(overall.completeness)*100)+"%"} · Confidence ${overall.confidence||"—"} · Missing ${missing.length?missing.join(", "):"—"} · ${payload.algorithm_version||"health-score-v1.0"}`);
+  }
+  async function refreshBeta(){
+    if(!sessionToken)return;
+    try{renderScores(await betaRequest("/v1/scores/daily"))}catch(error){setText("score-status",`分數讀取失敗：${error.message}`)}
+  }
+  document.getElementById("android-claim").onclick=()=>issueClaim("android");
+  document.getElementById("ios-claim").onclick=()=>issueClaim("ios");
+  document.getElementById("refresh").onclick=refreshBeta;
+  window.addEventListener("load",async()=>{
+    const authenticated=await validateStoredSession();
+    if(authenticated)await refreshBeta();
+    google.accounts.id.initialize({client_id:CONFIG.googleClientId,callback:handleGoogleCredential});
+    google.accounts.id.renderButton(document.getElementById("google-login"),{theme:"outline",size:"large",text:"signin_with"});
+  });
+</script>
+</body>
+</html>
