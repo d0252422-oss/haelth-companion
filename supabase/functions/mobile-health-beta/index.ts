@@ -8,6 +8,11 @@ const DOMAINS = new Set([
   "steps", "heart_rate", "resting_heart_rate", "sleep", "sleep_stage",
   "weight", "workout", "hrv", "spo2",
 ]);
+const UNITS: Record<string, Set<string>> = {
+  steps: new Set(["count"]), heart_rate: new Set(["bpm"]), resting_heart_rate: new Set(["bpm"]),
+  sleep: new Set(["minute"]), sleep_stage: new Set(["minute"]), weight: new Set(["kg"]),
+  workout: new Set(["minute"]), hrv: new Set(["ms"]), spo2: new Set(["percent"]),
+};
 type Json = Record<string, unknown>;
 
 export default {
@@ -30,7 +35,13 @@ export default {
       if (request.method === "POST" && path === "/v1/mobile/install-claims/exchange") {
         return await exchangeClaim(request, ctx.supabaseAdmin, origin);
       }
-      if (request.method === "POST" && ["/v1/health/ingestion/batches", "/v1/connectors/ios-shortcut/ingest"].includes(path)) {
+      if (request.method === "POST" && path === "/v1/connectors/ios-shortcut/session") {
+        return await exchangeShortcutClaim(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "POST" && path === "/v1/connectors/ios-shortcut/ingest") {
+        return await ingestShortcut(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "POST" && path === "/v1/health/ingestion/batches") {
         return await ingest(request, ctx.supabaseAdmin, origin);
       }
       if (request.method === "POST" && path === "/v1/mobile/connectors/status") {
@@ -65,6 +76,109 @@ async function issueClaim(request: Request, admin: any, origin: string): Promise
   });
   if (error) throw databaseFailure(error);
   return json(201, { claim_code: claim, expires_in: 300, environment: "beta" }, origin);
+}
+
+async function exchangeShortcutClaim(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  if (body.environment !== "beta") throw failure("WRONG_ENVIRONMENT", 400);
+  const claim = requiredString(body.claim, "INVALID_CLAIM");
+  const accessToken = randomToken(32);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  const { data, error } = await admin.rpc("beta_exchange_shortcut_claim", {
+    p_claim_digest: await sha256(claim),
+    p_access_token_digest: await sha256(accessToken),
+    p_expires_at: expiresAt,
+  });
+  if (error) throw databaseFailure(error);
+  const session = Array.isArray(data) ? data[0] as Json : null;
+  if (!session) throw failure("INVALID_CLAIM", 400);
+  return json(200, {
+    canonical_user_id: session.canonical_user_id,
+    session_id: session.session_id,
+    access_token: accessToken,
+    expires_at: expiresAt,
+    environment: "beta",
+  }, origin);
+}
+
+async function ingestShortcut(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  if (body.environment !== "beta") throw failure("WRONG_ENVIRONMENT", 400);
+  if (body.schema_version !== "hdl-v2.connector-ingestion.v1"
+      || body.provider !== "apple_health" || body.connector_type !== "ios_shortcut") {
+    throw failure("SCHEMA_VERSION_MISMATCH", 400);
+  }
+  if (!Number.isFinite(Date.parse(String(body.sync_window_start)))
+      || !Number.isFinite(Date.parse(String(body.sync_window_end)))) throw failure("BAD_SYNC_WINDOW", 400);
+  const session = await authorizeShortcutSession(request, admin);
+  if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!Array.isArray(body.records) || body.records.length > 250) throw failure("INVALID_BATCH", 400);
+
+  const receipt: Json = { accepted_idempotency_keys: [], duplicate_idempotency_keys: [], rejected: [] };
+  for (const candidate of body.records) {
+    const mutation = await shortcutRecordToMutation(candidate as Json, String(session.canonical_user_id));
+    const { data, error } = await admin.rpc("beta_ingest_health_mutation", {
+      p_canonical_user_id: session.canonical_user_id,
+      p_platform: "ios",
+      p_domain: mutation.domain,
+      p_source_app: mutation.source_app,
+      p_source_record_id: mutation.source_record_id,
+      p_source_revision: mutation.source_revision,
+      p_source_updated_at: mutation.source_updated_at || null,
+      p_source_content_hash: mutation.source_content_hash,
+      p_operation: "UPSERT",
+      p_idempotency_key: mutation.idempotency_key,
+      p_record: mutation.record,
+      p_affected_local_dates: mutation.affected_local_dates,
+    });
+    if (error) throw databaseFailure(error);
+    const action = String(data);
+    if (["CREATED", "UPDATED"].includes(action)) {
+      (receipt.accepted_idempotency_keys as unknown[]).push(mutation.idempotency_key);
+    } else if (action === "REPLAYED") {
+      (receipt.duplicate_idempotency_keys as unknown[]).push(mutation.idempotency_key);
+    } else {
+      (receipt.rejected as unknown[]).push({ idempotency_key: mutation.idempotency_key, error_code: action });
+    }
+  }
+  return json((receipt.rejected as unknown[]).length ? 207 : 200, receipt, origin);
+}
+
+async function shortcutRecordToMutation(record: Json, userId: string): Promise<Json> {
+  const domain = String(record.domain ?? "");
+  const unit = String(record.unit ?? "");
+  if (!DOMAINS.has(domain)) throw failure("UNSUPPORTED_DOMAIN", 400);
+  if (!UNITS[domain]?.has(unit)) throw failure("INVALID_UNIT", 400);
+  if (typeof record.value !== "number" || !Number.isFinite(record.value) || record.value < 0) throw failure("MALFORMED_VALUE", 400);
+  if (!Number.isFinite(Date.parse(String(record.recorded_at)))) throw failure("MALFORMED_TIMESTAMP", 400);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(record.local_date ?? "")) || !record.timezone) throw failure("MALFORMED_CIVIL_TIME", 400);
+  const sourceApp = requiredString(record.source_app, "MISSING_SOURCE_IDENTITY");
+  const nativeId = typeof record.native_record_id === "string" && record.native_record_id ? record.native_record_id : "";
+  const sourceRecordId = nativeId || await sha256(stableJson({
+    provider: "apple_health", connector_type: "ios_shortcut", domain, source_app: sourceApp,
+    recorded_at: record.recorded_at, started_at: record.started_at ?? "", ended_at: record.ended_at ?? "",
+    timezone: record.timezone, local_date: record.local_date, unit, stage: record.stage ?? "",
+  }));
+  const sourceContentHash = await sha256(stableJson({
+    source_record_id: sourceRecordId, value: record.value, unit, recorded_at: record.recorded_at,
+    started_at: record.started_at ?? "", ended_at: record.ended_at ?? "", stage: record.stage ?? "",
+  }));
+  const revision = Number.isSafeInteger(record.source_revision) && Number(record.source_revision) > 0
+    ? Number(record.source_revision) : 1;
+  const canonicalRecord: Json = {
+    ...record, schema_version: "hdl-v2.health-ingestion.v1", canonical_user_id: userId,
+    platform: "ios", provider: "apple_health", connector_type: "ios_shortcut",
+    source_record_id: sourceRecordId,
+    source_record_id_kind: nativeId ? "NATIVE" : "DERIVED_FINGERPRINT",
+    source_fingerprint: sourceContentHash, sync_method: "USER_AUTOMATION",
+  };
+  validateRecord(canonicalRecord, userId);
+  return {
+    domain, source_app: sourceApp, source_record_id: sourceRecordId, source_revision: revision,
+    source_updated_at: record.source_updated_at ?? null, source_content_hash: sourceContentHash,
+    idempotency_key: await sha256(stableJson({ userId, domain, sourceApp, sourceRecordId, revision, sourceContentHash, operation: "UPSERT" })),
+    record: canonicalRecord, affected_local_dates: [record.local_date],
+  };
 }
 
 async function exchangeClaim(request: Request, admin: any, origin: string): Promise<Response> {
@@ -183,6 +297,19 @@ async function authorizeSession(request: Request, admin: any): Promise<Json> {
   return session;
 }
 
+async function authorizeShortcutSession(request: Request, admin: any): Promise<Json> {
+  const sessionId = request.headers.get("x-shortcut-session-id") ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
+  const { data, error } = await admin.rpc("beta_authorize_shortcut_session", {
+    p_session_id: sessionId,
+    p_access_token_digest: await sha256(bearer(request)),
+  });
+  if (error) throw databaseFailure(error);
+  const session = Array.isArray(data) ? data[0] as Json : null;
+  if (!session) throw failure("INVALID_SESSION", 401);
+  return session;
+}
+
 async function verifyWebSession(token: string): Promise<string> {
   if (!webAuthVerifyUrl.startsWith("https://")) throw failure("WEB_AUTH_NOT_CONFIGURED", 503);
   const upstream = await fetch(webAuthVerifyUrl, {
@@ -252,10 +379,19 @@ function json(status: number, body: Json, origin = ""): Response {
 function corsHeaders(origin: string): Record<string, string> {
   return origin && origin === allowedOrigin ? {
     "access-control-allow-origin": origin,
-    "access-control-allow-headers": "authorization, content-type, x-app-session-id, x-canonical-user-id",
+    "access-control-allow-headers": "authorization, content-type, x-app-session-id, x-shortcut-session-id, x-canonical-user-id",
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "vary": "Origin",
   } : {};
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Json).sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 function assertConfigured(): void {

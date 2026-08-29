@@ -10,7 +10,9 @@ Beta path: `authenticated Web/LINE → 健康資料同步 Shortcut → Apple Hea
 4. In Shortcuts, choose **Share → Copy iCloud Link**.
 5. Put that HTTPS URL into the beta runtime configuration key `IOS_SHORTCUT_SHARE_URL`. Do not commit it as a credential; the share URL is distribution configuration.
 
-Authentication is separate from distribution. At run time the tester signs in to the Web/LINE app, requests a five-minute single-use Beta setup code, and pastes it into the Shortcut prompt. The code is exchanged server-side for a user- and environment-scoped session; the iCloud share URL never contains a credential.
+Authentication is separate from distribution. At run time the tester signs in to the Web/LINE app, requests a five-minute single-use Beta setup code, and pastes it into the Shortcut prompt. The Shortcut sends `{environment: "beta", claim: <code>}` to the manifest's `session_exchange_path`, then retains the returned session ID and access token only as private Shortcut variables for its bounded POST. The server stores only the token digest; the session is user-scoped, Beta-scoped, revocable, and expires after 24 hours. The iCloud share URL never contains a credential.
+
+The health POST uses the manifest's `ingestion_path`, `Authorization: Bearer <session access token>`, and `x-shortcut-session-id: <session id>`. Its body is the existing `hdl-v2.connector-ingestion.v1` Apple Health envelope. Never put either session value in the shared Shortcut definition or in the share URL.
 
 Expected result: the Web/LINE settings screen changes from **iPhone 健康同步捷徑準備中** to **加入健康同步捷徑**. A real permission/API/HDL result belongs to Phase 4B and must not be inferred from the link alone.
 

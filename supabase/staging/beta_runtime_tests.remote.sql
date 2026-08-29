@@ -42,6 +42,28 @@ begin
   end;
   if not caught then raise exception 'REPLAYED_CLAIM_NOT_REJECTED'; end if;
 
+  perform public.beta_issue_install_claim(
+    user_a, repeat('1', 64), 'ios', repeat('9', 64),
+    now() + interval '5 minutes', 'ONE_TIME_CODE'
+  );
+  select * into session_row from public.beta_exchange_shortcut_claim(
+    repeat('9', 64), repeat('a', 64), now() + interval '24 hours'
+  );
+  if session_row.canonical_user_id <> user_a then raise exception 'SHORTCUT_SESSION_OWNER_MISMATCH'; end if;
+  if not exists (
+    select 1 from public.beta_authorize_shortcut_session(session_row.session_id, repeat('a', 64))
+    where canonical_user_id = user_a and environment = 'beta'
+  ) then raise exception 'VALID_SHORTCUT_SESSION_REJECTED'; end if;
+  if exists (select 1 from public.beta_authorize_shortcut_session(session_row.session_id, repeat('0', 64))) then
+    raise exception 'INVALID_SHORTCUT_SESSION_ACCEPTED';
+  end if;
+  caught := false;
+  begin
+    perform public.beta_exchange_shortcut_claim(repeat('9', 64), repeat('e', 64), now() + interval '24 hours');
+  exception when others then caught := position('REPLAYED_CLAIM' in sqlerrm) > 0;
+  end;
+  if not caught then raise exception 'REPLAYED_SHORTCUT_CLAIM_NOT_REJECTED'; end if;
+
   insert into public.users(id, external_subject_hash) values (user_b, repeat('2', 64));
   result := public.beta_ingest_health_mutation(
     user_a, 'android', 'heart_rate', 'test.origin', 'record-1', 1,

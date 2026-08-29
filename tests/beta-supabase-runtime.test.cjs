@@ -31,6 +31,11 @@ test('beta schema is RLS protected and service-role-only', () => {
   assert.match(bootstrap, /revoke all on schema private from public, anon, authenticated/u);
   assert.match(rpc, /security definer[\s\S]*set search_path = ''/u);
   assert.match(rpc, /revoke all on function public\.beta_ingest_health_mutation[\s\S]*from public, anon, authenticated/u);
+  const shortcutSession = read('supabase/migrations/20260829090000_beta_ios_shortcut_session.sql');
+  assert.match(shortcutSession, /alter table private\.beta_shortcut_sessions enable row level security/u);
+  assert.match(shortcutSession, /revoke all on table private\.beta_shortcut_sessions from public, anon, authenticated/u);
+  assert.match(shortcutSession, /claim\.platform <> 'ios'/u);
+  assert.match(shortcutSession, /claim\.consumed_at is not null then raise exception 'REPLAYED_CLAIM'/u);
 });
 
 test('custom Edge authentication fails closed without exposing secrets', () => {
@@ -39,11 +44,25 @@ test('custom Edge authentication fails closed without exposing secrets', () => {
   assert.match(config, /\[functions\.mobile-health-beta\][\s\S]*verify_jwt = false/u);
   assert.match(source, /verifyWebSession\(bearer\(request\)\)/u);
   assert.match(source, /authorizeSession\(request, admin\)/u);
+  assert.match(source, /authorizeShortcutSession\(request, admin\)/u);
+  assert.match(source, /beta_exchange_shortcut_claim/u);
   assert.match(source, /CROSS_USER_UPLOAD/u);
   assert.match(source, /WRONG_ENVIRONMENT/u);
   assert.doesNotMatch(source, /console\.(?:log|debug|info)\(/u);
   assert.doesNotMatch(source, /service_role|SUPABASE_SERVICE_ROLE_KEY/u);
   assert.doesNotMatch(source, /vptqedxdxfoohbqctujf/u);
+});
+
+test('iOS Shortcut uses its canonical envelope and a scoped revocable session', () => {
+  const source = read('supabase/functions/mobile-health-beta/index.ts');
+  const manifest = JSON.parse(read('config/ios-shortcut-tester.manifest.json'));
+  assert.equal(manifest.session_exchange_path, '/v1/connectors/ios-shortcut/session');
+  assert.equal(manifest.ingestion_path, '/v1/connectors/ios-shortcut/ingest');
+  assert.match(source, /body\.schema_version !== "hdl-v2\.connector-ingestion\.v1"/u);
+  assert.match(source, /body\.provider !== "apple_health"/u);
+  assert.match(source, /body\.connector_type !== "ios_shortcut"/u);
+  assert.match(source, /x-shortcut-session-id/u);
+  assert.match(source, /source_record_id_kind: nativeId \? "NATIVE" : "DERIVED_FINGERPRINT"/u);
 });
 
 test('Edge dependencies are pinned and Android build embeds only public beta URL', () => {
