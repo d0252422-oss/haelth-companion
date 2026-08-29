@@ -50,7 +50,8 @@ function normalizeRecord(record, envelope) {
     ...record, provider: envelope.provider, connector_type: envelope.connector_type,
     source_record_id: sourceRecordId,
     source_record_id_kind: native ? 'NATIVE' : 'DERIVED_FINGERPRINT',
-    sync_method: envelope.connector_type === 'ios_shortcut' ? 'USER_AUTOMATION' : 'SCHEDULED_EXPORT',
+    sync_method: envelope.connector_type === 'ios_shortcut' ? 'USER_AUTOMATION'
+      : envelope.connector_type === 'android_helper' ? 'BACKGROUND_HELPER' : 'SCHEDULED_EXPORT',
   };
   return Object.freeze({ ...normalized, source_fingerprint: sourceFingerprint(normalized) });
 }
@@ -65,11 +66,14 @@ function validateEnvelope(payload, canonicalUserId) {
 }
 
 const CAPABILITIES = Object.freeze({
-  ios: Object.freeze([{ connector: 'ios_shortcut', label: '連接 Apple 健康', installRequired: false, status: 'POC' }]),
+  ios: Object.freeze([
+    { connector: 'ios_shortcut', label: '加入健康同步捷徑', installRequired: false, status: 'BETA_PRIMARY' },
+    { connector: 'ios_helper', label: 'iOS 原生同步器', installRequired: true, status: 'FUTURE_OPTIONAL' },
+  ]),
   android: Object.freeze([
-    { connector: 'vendor_cloud', label: '推薦：自動同步', installRequired: false, status: 'CONDITIONAL' },
-    { connector: 'android_helper', label: '推薦：自動同步', installRequired: true, status: 'AVAILABLE' },
-    { connector: 'health_connect_export', label: '不想安裝 App？使用免安裝方式', installRequired: false, status: 'POC' },
+    { connector: 'android_helper', label: '下載 Android Beta', installRequired: true, status: 'BETA_PRIMARY' },
+    { connector: 'health_connect_export', label: 'Health Connect 匯出診斷', installRequired: false, status: 'FALLBACK_DIAGNOSTIC' },
+    { connector: 'vendor_cloud', label: '品牌雲端連線', installRequired: false, status: 'FUTURE_CONDITIONAL' },
   ]),
 });
 

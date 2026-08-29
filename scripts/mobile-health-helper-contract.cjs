@@ -3,7 +3,8 @@
 const crypto = require('node:crypto');
 
 const CLAIM_TTL_SECONDS = 300;
-const DOMAINS = new Set(['steps', 'heart_rate', 'sleep']);
+const PLATFORMS = new Set(['ios', 'android']);
+const DOMAINS = new Set(['steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage', 'weight', 'workout', 'hrv', 'spo2']);
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -17,7 +18,7 @@ function canonicalNumber(value) {
 
 function idempotencyKey(record) {
   const tuple = [
-    'sha256-canonical-v1', record.canonical_user_id.toLowerCase(), 'ios', record.domain,
+    'sha256-canonical-v1', record.canonical_user_id.toLowerCase(), record.platform, record.domain,
     record.source_app, record.source_record_id || '', record.started_at || '',
     record.ended_at || '', record.recorded_at, canonicalNumber(record.value),
     record.unit, record.stage || '',
@@ -27,7 +28,7 @@ function idempotencyKey(record) {
 
 function validateRecord(record, sessionUserId) {
   if (!record || record.canonical_user_id !== sessionUserId) throw new Error('CROSS_USER_UPLOAD');
-  if (record.platform !== 'ios') throw new Error('PLATFORM_MISMATCH');
+  if (!PLATFORMS.has(record.platform)) throw new Error('PLATFORM_MISMATCH');
   if (!DOMAINS.has(record.domain)) throw new Error('UNSUPPORTED_DOMAIN');
   if (typeof record.source_app !== 'string' || !record.source_app) throw new Error('MISSING_SOURCE');
   if (!Number.isFinite(Date.parse(record.recorded_at))) throw new Error('MALFORMED_TIMESTAMP');
@@ -133,7 +134,9 @@ class InstallClaimRegistry {
 
 module.exports = {
   CLAIM_TTL_SECONDS,
+  DOMAINS,
   InstallClaimRegistry,
+  PLATFORMS,
   canonicalNumber,
   classifyHTTPStatus,
   idempotencyKey,

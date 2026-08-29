@@ -1,0 +1,24 @@
+{
+  "schema_version": "tester-access.v1",
+  "development": {
+    "ANDROID_BETA_APK_URL": "",
+    "ANDROID_BETA_APK_VERSION": "0.1.0-dev",
+    "IOS_SHORTCUT_SHARE_URL": "",
+    "IOS_SHORTCUT_VERSION": "0.1.0-dev",
+    "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
+  },
+  "beta": {
+    "ANDROID_BETA_APK_URL": "",
+    "ANDROID_BETA_APK_VERSION": "0.1.0-beta.1",
+    "IOS_SHORTCUT_SHARE_URL": "",
+    "IOS_SHORTCUT_VERSION": "0.1.0-beta.1",
+    "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
+  },
+  "production": {
+    "ANDROID_BETA_APK_URL": "",
+    "ANDROID_BETA_APK_VERSION": "disabled",
+    "IOS_SHORTCUT_SHARE_URL": "",
+    "IOS_SHORTCUT_VERSION": "disabled",
+    "CONNECTOR_VERSION": "hdl-v2.connector-ingestion.v1"
+  }
+}

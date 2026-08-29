@@ -4,6 +4,15 @@ Status: architecture preparation only
 Production changes: none  
 Human approval required before channel/provider creation, linking policy changes, or deploy: yes
 
+## Friends & Family beta access freeze
+
+- Android primary CTA: **下載 Android Beta** → development-signed helper → Health Connect read permission → authenticated staging ingestion.
+- iOS primary CTA: **加入健康同步捷徑** → Apple Health read permission → authenticated staging ingestion.
+- Health Connect ZIP export is fallback/diagnostic only.
+- The native iOS HealthKit helper is a future optional automatic-sync path.
+- Both platform routes normalize through the existing HDL v2 canonical ingestion; neither creates a platform-specific health database.
+- Empty distribution URLs render a truthful “準備中” state and never a fabricated link.
+
 ## Decisions that can be made safely now
 
 - Treat the LINE MINI App as a LIFF web client. It must work in both the LIFF browser and an external browser; external-browser login is an explicit flow, not an assumed session.

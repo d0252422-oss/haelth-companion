@@ -7,6 +7,7 @@ const {
   sha256,
   validateRecord,
 } = require('./mobile-health-helper-contract.cjs');
+const { ConnectorStatusRegistry } = require('./connector-status-contract.cjs');
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -62,8 +63,8 @@ function isOlderSourceTimestamp(incoming, current) {
 
 function validateMutation(mutation, canonicalUserId) {
   if (!mutation || mutation.canonical_user_id !== canonicalUserId) throw codeError('CROSS_USER_UPLOAD', 403);
-  if (mutation.platform !== 'ios') throw codeError('PLATFORM_MISMATCH', 400);
-  if (!['steps', 'heart_rate', 'sleep'].includes(mutation.domain)) throw codeError('UNSUPPORTED_DOMAIN', 400);
+  if (!['ios', 'android'].includes(mutation.platform)) throw codeError('PLATFORM_MISMATCH', 400);
+  if (!['steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage', 'weight', 'workout', 'hrv', 'spo2'].includes(mutation.domain)) throw codeError('UNSUPPORTED_DOMAIN', 400);
   if (!['UPSERT', 'DELETE'].includes(mutation.operation)) throw codeError('INVALID_OPERATION', 400);
   if (!Number.isSafeInteger(mutation.source_revision) || mutation.source_revision < 1) throw codeError('INVALID_SOURCE_REVISION', 400);
   if (!/^[0-9a-f]{64}$/u.test(mutation.source_content_hash || '')) throw codeError('INVALID_CONTENT_HASH', 400);
@@ -75,6 +76,7 @@ function validateMutation(mutation, canonicalUserId) {
 function createMobileHealthRuntime(options = {}) {
   const claims = options.claimRegistry || new InstallClaimRegistry();
   const reconciler = options.reconciler || new SourceRecordReconciler();
+  const connectorStatuses = options.connectorStatuses || new ConnectorStatusRegistry();
   const audit = typeof options.audit === 'function' ? options.audit : () => {};
   const authenticateWebRequest = options.authenticateWebRequest || (async () => { throw codeError('WEB_SESSION_REQUIRED', 401); });
   const continuationOrigin = options.continuationOrigin;
@@ -193,6 +195,18 @@ function createMobileHealthRuntime(options = {}) {
     });
   });
 
+  route('POST', '/v1/mobile/connectors/status', async (request, response, body) => {
+    const authorization = request.headers.authorization || '';
+    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    authorizeSession(claims, { sessionId: request.headers['x-app-session-id'], accessToken, canonicalUserId: body.canonical_user_id });
+    json(response, 200, connectorStatuses.report(body, body.canonical_user_id));
+  });
+
+  route('GET', '/v1/mobile/connectors/status', async (request, response) => {
+    const canonicalUserId = await authenticateWebRequest(request);
+    json(response, 200, { connectors: connectorStatuses.forUser(canonicalUserId) });
+  });
+
   route('DELETE', '/v1/mobile/sessions/current', async (request, response) => {
     const sessionId = request.headers['x-app-session-id'];
     const authorization = request.headers.authorization || '';
@@ -229,7 +243,7 @@ function createMobileHealthRuntime(options = {}) {
     }
   }
 
-  return { handler, routes: Object.freeze([...routes.keys()]), claimRegistry: claims, reconciler };
+  return { handler, routes: Object.freeze([...routes.keys()]), claimRegistry: claims, reconciler, connectorStatuses };
 }
 
 function emitAudit(audit, event) {

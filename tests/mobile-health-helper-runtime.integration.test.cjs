@@ -41,6 +41,8 @@ test('runtime registers claim, exchange, ingestion, and revocation routes', () =
     'POST /v1/health/ingestion/batches',
     'POST /v1/mobile/install-claims',
     'POST /v1/mobile/install-claims/exchange',
+    'GET /v1/mobile/connectors/status',
+    'POST /v1/mobile/connectors/status',
     'POST /v1/mobile/sessions/refresh',
   ].sort());
 });

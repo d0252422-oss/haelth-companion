@@ -1,4 +1,6 @@
-# iOS Real-Device HealthKit Runbook
+# iOS Native Helper Real-Device HealthKit Runbook (future optional path)
+
+The Friends & Family beta primary iOS entry is the shareable Apple Shortcut documented in `IOS_SHORTCUT_TESTER_RUNBOOK.md`. This native Xcode-installed helper remains preserved for future automatic/background synchronization validation and does not block the current tester-access gate.
 
 ## Required environment
 

@@ -519,10 +519,29 @@
         </div>
         <div class="section-heading" style="margin-top:22px">
          <div>
-          <h2 data-template-id="connection-title" class="canva-text">資料連線</h2>
+           <h2 data-template-id="connection-title" class="canva-text">資料連線</h2>
+          </div>
          </div>
-        </div>
-        <div class="option">
+         <div id="health-connector-panel" class="option-list" aria-labelledby="health-connector-title">
+          <div class="option" style="display:block">
+           <span><b id="health-connector-title">健康資料連線</b><small id="health-connector-recommendation">正在判斷適合的連線方式…</small></span>
+           <div style="display:flex;gap:8px;margin-top:10px"><button class="secondary-button" data-connector-platform="ANDROID" type="button">Android</button><button class="secondary-button" data-connector-platform="IOS" type="button">iPhone / iOS</button></div>
+          </div>
+          <div id="android-connector-card" class="option" hidden style="display:block">
+           <span><b>連接 Android 健康資料</b><small>安裝 Beta APK，開啟後授權 Health Connect；僅讀取健康分析需要的資料。</small></span>
+           <ol class="card-caption" style="padding-left:18px;line-height:1.6"><li>安裝並開啟 Android Beta</li><li>允許 Health Connect 讀取權限</li><li>完成首次同步後回到健康管理 APP</li></ol>
+           <a id="android-beta-download" class="primary-button" role="button" hidden rel="noopener">下載 Android Beta</a><button id="android-beta-pending" class="primary-button" type="button" disabled>Android 測試版準備中</button>
+           <small>APK <span id="android-apk-version">準備中</span> · Connector <span class="connector-version">—</span></small>
+          </div>
+          <div id="ios-connector-card" class="option" hidden style="display:block">
+           <span><b>連接 iPhone 健康資料</b><small>加入「健康資料同步」捷徑，第一次執行時允許所需的 Apple Health 唯讀權限。</small></span>
+           <ol class="card-caption" style="padding-left:18px;line-height:1.6"><li>加入健康同步捷徑</li><li>允許 Apple Health 唯讀權限</li><li>執行同步後回到健康管理 APP</li></ol>
+           <a id="ios-shortcut-link" class="primary-button" role="button" hidden rel="noopener">加入健康同步捷徑</a><button id="ios-shortcut-pending" class="primary-button" type="button" disabled>iPhone 健康同步捷徑準備中</button>
+           <small>Shortcut <span id="ios-shortcut-version">準備中</span> · Connector <span class="connector-version">—</span></small>
+          </div>
+          <div class="option"><span><b>連線狀態</b><small id="health-connector-status">UNKNOWN · 尚未收到同步器回報</small><small>最近同步：<span id="health-connector-last-sync">—</span> · 結果：<span id="health-connector-last-result">—</span></small></span></div>
+         </div>
+         <div class="option">
          <span><b>Google Sheets</b><small id="technical-api-status">連線中</small></span><i id="settings-status-dot" class="status-dot connecting"></i>
         </div><button id="reconnect-button" class="secondary-button" type="button" style="margin-top:10px;width:100%" data-template-id="reconnect-label">重新整理資料</button>
         <button id="line-link-button" class="secondary-button" type="button" style="display:none;margin-top:10px;width:100%;border-color:#06c;color:#06c">綁定 LINE 帳號</button>
@@ -623,7 +642,13 @@
       API_TIMEOUT:45000,
       TIMEZONE:"Asia/Taipei",
       LIFF_ID:"2011116657-9SpSnQlN",
-      EXTERNAL_APP_URL:"https://d0252422-oss.github.io/haelth-companion/?source=line&auth=google-external-v7"
+      EXTERNAL_APP_URL:"https://d0252422-oss.github.io/haelth-companion/?source=line&auth=google-external-v7",
+      ANDROID_BETA_APK_URL:"",
+      ANDROID_BETA_APK_VERSION:"0.1.0-beta.1",
+      IOS_SHORTCUT_SHARE_URL:"",
+      IOS_SHORTCUT_VERSION:"0.1.0-beta.1",
+      CONNECTOR_VERSION:"hdl-v2.connector-ingestion.v1",
+      ...(window.HEALTH_CONNECTOR_CONFIG||{})
     };
     const FEATURE_FLAGS={DIRECT_OPENAI_MEAL_ANALYSIS:false,CHATGPT_MEAL_BRIDGE:true};
     let currentUser=null;
@@ -681,6 +706,9 @@
     function formatDuration(minutes){const n=num(minutes);return n===null?"—":`${Math.floor(n/60)}h ${Math.round(n%60)}m`;}
     function sum(rows,key){return rows.reduce((total,row)=>total+(num(row[key])||0),0);}
     function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.classList.remove("show"),2800);}
+    function detectedTesterPlatform(){const evidence=`${navigator.userAgent||""} ${navigator.platform||""}`.toLowerCase();if(evidence.includes("android"))return "ANDROID";if(/iphone|ipad|ipod/.test(evidence)||(evidence.includes("mac")&&evidence.includes("mobile")))return "IOS";return "OTHER";}
+    function safeTesterLink(value){if(!value)return "";try{const url=new URL(value,location.href);return url.protocol==="https:"?url.href:""}catch{return ""}}
+    function renderTesterConnector(platform=detectedTesterPlatform()){const android=platform==="ANDROID",ios=platform==="IOS";document.getElementById("android-connector-card").hidden=!android;document.getElementById("ios-connector-card").hidden=!ios;setValue("health-connector-recommendation",android?"建議：Android Beta + Health Connect":ios?"建議：Apple Health 健康同步捷徑":"請選擇你的手機平台");const apk=safeTesterLink(CONFIG.ANDROID_BETA_APK_URL),shortcut=safeTesterLink(CONFIG.IOS_SHORTCUT_SHARE_URL),apkLink=document.getElementById("android-beta-download"),shortcutLink=document.getElementById("ios-shortcut-link");apkLink.hidden=!apk;document.getElementById("android-beta-pending").hidden=Boolean(apk);if(apk)apkLink.href=apk;shortcutLink.hidden=!shortcut;document.getElementById("ios-shortcut-pending").hidden=Boolean(shortcut);if(shortcut)shortcutLink.href=shortcut;setValue("android-apk-version",CONFIG.ANDROID_BETA_APK_VERSION||"準備中");setValue("ios-shortcut-version",CONFIG.IOS_SHORTCUT_VERSION||"準備中");document.querySelectorAll(".connector-version").forEach(node=>node.textContent=CONFIG.CONNECTOR_VERSION||"—");}
     function setConnectionState(state){const labels={connected:"已連線",connecting:"連線中",error:"資料載入失敗",notConfigured:"未設定"};["sync-dot","settings-status-dot"].forEach(id=>{const el=document.getElementById(id);if(el)el.className=`status-dot ${state}`;});document.getElementById("connection-label").textContent=labels[state];document.getElementById("technical-api-status").textContent=labels[state];}
     function unwrapApiResponse(response){if(response&&response.ok===true)return response.data;const error=response?.error;const e=new Error(readableError(error||response?.message));e.code=typeof error==="string"?error:error?.code||response?.code;throw e;}
     function classifyRequestError(error){if(error?.name==="AbortError"||error?.code==="REQUEST_TIMEOUT")return "REQUEST_TIMEOUT";if(error instanceof TypeError||/failed to fetch|networkerror|load failed/i.test(String(error?.message||"")))return "NETWORK_FAILURE";if(/^HTTP \d+/.test(String(error?.message||"")))return "SERVER_ERROR";if(error?.code)return String(error.code);return "OTHER";}
@@ -964,13 +992,14 @@
     document.getElementById("finish-workout").onclick=async()=>{if(!workoutSession?.exercises.some(x=>x.sets.length))return toast("先完成至少一組，再結束訓練。");const btn=document.getElementById("finish-workout"),workoutDate=document.getElementById("workout-date").value;if(!workoutDate||workoutDate>getLocalDateString())return toast("請選擇有效的訓練日期。");setSubmitting(btn,true);try{const endTime=new Date().toISOString(),totalSets=workoutSession.exercises.reduce((s,x)=>s+x.sets.length,0),totalVolume=workoutSession.exercises.reduce((s,x)=>s+x.sets.reduce((n,set)=>n+set.volume,0),0);await apiService.addWorkoutRecord({date:workoutDate,startTime:workoutSession.startTime,endTime,durationMinutes:Math.max(1,Math.round((new Date(endTime)-new Date(workoutSession.startTime))/60000)),totalSets,totalVolume,exercises:workoutSession.exercises});setSubmitting(btn,false);document.getElementById("back-training").click();toast(`訓練完成：${totalSets} 組已記錄。`);refreshInBackground("workout-create",async()=>{await apiService.refreshDerivedData("workout",workoutDate);const range={...sectionWindows.training};await refreshSectionRange("training",range.start,range.end);clearDashboardCache();});}catch(err){toast(err.message||"儲存失敗");}finally{setSubmitting(btn,false)}};
     document.querySelectorAll("[data-mode]").forEach(btn=>btn.onclick=()=>{localStorage.setItem("themeMode",btn.dataset.mode);applyThemeMode(btn.dataset.mode);refreshThemeOptions();});
     document.querySelectorAll("[data-accent-option]").forEach(btn=>btn.onclick=()=>{localStorage.setItem("themeColor",btn.dataset.accentOption);document.documentElement.dataset.accent=btn.dataset.accentOption;refreshThemeOptions();});
+    document.querySelectorAll("[data-connector-platform]").forEach(button=>button.onclick=()=>renderTesterConnector(button.dataset.connectorPlatform));
     document.getElementById("apply-theme").onclick=()=>toast("外觀設定已套用。");
     document.getElementById("header-theme-toggle").onclick=()=>{const current=document.documentElement.dataset.theme==="dark"?"light":"dark";localStorage.setItem("themeMode",current);applyThemeMode(current);refreshThemeOptions();};
     document.getElementById("reconnect-button").onclick=boot;
     document.getElementById("logout-button").onclick=logout;
     if(POINTER_DEBUG)document.addEventListener("pointerdown",event=>console.info("[Pointer]",{target:event.target,topElement:document.elementFromPoint(event.clientX,event.clientY),x:event.clientX,y:event.clientY}),true);
     document.querySelectorAll(".sheet-backdrop,.date-range-backdrop").forEach(element=>{element.setAttribute("aria-hidden",String(!element.classList.contains("show")));if("inert" in element)element.inert=!element.classList.contains("show");});
-    sharedTrendMetrics=loadSharedTrendMetrics();syncDateRangeUI();updatePageHeader();initTheme();lucide.createIcons();initSharedTrendLazyRender();if(UI_TEST_MODE){setConnectionState("connected");perfLog("ui-test-ready");}else initializeSession().then(ok=>{if(ok)boot();});
+    sharedTrendMetrics=loadSharedTrendMetrics();syncDateRangeUI();updatePageHeader();initTheme();renderTesterConnector();lucide.createIcons();initSharedTrendLazyRender();if(UI_TEST_MODE){setConnectionState("connected");perfLog("ui-test-ready");}else initializeSession().then(ok=>{if(ok)boot();});
   </script>
  </body>
 </html>

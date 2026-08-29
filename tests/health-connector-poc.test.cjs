@@ -43,7 +43,8 @@ test('source selection is per-record evidence, not a global vendor preference', 
     { source_fingerprint: 'a', native_provenance: true, data_resolution: 1, recorded_at: '2026-08-28T01:00:00Z', duplicate_risk: 0 },
   ]);
   assert.equal(selected.source_fingerprint, 'a');
-  assert.match(connectorOptions('android')[2].label, /免安裝/u);
+  assert.equal(connectorOptions('android')[0].connector, 'android_helper');
+  assert.equal(connectorOptions('android')[1].status, 'FALLBACK_DIAGNOSTIC');
 });
 
 test('connector reconciliation distinguishes create, replay, update, stale and conflict', () => {
