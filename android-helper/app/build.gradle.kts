@@ -9,13 +9,15 @@ android {
 
     defaultConfig {
         val betaApiBaseUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_API_BASE_URL").orElse("https://beta.invalid").get()
+        val betaAuthSetupUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_AUTH_SETUP_URL").orElse("https://beta.invalid").get()
         val betaAppLinkHost = providers.environmentVariable("HEALTH_COMPANION_BETA_APP_LINK_HOST").orElse("beta.invalid").get()
         applicationId = "app.healthcompanion.sync.beta"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.0-beta.2"
+        versionCode = 3
+        versionName = "0.1.0-beta.3"
         buildConfigField("String", "API_BASE_URL", "\"$betaApiBaseUrl\"")
+        buildConfigField("String", "AUTH_SETUP_URL", "\"$betaAuthSetupUrl\"")
         buildConfigField("String", "APP_LINK_HOST", "\"$betaAppLinkHost\"")
         manifestPlaceholders["appLinkHost"] = betaAppLinkHost
     }
@@ -39,4 +41,5 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }

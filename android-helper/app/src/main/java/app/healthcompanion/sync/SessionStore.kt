@@ -11,7 +11,13 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-data class AppSession(val canonicalUserId: String, val sessionId: String, val accessToken: String, val refreshToken: String)
+data class AppSession(
+    val canonicalUserId: String,
+    val sessionId: String,
+    val accessToken: String,
+    val refreshToken: String,
+    val expiresAtEpochMillis: Long,
+)
 
 class SessionStore(context: Context) {
     private val preferences = context.getSharedPreferences("secure_session", Context.MODE_PRIVATE)
@@ -20,7 +26,7 @@ class SessionStore(context: Context) {
     fun save(session: AppSession) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
-        val plaintext = JSONObject().put("canonical_user_id", session.canonicalUserId).put("session_id", session.sessionId).put("access_token", session.accessToken).put("refresh_token", session.refreshToken).toString().toByteArray()
+        val plaintext = JSONObject().put("canonical_user_id", session.canonicalUserId).put("session_id", session.sessionId).put("access_token", session.accessToken).put("refresh_token", session.refreshToken).put("expires_at_epoch_ms", session.expiresAtEpochMillis).toString().toByteArray()
         preferences.edit().putString("ciphertext", Base64.encodeToString(cipher.doFinal(plaintext), Base64.NO_WRAP)).putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).apply()
     }
 
@@ -30,8 +36,12 @@ class SessionStore(context: Context) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
         val json = JSONObject(String(cipher.doFinal(encrypted)))
-        AppSession(json.getString("canonical_user_id"), json.getString("session_id"), json.getString("access_token"), json.getString("refresh_token"))
+        AppSession(json.getString("canonical_user_id"), json.getString("session_id"), json.getString("access_token"), json.getString("refresh_token"), json.getLong("expires_at_epoch_ms"))
     }.getOrNull()
+
+    fun clear() {
+        preferences.edit().clear().apply()
+    }
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

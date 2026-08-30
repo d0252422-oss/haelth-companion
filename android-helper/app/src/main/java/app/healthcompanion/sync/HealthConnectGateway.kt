@@ -31,34 +31,36 @@ class HealthConnectGateway(private val context: Context) {
     )
 
     suspend fun hasAllPermissions(): Boolean = client.permissionController.getGrantedPermissions().containsAll(readPermissions)
+    suspend fun hasAnyPermission(): Boolean = client.permissionController.getGrantedPermissions().any { it in readPermissions }
 
     suspend fun readBounded(start: Instant, end: Instant): List<CanonicalHealthRecord> {
         val filter = TimeRangeFilter.between(start, end)
         val zone = ZoneId.systemDefault()
         val output = mutableListOf<CanonicalHealthRecord>()
-        client.readRecords(ReadRecordsRequest(StepsRecord::class, filter)).records.forEach { record ->
+        val granted = client.permissionController.getGrantedPermissions()
+        if (HealthPermission.getReadPermission(StepsRecord::class) in granted) client.readRecords(ReadRecordsRequest(StepsRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("steps", record.count.toDouble(), "count", record.startTime, record.endTime, zone)
         }
-        client.readRecords(ReadRecordsRequest(HeartRateRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(HeartRateRecord::class) in granted) client.readRecords(ReadRecordsRequest(HeartRateRecord::class, filter)).records.forEach { record ->
             record.samples.forEach { sample -> output += record.toCanonical("heart_rate", sample.beatsPerMinute.toDouble(), "bpm", sample.time, sample.time, zone) }
         }
-        client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(RestingHeartRateRecord::class) in granted) client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("resting_heart_rate", record.beatsPerMinute.toDouble(), "bpm", record.time, record.time, zone)
         }
-        client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(SleepSessionRecord::class) in granted) client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("sleep", (record.endTime.epochSecond - record.startTime.epochSecond) / 60.0, "minute", record.startTime, record.endTime, zone)
             record.stages.forEach { stage -> output += record.toCanonical("sleep_stage", (stage.endTime.epochSecond - stage.startTime.epochSecond) / 60.0, "minute", stage.startTime, stage.endTime, zone, stage.stage.toString()) }
         }
-        client.readRecords(ReadRecordsRequest(WeightRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(WeightRecord::class) in granted) client.readRecords(ReadRecordsRequest(WeightRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("weight", record.weight.inKilograms, "kg", record.time, record.time, zone)
         }
-        client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(ExerciseSessionRecord::class) in granted) client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("workout", (record.endTime.epochSecond - record.startTime.epochSecond) / 60.0, "minute", record.startTime, record.endTime, zone)
         }
-        client.readRecords(ReadRecordsRequest(HeartRateVariabilityRmssdRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class) in granted) client.readRecords(ReadRecordsRequest(HeartRateVariabilityRmssdRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("hrv", record.heartRateVariabilityMillis, "ms", record.time, record.time, zone)
         }
-        client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, filter)).records.forEach { record ->
+        if (HealthPermission.getReadPermission(OxygenSaturationRecord::class) in granted) client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, filter)).records.forEach { record ->
             output += record.toCanonical("spo2", record.percentage.value, "percent", record.time, record.time, zone)
         }
         return output

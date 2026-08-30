@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 20
     env:
       HEALTH_COMPANION_BETA_API_BASE_URL: https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta
+      HEALTH_COMPANION_BETA_AUTH_SETUP_URL: https://d0252422-oss.github.io/health-companion-beta/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

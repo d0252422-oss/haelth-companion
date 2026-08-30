@@ -16,26 +16,26 @@
     <span class="tag">FRIENDS &amp; FAMILY BETA · NON-PRODUCTION</span>
     <h1>健康陪跑 Beta 測試入口</h1>
     <p class="muted">登入只用來確認你的既有健康管理帳號；所有 Helper / Shortcut 健康資料與衍生分數只寫入獨立 Beta project。</p>
-    <div id="auth-status" class="status">請先登入，再產生五分鐘內有效的一次性連接碼。</div>
+    <div id="auth-status" class="status">請先登入；Android 會在登入後自動完成安全連接。</div>
     <div id="google-login" style="margin-top:12px"></div>
   </section>
 
   <section class="grid">
     <article class="card">
       <h2>Android + Health Connect</h2>
-      <p class="muted">版本 0.1.0-beta.2 · 約 10.5 MB · 測試版</p>
-      <ol><li>下載並安裝 APK</li><li>在此產生一次性碼</li><li>APK 貼上代碼並授權 Health Connect</li><li>同步後回此頁查看分數</li></ol>
-      <a class="button" href="https://github.com/d0252422-oss/haelth-companion/releases/download/android-beta-v0.1.0-beta.2/health-sync-companion-beta-0.1.0-beta.2.apk" rel="noopener">下載 Android Beta</a>
-      <button id="android-claim" class="button secondary" type="button" disabled>產生 Android 一次性連接碼</button>
+      <p class="muted">版本 0.1.0-beta.3 · 測試版</p>
+      <ol><li>下載並安裝 APK</li><li>在 APK 點「登入」並於瀏覽器完成登入</li><li>允許 Health Connect</li><li>首次同步與健康分析會自動完成</li></ol>
+      <a class="button" href="https://github.com/d0252422-oss/haelth-companion/releases/download/android-beta-v0.1.0-beta.3/health-sync-companion-beta-0.1.0-beta.3.apk" rel="noopener">下載 Android Beta</a>
+      <button id="android-claim" class="button secondary debug-only" type="button" disabled hidden>Debug：產生 Android 一次性連接碼</button>
       <div id="android-code" class="code" aria-live="polite"></div>
-      <p class="muted"><code>SHA-256 304b65675c7d…</code></p>
+      <p class="muted"><code>SHA-256 e46c9a35b04b…</code></p>
     </article>
 
     <article class="card">
       <h2>iPhone + Apple Health Shortcut</h2>
       <p class="muted">工程接線已完成；目前等待真人從 iPhone 建立並分享 iCloud Shortcut link。</p>
       <button class="button" type="button" disabled>等待 iPhone 分享捷徑連結</button>
-      <button id="ios-claim" class="button secondary" type="button" disabled>產生 iPhone 一次性連接碼</button>
+      <button id="ios-claim" class="button secondary debug-only" type="button" disabled hidden>Debug：產生 iPhone 一次性連接碼</button>
       <div id="ios-code" class="code" aria-live="polite"></div>
     </article>
 
@@ -57,6 +57,11 @@
   });
   const labels={sleep:"睡眠",activity:"活動",training:"訓練",nutrition:"營養",body_composition:"身體組成",recovery:"恢復",fatigue:"疲勞",health_overall:"整體健康"};
   let sessionToken=sessionStorage.getItem("healthCompanionBetaSession")||"";
+  const setup=new URLSearchParams(location.search);
+  const isAndroidSetup=setup.get("connector_setup")==="android";
+  const installFingerprint=setup.get("installation_key_fingerprint")||"";
+  const returnUri=setup.get("return_uri")||"";
+  const debugClaims=setup.get("debug_claim")==="1";
   const setText=(id,text)=>document.getElementById(id).textContent=text;
   const unwrap=(value)=>value?.data??value?.result??value;
   async function authRequest(action,extra={}){
@@ -74,8 +79,9 @@
     return payload;
   }
   function setAuthenticated(authenticated){
-    document.querySelectorAll("#android-claim,#ios-claim,#refresh").forEach(button=>button.disabled=!authenticated);
-    setText("auth-status",authenticated?"已登入。可產生一次性碼，或查看自己的 Beta 同步狀態與分數。":"請先登入，再產生五分鐘內有效的一次性連接碼。");
+    document.getElementById("refresh").disabled=!authenticated;
+    document.querySelectorAll(".debug-only").forEach(button=>{button.hidden=!debugClaims;button.disabled=!authenticated});
+    setText("auth-status",authenticated?(isAndroidSetup?"已登入，正在安全連接 Android…":"已登入，可查看自己的 Beta 同步狀態與分數。"):(isAndroidSetup?"請登入以連接 Android 健康資料。":"請先登入；Android 會在登入後自動完成安全連接。"));
   }
   async function handleGoogleCredential(result){
     try{
@@ -83,7 +89,8 @@
       sessionToken=payload.sessionToken;
       if(!sessionToken)throw new Error("SESSION_NOT_ISSUED");
       sessionStorage.setItem("healthCompanionBetaSession",sessionToken);
-      setAuthenticated(true);await refreshBeta();
+      setAuthenticated(true);
+      if(isAndroidSetup)await continueAndroidSetup();else await refreshBeta();
     }catch(error){setText("auth-status",`登入失敗：${error.message}`);document.getElementById("auth-status").classList.add("error")}
   }
   async function validateStoredSession(){
@@ -97,6 +104,14 @@
       output.textContent=payload.claim_code;output.style.display="block";
       setTimeout(()=>{output.textContent="";output.style.display="none"},300000);
     }catch(error){output.textContent=`無法產生：${error.message}`;output.style.display="block"}
+  }
+  async function continueAndroidSetup(){
+    if(!/^[0-9a-f]{64}$/.test(installFingerprint)||returnUri!=="healthcompanion-beta://auth/bootstrap"){
+      throw new Error("INVALID_ANDROID_SETUP");
+    }
+    const payload=await betaRequest("/v1/mobile/install-claims",{method:"POST",body:JSON.stringify({platform:"android",environment:"beta",binding_method:"VERIFIED_APP_LINK",installation_key_fingerprint:installFingerprint})});
+    if(typeof payload.continuation_url!=="string"||!payload.continuation_url.startsWith("healthcompanion-beta://auth/bootstrap#claim="))throw new Error("INVALID_CONTINUATION");
+    location.assign(payload.continuation_url);
   }
   function renderScores(payload){
     const target=document.getElementById("scores"),scores=payload.scores||{};
@@ -114,7 +129,7 @@
   document.getElementById("refresh").onclick=refreshBeta;
   window.addEventListener("load",async()=>{
     const authenticated=await validateStoredSession();
-    if(authenticated)await refreshBeta();
+    if(authenticated){if(isAndroidSetup)await continueAndroidSetup();else await refreshBeta();}
     google.accounts.id.initialize({client_id:CONFIG.googleClientId,callback:handleGoogleCredential});
     google.accounts.id.renderButton(document.getElementById("google-login"),{theme:"outline",size:"large",text:"signin_with"});
   });

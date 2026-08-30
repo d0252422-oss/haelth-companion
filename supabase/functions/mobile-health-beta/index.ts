@@ -3,6 +3,7 @@ import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 
 const webAuthVerifyUrl = Deno.env.get("BETA_WEB_AUTH_VERIFY_URL") ?? "";
 const allowedOrigin = Deno.env.get("BETA_ALLOWED_ORIGIN") ?? "";
+const androidCallbackUri = Deno.env.get("BETA_ANDROID_CALLBACK_URI") ?? "";
 const encoder = new TextEncoder();
 const MAX_BODY_BYTES = 1024 * 1024;
 const DOMAINS = new Set([
@@ -36,6 +37,12 @@ export default {
       if (request.method === "POST" && path === "/v1/mobile/install-claims/exchange") {
         return await exchangeClaim(request, ctx.supabaseAdmin, origin);
       }
+      if (request.method === "POST" && path === "/v1/mobile/sessions/refresh") {
+        return await refreshSession(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "DELETE" && path === "/v1/mobile/sessions/current") {
+        return await revokeSession(request, ctx.supabaseAdmin, origin);
+      }
       if (request.method === "POST" && path === "/v1/connectors/ios-shortcut/session") {
         return await exchangeShortcutClaim(request, ctx.supabaseAdmin, origin);
       }
@@ -64,7 +71,12 @@ export default {
 
 async function issueClaim(request: Request, admin: any, origin: string): Promise<Response> {
   const body = await readJson(request);
-  if (body.environment !== "beta" || body.binding_method !== "ONE_TIME_CODE" || !["android", "ios"].includes(String(body.platform))) {
+  const bindingMethod = String(body.binding_method ?? "");
+  const fingerprint = typeof body.installation_key_fingerprint === "string" ? body.installation_key_fingerprint : null;
+  if (body.environment !== "beta" || !["ONE_TIME_CODE", "VERIFIED_APP_LINK"].includes(bindingMethod)
+      || !["android", "ios"].includes(String(body.platform))
+      || (bindingMethod === "VERIFIED_APP_LINK" && !/^[0-9a-f]{64}$/.test(fingerprint ?? ""))
+      || (bindingMethod === "ONE_TIME_CODE" && fingerprint !== null)) {
     throw failure("INVALID_INSTALL_BINDING", 400);
   }
   const subject = await verifyWebSession(bearer(request));
@@ -76,10 +88,15 @@ async function issueClaim(request: Request, admin: any, origin: string): Promise
     p_platform: body.platform,
     p_claim_digest: await sha256(claim),
     p_expires_at: new Date(Date.now() + 300_000).toISOString(),
-    p_binding_method: "ONE_TIME_CODE",
+    p_binding_method: bindingMethod,
+    p_installation_key_fingerprint: fingerprint,
   });
   if (error) throw databaseFailure(error);
-  return json(201, { claim_code: claim, expires_in: 300, environment: "beta" }, origin);
+  return json(201, {
+    claim_code: bindingMethod === "ONE_TIME_CODE" ? claim : undefined,
+    continuation_url: bindingMethod === "VERIFIED_APP_LINK" ? `${androidCallbackUri}#claim=${encodeURIComponent(claim)}` : undefined,
+    expires_in: 300, environment: "beta",
+  }, origin);
 }
 
 async function exchangeShortcutClaim(request: Request, admin: any, origin: string): Promise<Response> {
@@ -194,10 +211,10 @@ async function exchangeClaim(request: Request, admin: any, origin: string): Prom
   const publicKeyBytes = decodeBase64(requiredString(body.installation_public_key, "INVALID_PUBLIC_KEY"));
   const signatureDer = decodeBase64(requiredString(body.signature, "INVALID_SIGNATURE"));
   const publicKey = await crypto.subtle.importKey(
-    "spki", publicKeyBytes, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"],
+    "spki", arrayBuffer(publicKeyBytes), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"],
   ).catch(() => { throw failure("INVALID_PUBLIC_KEY", 400); });
   const verified = await crypto.subtle.verify(
-    { name: "ECDSA", hash: "SHA-256" }, publicKey, derEcdsaToRaw(signatureDer, 32), encoder.encode(claim),
+    { name: "ECDSA", hash: "SHA-256" }, publicKey, arrayBuffer(derEcdsaToRaw(signatureDer, 32)), arrayBuffer(encoder.encode(claim)),
   ).catch(() => false);
   if (!verified) throw failure("INVALID_SIGNATURE", 400);
 
@@ -224,6 +241,56 @@ async function exchangeClaim(request: Request, admin: any, origin: string): Prom
     expires_at: expiresAt,
     environment: "beta",
   }, origin);
+}
+
+async function refreshSession(request: Request, admin: any, origin: string): Promise<Response> {
+  const body = await readJson(request);
+  const sessionId = requiredString(body.session_id, "INVALID_SESSION");
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
+  const refreshToken = requiredString(body.refresh_token, "INVALID_REFRESH_TOKEN");
+  const signatureDer = decodeBase64(requiredString(body.signature, "INVALID_SIGNATURE"));
+  const { data: materialData, error: materialError } = await admin.rpc("beta_get_app_session_refresh_material", { p_session_id: sessionId });
+  if (materialError) throw databaseFailure(materialError);
+  const material = Array.isArray(materialData) ? materialData[0] as Json : null;
+  if (!material) throw failure("INVALID_REFRESH_TOKEN", 401);
+  const publicKeyBytes = decodePostgresBytea(requiredString(material.installation_public_key_spki, "INVALID_SESSION"));
+  const publicKey = await crypto.subtle.importKey(
+    "spki", arrayBuffer(publicKeyBytes), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"],
+  ).catch(() => { throw failure("INVALID_SESSION", 401); });
+  const verified = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" }, publicKey, arrayBuffer(derEcdsaToRaw(signatureDer, 32)), arrayBuffer(encoder.encode(`${sessionId}\u001f${refreshToken}`)),
+  ).catch(() => false);
+  if (!verified) throw failure("INVALID_SIGNATURE", 401);
+
+  const accessToken = randomToken(32);
+  const newRefreshToken = randomToken(48);
+  const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+  const { data, error } = await admin.rpc("beta_rotate_app_session", {
+    p_session_id: sessionId,
+    p_refresh_token_digest: await sha256(refreshToken),
+    p_new_access_token_digest: await sha256(accessToken),
+    p_new_refresh_token_digest: await sha256(newRefreshToken),
+    p_access_expires_at: expiresAt,
+    p_refresh_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+  });
+  if (error) throw databaseFailure(error);
+  const session = Array.isArray(data) ? data[0] as Json : null;
+  if (!session) throw failure("INVALID_REFRESH_TOKEN", 401);
+  return json(200, {
+    canonical_user_id: session.canonical_user_id, session_id: session.session_id,
+    access_token: accessToken, refresh_token: newRefreshToken, expires_at: expiresAt, environment: "beta",
+  }, origin);
+}
+
+async function revokeSession(request: Request, admin: any, origin: string): Promise<Response> {
+  const sessionId = request.headers.get("x-app-session-id") ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
+  const { data, error } = await admin.rpc("beta_revoke_app_session", {
+    p_session_id: sessionId, p_access_token_digest: await sha256(bearer(request)),
+  });
+  if (error) throw databaseFailure(error);
+  if (data !== true) throw failure("INVALID_SESSION", 401);
+  return new Response(null, { status: 204, headers: { "cache-control": "no-store", ...corsHeaders(origin) } });
 }
 
 async function ingest(request: Request, admin: any, origin: string): Promise<Response> {
@@ -418,14 +485,19 @@ function stableJson(value: unknown): string {
 }
 
 function assertConfigured(): void {
-  if (!allowedOrigin.startsWith("https://") || !webAuthVerifyUrl.startsWith("https://")) {
+  if (!allowedOrigin.startsWith("https://") || !webAuthVerifyUrl.startsWith("https://")
+      || androidCallbackUri !== "healthcompanion-beta://auth/bootstrap") {
     throw failure("BETA_RUNTIME_NOT_CONFIGURED", 503);
   }
 }
 
 async function sha256(value: string | Uint8Array): Promise<string> {
   const bytes = typeof value === "string" ? encoder.encode(value) : value;
-  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", arrayBuffer(bytes))));
+}
+
+function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(bytes).buffer;
 }
 
 function uuidFromHash(hash: string): string {
@@ -446,6 +518,12 @@ function randomToken(size: number): string {
 function decodeBase64(value: string): Uint8Array {
   try { return Uint8Array.from(atob(value), (char) => char.charCodeAt(0)); }
   catch { throw failure("MALFORMED_BASE64", 400); }
+}
+
+function decodePostgresBytea(value: string): Uint8Array {
+  const hex = value.startsWith("\\x") ? value.slice(2) : value;
+  if (!/^[0-9a-f]+$/i.test(hex) || hex.length % 2 !== 0) throw failure("INVALID_SESSION", 401);
+  return Uint8Array.from(hex.match(/.{2}/g) ?? [], (pair) => parseInt(pair, 16));
 }
 
 function derEcdsaToRaw(der: Uint8Array, width: number): Uint8Array {
@@ -474,7 +552,7 @@ function requiredString(value: unknown, code: string): string {
 
 function databaseFailure(error: { message?: string }): SafeError {
   const message = String(error?.message ?? "");
-  for (const code of ["INVALID_CLAIM", "REPLAYED_CLAIM", "EXPIRED_CLAIM", "REVOKED_CLAIM", "WRONG_ENVIRONMENT", "CANONICAL_IDENTITY_CONFLICT"]) {
+  for (const code of ["INVALID_CLAIM", "REPLAYED_CLAIM", "EXPIRED_CLAIM", "REVOKED_CLAIM", "WRONG_ENVIRONMENT", "CANONICAL_IDENTITY_CONFLICT", "INSTALLATION_KEY_MISMATCH"]) {
     if (message.includes(code)) return failure(code, code === "REPLAYED_CLAIM" ? 409 : code === "EXPIRED_CLAIM" ? 410 : 400);
   }
   return failure("DATABASE_OPERATION_FAILED", 500);

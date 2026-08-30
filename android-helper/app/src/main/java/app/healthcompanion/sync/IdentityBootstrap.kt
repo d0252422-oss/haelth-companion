@@ -15,13 +15,18 @@ import java.security.MessageDigest
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
 
-class IdentityBootstrap(private val context: Context, private val baseUrl: String) {
+class IdentityBootstrap(private val context: Context, private val baseUrl: String, private val authSetupUrl: String) {
     private val alias = "health-sync-installation-ec"
 
     fun setupIntent(): Intent {
-        requireConfigured()
+        requireConfigured(authSetupUrl)
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(publicKey().encoded).joinToString("") { "%02x".format(it) }
-        val uri = Uri.parse("$baseUrl/health-sync/setup").buildUpon().appendQueryParameter("platform", "android").appendQueryParameter("installation_key_fingerprint", fingerprint).build()
+        val uri = Uri.parse(authSetupUrl).buildUpon()
+            .appendQueryParameter("connector_setup", "android")
+            .appendQueryParameter("environment", "beta")
+            .appendQueryParameter("installation_key_fingerprint", fingerprint)
+            .appendQueryParameter("return_uri", "healthcompanion-beta://auth/bootstrap")
+            .build()
         return Intent(Intent.ACTION_VIEW, uri)
     }
 
@@ -30,7 +35,7 @@ class IdentityBootstrap(private val context: Context, private val baseUrl: Strin
         ?.firstOrNull { it[0] == "claim" }?.get(1)?.let(Uri::decode)
 
     fun exchange(claim: String): AppSession {
-        requireConfigured()
+        requireConfigured(baseUrl)
         val signer = Signature.getInstance("SHA256withECDSA").apply { initSign(privateKey()); update(claim.toByteArray()) }
         val body = JSONObject().put("claim", claim).put("installation_public_key", Base64.encodeToString(publicKey().encoded, Base64.NO_WRAP)).put("signature", Base64.encodeToString(signer.sign(), Base64.NO_WRAP)).toString()
         val connection = (URL("$baseUrl/v1/mobile/install-claims/exchange").openConnection() as HttpURLConnection).apply {
@@ -40,10 +45,43 @@ class IdentityBootstrap(private val context: Context, private val baseUrl: Strin
         connection.outputStream.use { it.write(body.toByteArray()) }
         require(connection.responseCode in 200..299) { "CLAIM_EXCHANGE_FAILED" }
         val result = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-        return AppSession(result.getString("canonical_user_id"), result.getString("session_id"), result.getString("access_token"), result.getString("refresh_token"))
+        return parseSession(result)
     }
 
-    private fun requireConfigured() = require(baseUrl.startsWith("https://") && !baseUrl.endsWith(".invalid")) { "STAGING_ENDPOINT_NOT_CONFIGURED" }
+    fun refresh(session: AppSession): AppSession {
+        requireConfigured(baseUrl)
+        val message = "${session.sessionId}\u001f${session.refreshToken}"
+        val signer = Signature.getInstance("SHA256withECDSA").apply { initSign(privateKey()); update(message.toByteArray()) }
+        val body = JSONObject().put("session_id", session.sessionId).put("refresh_token", session.refreshToken)
+            .put("signature", Base64.encodeToString(signer.sign(), Base64.NO_WRAP)).toString()
+        val connection = post("$baseUrl/v1/mobile/sessions/refresh", body)
+        require(connection.responseCode in 200..299) { "SESSION_REFRESH_FAILED" }
+        return parseSession(JSONObject(connection.inputStream.bufferedReader().use { it.readText() }))
+    }
+
+    fun logout(session: AppSession) {
+        requireConfigured(baseUrl)
+        val connection = (URL("$baseUrl/v1/mobile/sessions/current").openConnection() as HttpURLConnection).apply {
+            requestMethod = "DELETE"; connectTimeout = 15_000; readTimeout = 15_000
+            setRequestProperty("Authorization", "Bearer ${session.accessToken}")
+            setRequestProperty("X-App-Session-Id", session.sessionId)
+        }
+        require(connection.responseCode in 200..299) { "SESSION_REVOKE_FAILED" }
+    }
+
+    private fun post(url: String, body: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 15_000; doOutput = true
+        setRequestProperty("Content-Type", "application/json")
+        outputStream.use { it.write(body.toByteArray()) }
+    }
+
+    private fun parseSession(result: JSONObject) = AppSession(
+        result.getString("canonical_user_id"), result.getString("session_id"),
+        result.getString("access_token"), result.getString("refresh_token"),
+        java.time.Instant.parse(result.getString("expires_at")).toEpochMilli(),
+    )
+
+    private fun requireConfigured(url: String) = require(url.startsWith("https://") && !url.contains(".invalid")) { "STAGING_ENDPOINT_NOT_CONFIGURED" }
     private fun store() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private fun publicKey(): ECPublicKey {
         val existing = store().getCertificate(alias)?.publicKey as? ECPublicKey

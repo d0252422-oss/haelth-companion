@@ -44,6 +44,8 @@ test('custom Edge authentication fails closed without exposing secrets', () => {
   assert.match(config, /\[functions\.mobile-health-beta\][\s\S]*verify_jwt = false/u);
   assert.match(source, /verifyWebSession\(bearer\(request\)\)/u);
   assert.match(source, /authorizeSession\(request, admin\)/u);
+  assert.match(source, /beta_rotate_app_session/u);
+  assert.match(source, /beta_revoke_app_session/u);
   assert.match(source, /authorizeShortcutSession\(request, admin\)/u);
   assert.match(source, /beta_exchange_shortcut_claim/u);
   assert.match(source, /CROSS_USER_UPLOAD/u);
@@ -51,6 +53,18 @@ test('custom Edge authentication fails closed without exposing secrets', () => {
   assert.doesNotMatch(source, /console\.(?:log|debug|info)\(/u);
   assert.doesNotMatch(source, /service_role|SUPABASE_SERVICE_ROLE_KEY/u);
   assert.doesNotMatch(source, /vptqedxdxfoohbqctujf/u);
+});
+
+test('Android V2 claim is installation-bound and session lifecycle stays server-only', () => {
+  const source = read('supabase/functions/mobile-health-beta/index.ts');
+  const migration = read('supabase/migrations/20260830141842_android_connector_v2_sessions.sql');
+  assert.match(source, /bindingMethod === "VERIFIED_APP_LINK"/u);
+  assert.match(source, /p_installation_key_fingerprint: fingerprint/u);
+  assert.match(migration, /INSTALLATION_KEY_MISMATCH/u);
+  assert.match(migration, /beta_rotate_app_session/u);
+  assert.match(migration, /beta_revoke_app_session/u);
+  assert.match(migration, /revoke all on function public\.beta_rotate_app_session/u);
+  assert.doesNotMatch(`${source}\n${migration}`, /console\.(?:log|debug|info)|service_role key/iu);
 });
 
 test('iOS Shortcut uses its canonical envelope and a scoped revocable session', () => {
