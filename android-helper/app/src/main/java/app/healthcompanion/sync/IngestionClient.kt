@@ -13,7 +13,7 @@ class BatchUploadFailed(val statusCode: Int) : IOException("BATCH_UPLOAD_FAILED"
 
 class IngestionClient(private val baseUrl: String) {
     fun upload(
-        session: AppSession,
+        session: BackendSession,
         records: List<CanonicalHealthRecord>,
         checkpoints: CheckpointRepository,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
@@ -37,7 +37,7 @@ class IngestionClient(private val baseUrl: String) {
         return UploadSummary(plan.batches.size, plan.batches.size, uploaded)
     }
 
-    private fun postBatch(session: AppSession, body: String) {
+    private fun postBatch(session: BackendSession, body: String) {
         var attempt = 0
         while (true) {
             attempt += 1
@@ -56,12 +56,12 @@ class IngestionClient(private val baseUrl: String) {
         }
     }
 
-    private fun execute(session: AppSession, body: String): Int {
+    private fun execute(session: BackendSession, body: String): Int {
         val connection = (URL("$baseUrl/v1/health/ingestion/batches").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 30_000; doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Authorization", "Bearer ${session.accessToken}")
-            setRequestProperty("X-App-Session-Id", session.sessionId)
+            session.legacySessionId?.let { setRequestProperty("X-App-Session-Id", it) }
         }
         return try {
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -69,7 +69,7 @@ class IngestionClient(private val baseUrl: String) {
         } finally { connection.disconnect() }
     }
 
-    fun reportStatus(session: AppSession, records: List<CanonicalHealthRecord>, result: String): Int {
+    fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String): Int {
         requireConfigured()
         val now = java.time.Instant.now().toString()
         val body = JSONObject()
@@ -81,13 +81,13 @@ class IngestionClient(private val baseUrl: String) {
             .put("last_success_at", if (result == "SYNCED") now else JSONObject.NULL)
             .put("last_result", result)
             .put("available_domains", JSONArray(records.map { it.domain }.distinct()))
-            .put("permission_state_if_known", "GRANTED")
+            .put("permission_state_if_known", permissionState)
             .toString()
         val connection = (URL("$baseUrl/v1/mobile/connectors/status").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 15_000; doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Authorization", "Bearer ${session.accessToken}")
-            setRequestProperty("X-App-Session-Id", session.sessionId)
+            session.legacySessionId?.let { setRequestProperty("X-App-Session-Id", it) }
         }
         return try {
             connection.outputStream.use { it.write(body.toByteArray()) }

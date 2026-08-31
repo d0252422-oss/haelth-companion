@@ -529,9 +529,8 @@
           </div>
           <div id="android-connector-card" class="option" hidden style="display:block">
            <span><b>連接 Android 健康資料</b><small>安裝 Beta APK，開啟後授權 Health Connect；僅讀取健康分析需要的資料。</small></span>
-           <ol class="card-caption" style="padding-left:18px;line-height:1.6"><li>安裝並開啟 Android Beta</li><li>取得並貼上五分鐘內有效的一次性連接碼</li><li>允許 Health Connect 讀取權限</li><li>完成首次同步後回到健康管理 APP</li></ol>
+           <ol class="card-caption" style="padding-left:18px;line-height:1.6"><li>下載並安裝 Android Beta</li><li>在 APP 使用 Google 帳號登入</li><li>允許 Health Connect 讀取權限</li><li>APP 會自動同步；完成後回到健康管理 APP 查看分數</li></ol>
            <a id="android-beta-download" class="primary-button" role="button" hidden rel="noopener">下載 Android Beta</a><button id="android-beta-pending" class="primary-button" type="button" disabled>Android 測試版準備中</button>
-           <button id="android-claim-code" class="secondary-button" type="button" style="margin-top:8px">取得一次性連接碼</button><code id="android-claim-code-value" hidden></code>
            <small>APK <span id="android-apk-version">準備中</span> · Connector <span class="connector-version">—</span></small>
            <small id="android-apk-metadata"></small>
           </div>
@@ -1002,7 +1001,6 @@
     document.querySelectorAll("[data-mode]").forEach(btn=>btn.onclick=()=>{localStorage.setItem("themeMode",btn.dataset.mode);applyThemeMode(btn.dataset.mode);refreshThemeOptions();});
     document.querySelectorAll("[data-accent-option]").forEach(btn=>btn.onclick=()=>{localStorage.setItem("themeColor",btn.dataset.accentOption);document.documentElement.dataset.accent=btn.dataset.accentOption;refreshThemeOptions();});
     document.querySelectorAll("[data-connector-platform]").forEach(button=>button.onclick=()=>renderTesterConnector(button.dataset.connectorPlatform));
-    document.getElementById("android-claim-code").onclick=()=>requestBetaClaim("ANDROID").catch(()=>toast("目前無法建立連接碼"));
     document.getElementById("ios-claim-code").onclick=()=>requestBetaClaim("IOS").catch(()=>toast("目前無法建立連接碼"));
     document.getElementById("apply-theme").onclick=()=>toast("外觀設定已套用。");
     document.getElementById("header-theme-toggle").onclick=()=>{const current=document.documentElement.dataset.theme==="dark"?"light":"dark";localStorage.setItem("themeMode",current);applyThemeMode(current);refreshThemeOptions();};

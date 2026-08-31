@@ -67,6 +67,22 @@ test('Android V2 claim is installation-bound and session lifecycle stays server-
   assert.doesNotMatch(`${source}\n${migration}`, /console\.(?:log|debug|info)|service_role key/iu);
 });
 
+test('native Android auth verifies Google-backed Supabase JWT and links canonical identity server-side', () => {
+  const source = read('supabase/functions/mobile-health-beta/index.ts');
+  const migration = read('supabase/migrations/20260831000913_android_native_auth_identity_link.sql');
+  assert.match(source, /admin\.auth\.getUser\(token\)/u);
+  assert.match(source, /providers\.has\("google"\)/u);
+  assert.match(source, /ACCOUNT_IDENTITY_MISMATCH/u);
+  assert.match(source, /nativeUser\.auth_email !== webIdentity\.email/u);
+  assert.match(source, /beta_link_native_auth_identity/u);
+  assert.match(source, /beta_resolve_native_auth_identity/u);
+  assert.match(migration, /auth_user_id uuid primary key references auth\.users\(id\)/u);
+  assert.match(migration, /canonical_user_id uuid not null unique/u);
+  assert.match(migration, /revoke all on table private\.beta_native_auth_identities from public, anon, authenticated/u);
+  assert.match(migration, /to service_role/u);
+  assert.doesNotMatch(`${source}\n${migration}`, /console\.(?:log|debug|info)|service[_-]?role key/iu);
+});
+
 test('iOS Shortcut uses its canonical envelope and a scoped revocable session', () => {
   const source = read('supabase/functions/mobile-health-beta/index.ts');
   const manifest = JSON.parse(read('config/ios-shortcut-tester.manifest.json'));

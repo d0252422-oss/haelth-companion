@@ -32,6 +32,7 @@ class HealthConnectGateway(private val context: Context) {
 
     suspend fun hasAllPermissions(): Boolean = client.permissionController.getGrantedPermissions().containsAll(readPermissions)
     suspend fun hasAnyPermission(): Boolean = client.permissionController.getGrantedPermissions().any { it in readPermissions }
+    suspend fun grantedReadPermissions(): Set<String> = client.permissionController.getGrantedPermissions().intersect(readPermissions)
 
     suspend fun readBounded(start: Instant, end: Instant): List<CanonicalHealthRecord> {
         val filter = TimeRangeFilter.between(start, end)

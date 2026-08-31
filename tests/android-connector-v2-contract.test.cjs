@@ -9,15 +9,21 @@ const main = read('android-helper/app/src/main/java/app/healthcompanion/sync/Mai
 const ingestion = read('android-helper/app/src/main/java/app/healthcompanion/sync/IngestionClient.kt');
 const planner = read('android-helper/app/src/main/java/app/healthcompanion/sync/BatchPlanner.kt');
 const identity = read('android-helper/app/src/main/java/app/healthcompanion/sync/IdentityBootstrap.kt');
+const nativeAuth = read('android-helper/app/src/main/java/app/healthcompanion/sync/NativeGoogleAuth.kt');
+const secureStorage = read('android-helper/app/src/main/java/app/healthcompanion/sync/SecureSupabaseAuthStorage.kt');
 const manifest = read('android-helper/app/src/main/AndroidManifest.xml');
 
-test('normal Android UX has browser login and no manual claim input', () => {
-  assert.match(main, /text = "登入"/u);
-  assert.match(main, /identity\.setupIntent\(\)/u);
-  assert.doesNotMatch(main, /EditText|consumeManualClaim|一次性連接碼/u);
-  assert.match(identity, /connector_setup/u);
-  assert.match(identity, /installation_key_fingerprint/u);
-  assert.match(manifest, /healthcompanion-beta/u);
+test('normal Android UX uses native Google auth and never requests a connection code', () => {
+  assert.match(main, /使用 Google 帳號登入/u);
+  assert.match(main, /NativeGoogleAuth/u);
+  assert.doesNotMatch(main, /IdentityBootstrap|EditText|consumeManualClaim|一次性連接碼|setupIntent/u);
+  assert.match(nativeAuth, /GetGoogleIdOption/u);
+  assert.match(nativeAuth, /signInWith\(IDToken\)/u);
+  assert.match(nativeAuth, /\/v1\/mobile\/native-auth\/link/u);
+  assert.match(nativeAuth, /refreshCurrentSession/u);
+  assert.match(secureStorage, /AndroidKeyStore/u);
+  assert.match(secureStorage, /AES\/GCM\/NoPadding/u);
+  assert.match(identity, /\/v1\/mobile\/install-claims\/exchange/u);
 });
 
 test('upload uses deterministic record and UTF-8 byte bounds', () => {
@@ -30,8 +36,8 @@ test('upload uses deterministic record and UTF-8 byte bounds', () => {
   assert.match(ingestion, /MAX_ATTEMPTS = 3/u);
 });
 
-test('session refresh and logout never expose credentials in UI or logs', () => {
+test('legacy claim stays isolated while native session credentials never appear in UI or logs', () => {
   assert.match(identity, /\/v1\/mobile\/sessions\/refresh/u);
   assert.match(identity, /\/v1\/mobile\/sessions\/current/u);
-  assert.doesNotMatch(`${main}\n${identity}\n${ingestion}`, /Log\.|println\(|printStackTrace|service[_-]?role/iu);
+  assert.doesNotMatch(`${main}\n${nativeAuth}\n${secureStorage}\n${identity}\n${ingestion}`, /Log\.|println\(|printStackTrace|service[_-]?role/iu);
 });

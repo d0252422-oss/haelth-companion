@@ -11,13 +11,28 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+interface BackendSession {
+    val canonicalUserId: String
+    val accessToken: String
+    val legacySessionId: String?
+}
+
+data class NativeAuthSession(
+    override val canonicalUserId: String,
+    override val accessToken: String,
+) : BackendSession {
+    override val legacySessionId: String? = null
+}
+
 data class AppSession(
-    val canonicalUserId: String,
+    override val canonicalUserId: String,
     val sessionId: String,
-    val accessToken: String,
+    override val accessToken: String,
     val refreshToken: String,
     val expiresAtEpochMillis: Long,
-)
+) : BackendSession {
+    override val legacySessionId: String = sessionId
+}
 
 class SessionStore(context: Context) {
     private val preferences = context.getSharedPreferences("secure_session", Context.MODE_PRIVATE)

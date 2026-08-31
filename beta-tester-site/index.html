@@ -16,19 +16,17 @@
     <span class="tag">FRIENDS &amp; FAMILY BETA · NON-PRODUCTION</span>
     <h1>健康陪跑 Beta 測試入口</h1>
     <p class="muted">登入只用來確認你的既有健康管理帳號；所有 Helper / Shortcut 健康資料與衍生分數只寫入獨立 Beta project。</p>
-    <div id="auth-status" class="status">請先登入；Android 會在登入後自動完成安全連接。</div>
+    <div id="auth-status" class="status">登入健康陪跑 Beta 後，即可查看同步後的健康資料與分數。</div>
     <div id="google-login" style="margin-top:12px"></div>
   </section>
 
   <section class="grid">
     <article class="card">
       <h2>Android + Health Connect</h2>
-      <p class="muted">版本 0.1.0-beta.3 · 測試版</p>
-      <ol><li>下載並安裝 APK</li><li>在 APK 點「登入」並於瀏覽器完成登入</li><li>允許 Health Connect</li><li>首次同步與健康分析會自動完成</li></ol>
-      <a class="button" href="https://github.com/d0252422-oss/haelth-companion/releases/download/android-beta-v0.1.0-beta.3/health-sync-companion-beta-0.1.0-beta.3.apk" rel="noopener">下載 Android Beta</a>
-      <button id="android-claim" class="button secondary debug-only" type="button" disabled hidden>Debug：產生 Android 一次性連接碼</button>
-      <div id="android-code" class="code" aria-live="polite"></div>
-      <p class="muted"><code>SHA-256 e46c9a35b04b…</code></p>
+      <p class="muted">版本 0.1.0-beta.4 · 原生 Google 登入測試版</p>
+      <ol><li>下載並安裝 APK</li><li>在 APP 使用 Google 帳號登入</li><li>同意 Health Connect 權限</li><li>APP 會自動同步並更新健康分析</li></ol>
+      <button class="button" type="button" disabled>新版 APK 等待 Beta OAuth 設定</button>
+      <p class="muted">Android 使用者不需要產生、複製或貼上連接碼。APK 與 SHA-256 將在 Beta 設定驗證後更新。</p>
     </article>
 
     <article class="card">
@@ -58,9 +56,6 @@
   const labels={sleep:"睡眠",activity:"活動",training:"訓練",nutrition:"營養",body_composition:"身體組成",recovery:"恢復",fatigue:"疲勞",health_overall:"整體健康"};
   let sessionToken=sessionStorage.getItem("healthCompanionBetaSession")||"";
   const setup=new URLSearchParams(location.search);
-  const isAndroidSetup=setup.get("connector_setup")==="android";
-  const installFingerprint=setup.get("installation_key_fingerprint")||"";
-  const returnUri=setup.get("return_uri")||"";
   const debugClaims=setup.get("debug_claim")==="1";
   const setText=(id,text)=>document.getElementById(id).textContent=text;
   const unwrap=(value)=>value?.data??value?.result??value;
@@ -81,7 +76,7 @@
   function setAuthenticated(authenticated){
     document.getElementById("refresh").disabled=!authenticated;
     document.querySelectorAll(".debug-only").forEach(button=>{button.hidden=!debugClaims;button.disabled=!authenticated});
-    setText("auth-status",authenticated?(isAndroidSetup?"已登入，正在安全連接 Android…":"已登入，可查看自己的 Beta 同步狀態與分數。"):(isAndroidSetup?"請登入以連接 Android 健康資料。":"請先登入；Android 會在登入後自動完成安全連接。"));
+    setText("auth-status",authenticated?"已登入，可查看自己的 Beta 同步狀態與分數。":"登入健康陪跑 Beta 後，即可查看同步後的健康資料與分數。");
   }
   async function handleGoogleCredential(result){
     try{
@@ -90,7 +85,7 @@
       if(!sessionToken)throw new Error("SESSION_NOT_ISSUED");
       sessionStorage.setItem("healthCompanionBetaSession",sessionToken);
       setAuthenticated(true);
-      if(isAndroidSetup)await continueAndroidSetup();else await refreshBeta();
+      await refreshBeta();
     }catch(error){setText("auth-status",`登入失敗：${error.message}`);document.getElementById("auth-status").classList.add("error")}
   }
   async function validateStoredSession(){
@@ -105,14 +100,6 @@
       setTimeout(()=>{output.textContent="";output.style.display="none"},300000);
     }catch(error){output.textContent=`無法產生：${error.message}`;output.style.display="block"}
   }
-  async function continueAndroidSetup(){
-    if(!/^[0-9a-f]{64}$/.test(installFingerprint)||returnUri!=="healthcompanion-beta://auth/bootstrap"){
-      throw new Error("INVALID_ANDROID_SETUP");
-    }
-    const payload=await betaRequest("/v1/mobile/install-claims",{method:"POST",body:JSON.stringify({platform:"android",environment:"beta",binding_method:"VERIFIED_APP_LINK",installation_key_fingerprint:installFingerprint})});
-    if(typeof payload.continuation_url!=="string"||!payload.continuation_url.startsWith("healthcompanion-beta://auth/bootstrap#claim="))throw new Error("INVALID_CONTINUATION");
-    location.assign(payload.continuation_url);
-  }
   function renderScores(payload){
     const target=document.getElementById("scores"),scores=payload.scores||{};
     target.innerHTML=Object.entries(labels).map(([type,label])=>{const row=scores[type]||{};const value=row.score==null?"—":Math.round(Number(row.score));return `<div class="score"><span>${label}</span><b>${value}</b><small class="muted">${row.status||"NOT_AVAILABLE"} · ${row.confidence||"—"}</small></div>`}).join("");
@@ -124,12 +111,11 @@
     if(!sessionToken)return;
     try{renderScores(await betaRequest("/v1/scores/daily"))}catch(error){setText("score-status",`分數讀取失敗：${error.message}`)}
   }
-  document.getElementById("android-claim").onclick=()=>issueClaim("android");
   document.getElementById("ios-claim").onclick=()=>issueClaim("ios");
   document.getElementById("refresh").onclick=refreshBeta;
   window.addEventListener("load",async()=>{
     const authenticated=await validateStoredSession();
-    if(authenticated){if(isAndroidSetup)await continueAndroidSetup();else await refreshBeta();}
+    if(authenticated)await refreshBeta();
     google.accounts.id.initialize({client_id:CONFIG.googleClientId,callback:handleGoogleCredential});
     google.accounts.id.renderButton(document.getElementById("google-login"),{theme:"outline",size:"large",text:"signin_with"});
   });

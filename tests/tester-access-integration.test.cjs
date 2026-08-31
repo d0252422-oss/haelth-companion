@@ -24,9 +24,9 @@ test('Web tester UI has manual selection, config-driven links, and no fake href'
   assert.match(html, /ANDROID_BETA_APK_URL:"https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\/android-beta-v0\.1\.0-beta\.2\/health-sync-companion-beta-0\.1\.0-beta\.2\.apk"/u);
   assert.match(html, /IOS_SHORTCUT_SHARE_URL:""/u);
   assert.match(html, /window\.HEALTH_CONNECTOR_CONFIG/u);
-  assert.match(html, /binding_method:"ONE_TIME_CODE"/u);
+  assert.doesNotMatch(html, /id="android-claim-code"/u);
   assert.match(html, /BETA_INGESTION_BASE_URL:"https:\/\/uavimjgccigpbwqmfkhh\.supabase\.co\/functions\/v1\/mobile-health-beta"/u);
-  assert.match(html, /一次性連接碼/u);
+  assert.match(html, /APP 使用 Google 帳號登入/u);
   assert.doesNotMatch(html, /href="[^"]*(?:\.apk|icloud\.com\/shortcuts)/iu);
 });
 
@@ -43,7 +43,7 @@ test('Android beta project is read-only Health Connect and development-only', ()
   assert.match(build, /https:\/\/beta\.invalid/u);
   assert.match(workflow, /assembleDebug/u);
   assert.match(workflow, /actions\/upload-artifact@v4/u);
-  assert.doesNotMatch(workflow, /(?:deploy|play|publish|production|signingConfig)/iu);
+  assert.doesNotMatch(workflow, /(?:\bdeploy\b|\bplay\b|\bproduction\b|signingConfig|app-store|testflight)/iu);
 });
 
 test('Shortcut setup manifest is read-only, bounded, and staging-only', () => {

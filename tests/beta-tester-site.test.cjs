@@ -12,17 +12,15 @@ test('beta tester entry is pinned to isolated Beta data target', () => {
 });
 
 test('tester entry exposes Android distribution and fail-closed iOS state', () => {
-  assert.match(html, /0\.1\.0-beta\.3/u);
+  assert.match(html, /0\.1\.0-beta\.4/u);
   assert.match(html, /等待 iPhone 分享捷徑連結/u);
   assert.doesNotMatch(html, /href=["'][^"']*icloud\.com\/shortcuts\//u);
 });
 
-test('tester entry uses authenticated installation-bound continuation and score API', () => {
-  assert.match(html, /\/v1\/mobile\/install-claims/u);
-  assert.match(html, /binding_method:"VERIFIED_APP_LINK"/u);
-  assert.match(html, /installation_key_fingerprint:installFingerprint/u);
-  assert.match(html, /healthcompanion-beta:\/\/auth\/bootstrap/u);
-  assert.doesNotMatch(html, /APK 貼上代碼/u);
+test('tester entry documents native Android login and removes Android claim continuation', () => {
+  assert.match(html, /APP 使用 Google 帳號登入/u);
+  assert.doesNotMatch(html, /android-claim|continueAndroidSetup|connector_setup|installation_key_fingerprint/u);
+  assert.doesNotMatch(html, /Android 一次性連接碼|APK 貼上代碼/u);
   assert.match(html, /\/v1\/scores\/daily/u);
   assert.match(html, /Authorization.*Bearer/u);
   assert.match(html, /sessionStorage\.setItem\("healthCompanionBetaSession"/u);

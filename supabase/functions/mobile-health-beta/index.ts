@@ -34,6 +34,12 @@ export default {
       if (request.method === "POST" && path === "/v1/mobile/install-claims") {
         return await issueClaim(request, ctx.supabaseAdmin, origin);
       }
+      if (request.method === "POST" && path === "/v1/mobile/native-auth/link") {
+        return await linkNativeIdentity(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "GET" && path === "/v1/mobile/native-auth/session") {
+        return await getNativeIdentity(request, ctx.supabaseAdmin, origin);
+      }
       if (request.method === "POST" && path === "/v1/mobile/install-claims/exchange") {
         return await exchangeClaim(request, ctx.supabaseAdmin, origin);
       }
@@ -68,6 +74,32 @@ export default {
     }
   }),
 };
+
+async function linkNativeIdentity(request: Request, admin: any, origin: string): Promise<Response> {
+  const nativeUser = await authenticateNativeUser(request, admin);
+  const body = await readJson(request);
+  const webIdentity = await verifyWebIdentity(requiredString(body.web_session_token, "WEB_SESSION_REQUIRED"));
+  if (!nativeUser.auth_email || nativeUser.auth_email !== webIdentity.email) {
+    throw failure("ACCOUNT_IDENTITY_MISMATCH", 403);
+  }
+  const subjectHash = await sha256(webIdentity.subject);
+  const canonicalUserId = uuidFromHash(subjectHash);
+  const { data, error } = await admin.rpc("beta_link_native_auth_identity", {
+    p_auth_user_id: nativeUser.auth_user_id,
+    p_canonical_user_id: canonicalUserId,
+    p_external_subject_hash: subjectHash,
+    p_provider: "google",
+  });
+  if (error) throw databaseFailure(error);
+  if (String(data) !== canonicalUserId) throw failure("CANONICAL_IDENTITY_CONFLICT", 409);
+  return json(200, { canonical_user_id: canonicalUserId, environment: "beta" }, origin);
+}
+
+async function getNativeIdentity(request: Request, admin: any, origin: string): Promise<Response> {
+  const nativeUser = await authenticateNativeUser(request, admin);
+  const identity = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id));
+  return json(200, identity, origin);
+}
 
 async function issueClaim(request: Request, admin: any, origin: string): Promise<Response> {
   const body = await readJson(request);
@@ -376,6 +408,10 @@ async function recomputeDates(admin: any, userId: string, dates: Set<string>): P
 
 async function authorizeSession(request: Request, admin: any): Promise<Json> {
   const sessionId = request.headers.get("x-app-session-id") ?? "";
+  if (!sessionId) {
+    const nativeUser = await authenticateNativeUser(request, admin);
+    return await resolveNativeIdentity(admin, String(nativeUser.auth_user_id));
+  }
   if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
   const { data, error } = await admin.rpc("beta_authorize_app_session", {
     p_session_id: sessionId,
@@ -385,6 +421,37 @@ async function authorizeSession(request: Request, admin: any): Promise<Json> {
   const session = Array.isArray(data) ? data[0] as Json : null;
   if (!session) throw failure("INVALID_SESSION", 401);
   return session;
+}
+
+async function authenticateNativeUser(request: Request, admin: any): Promise<Json> {
+  const token = bearer(request);
+  const { data, error } = await admin.auth.getUser(token);
+  const user = data?.user;
+  if (error || !user?.id) throw failure("INVALID_SUPABASE_SESSION", 401);
+  const providers = new Set<string>();
+  if (typeof user.app_metadata?.provider === "string") providers.add(user.app_metadata.provider);
+  if (Array.isArray(user.app_metadata?.providers)) {
+    for (const provider of user.app_metadata.providers) if (typeof provider === "string") providers.add(provider);
+  }
+  for (const identity of user.identities ?? []) {
+    if (typeof identity?.provider === "string") providers.add(identity.provider);
+  }
+  if (!providers.has("google")) throw failure("GOOGLE_AUTH_REQUIRED", 403);
+  const authEmail = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+  if (!authEmail || authEmail.length > 320) throw failure("GOOGLE_AUTH_REQUIRED", 403);
+  return { auth_user_id: user.id, auth_email: authEmail, provider: "google", environment: "beta" };
+}
+
+async function resolveNativeIdentity(admin: any, authUserId: string): Promise<Json> {
+  const { data, error } = await admin.rpc("beta_resolve_native_auth_identity", {
+    p_auth_user_id: authUserId,
+  });
+  if (error) throw databaseFailure(error);
+  const identity = Array.isArray(data) ? data[0] as Json : null;
+  if (!identity || identity.environment !== "beta" || identity.provider !== "google") {
+    throw failure("NATIVE_IDENTITY_NOT_LINKED", 401);
+  }
+  return identity;
 }
 
 async function authorizeShortcutSession(request: Request, admin: any): Promise<Json> {
@@ -401,6 +468,10 @@ async function authorizeShortcutSession(request: Request, admin: any): Promise<J
 }
 
 async function verifyWebSession(token: string): Promise<string> {
+  return (await verifyWebIdentity(token)).subject;
+}
+
+async function verifyWebIdentity(token: string): Promise<{ subject: string; email: string }> {
   if (!webAuthVerifyUrl.startsWith("https://")) throw failure("WEB_AUTH_NOT_CONFIGURED", 503);
   const upstream = await fetch(webAuthVerifyUrl, {
     method: "POST",
@@ -413,7 +484,10 @@ async function verifyWebSession(token: string): Promise<string> {
   const profile = (data?.profile ?? data) as Json | null;
   const subject = profile?.UserID ?? profile?.userId ?? profile?.id;
   if (typeof subject !== "string" || subject.length < 1 || subject.length > 256) throw failure("WEB_SESSION_REQUIRED", 401);
-  return subject;
+  const rawEmail = profile?.Email ?? profile?.email;
+  const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+  if (email.length > 320) throw failure("WEB_IDENTITY_EMAIL_REQUIRED", 401);
+  return { subject, email };
 }
 
 function validateMutation(mutation: Json, userId: string): Json {
@@ -552,8 +626,8 @@ function requiredString(value: unknown, code: string): string {
 
 function databaseFailure(error: { message?: string }): SafeError {
   const message = String(error?.message ?? "");
-  for (const code of ["INVALID_CLAIM", "REPLAYED_CLAIM", "EXPIRED_CLAIM", "REVOKED_CLAIM", "WRONG_ENVIRONMENT", "CANONICAL_IDENTITY_CONFLICT", "INSTALLATION_KEY_MISMATCH"]) {
-    if (message.includes(code)) return failure(code, code === "REPLAYED_CLAIM" ? 409 : code === "EXPIRED_CLAIM" ? 410 : 400);
+  for (const code of ["INVALID_CLAIM", "REPLAYED_CLAIM", "EXPIRED_CLAIM", "REVOKED_CLAIM", "WRONG_ENVIRONMENT", "CANONICAL_IDENTITY_CONFLICT", "INVALID_NATIVE_IDENTITY", "INSTALLATION_KEY_MISMATCH"]) {
+    if (message.includes(code)) return failure(code, code === "REPLAYED_CLAIM" || code === "CANONICAL_IDENTITY_CONFLICT" ? 409 : code === "EXPIRED_CLAIM" ? 410 : 400);
   }
   return failure("DATABASE_OPERATION_FAILED", 500);
 }
