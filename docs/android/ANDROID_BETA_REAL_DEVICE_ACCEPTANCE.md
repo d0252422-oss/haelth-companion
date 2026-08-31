@@ -1,6 +1,6 @@
 # Android Beta real-device acceptance
 
-Use the newly published `0.1.0-beta.4` APK only after its SHA-256 and OAuth signing certificate match the release metadata. The locally prepared development artifact currently has SHA-256 `ac21e7eddf8fc8ed52670413cf0245b8edf9f45b08da2a8ac377683aec9cb0a5`; do not substitute the older `beta.3` APK for this gate.
+Use the prepared `0.1.0-beta.4-debug` APK only after its SHA-256 and OAuth signing certificate match the release metadata. The locally prepared development artifact currently has SHA-256 `5e68bc543015c988593fcd059febe9c2dd256ceb138c83c77498ebc47c04ab17`; do not substitute the older `beta.3` APK for this gate.
 
 1. Uninstall the older debug APK if its application ID or signing certificate differs; otherwise install the update normally.
 2. Open **生活小助手**.
