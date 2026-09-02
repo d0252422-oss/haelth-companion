@@ -78,11 +78,17 @@ export default {
 async function linkNativeIdentity(request: Request, admin: any, origin: string): Promise<Response> {
   const nativeUser = await authenticateNativeUser(request, admin);
   const body = await readJson(request);
-  const webIdentity = await verifyWebIdentity(requiredString(body.web_session_token, "WEB_SESSION_REQUIRED"));
-  if (!nativeUser.auth_email || nativeUser.auth_email !== webIdentity.email) {
-    throw failure("ACCOUNT_IDENTITY_MISMATCH", 403);
+  for (const forbidden of ["canonical_user_id", "user_id", "owner_id", "external_subject", "email", "web_session_token"]) {
+    if (body[forbidden] != null) throw failure("CLIENT_IDENTITY_FORBIDDEN", 400);
   }
-  const subjectHash = await sha256(webIdentity.subject);
+  const identity = await ensureNativeIdentity(admin, nativeUser);
+  return json(200, identity, origin);
+}
+
+async function ensureNativeIdentity(admin: any, nativeUser: Json): Promise<Json> {
+  const existing = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id), false);
+  if (existing) return existing;
+  const subjectHash = await sha256(String(nativeUser.google_subject));
   const canonicalUserId = uuidFromHash(subjectHash);
   const { data, error } = await admin.rpc("beta_link_native_auth_identity", {
     p_auth_user_id: nativeUser.auth_user_id,
@@ -92,12 +98,13 @@ async function linkNativeIdentity(request: Request, admin: any, origin: string):
   });
   if (error) throw databaseFailure(error);
   if (String(data) !== canonicalUserId) throw failure("CANONICAL_IDENTITY_CONFLICT", 409);
-  return json(200, { canonical_user_id: canonicalUserId, environment: "beta" }, origin);
+  return { canonical_user_id: canonicalUserId, provider: "google", environment: "beta" };
 }
 
 async function getNativeIdentity(request: Request, admin: any, origin: string): Promise<Response> {
   const nativeUser = await authenticateNativeUser(request, admin);
-  const identity = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id));
+  const identity = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id), true);
+  if (!identity) throw failure("NATIVE_IDENTITY_NOT_LINKED", 401);
   return json(200, identity, origin);
 }
 
@@ -410,7 +417,9 @@ async function authorizeSession(request: Request, admin: any): Promise<Json> {
   const sessionId = request.headers.get("x-app-session-id") ?? "";
   if (!sessionId) {
     const nativeUser = await authenticateNativeUser(request, admin);
-    return await resolveNativeIdentity(admin, String(nativeUser.auth_user_id));
+    const identity = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id), true);
+    if (!identity) throw failure("NATIVE_IDENTITY_NOT_LINKED", 401);
+    return identity;
   }
   if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
   const { data, error } = await admin.rpc("beta_authorize_app_session", {
@@ -433,22 +442,30 @@ async function authenticateNativeUser(request: Request, admin: any): Promise<Jso
   if (Array.isArray(user.app_metadata?.providers)) {
     for (const provider of user.app_metadata.providers) if (typeof provider === "string") providers.add(provider);
   }
+  let googleSubject = "";
   for (const identity of user.identities ?? []) {
     if (typeof identity?.provider === "string") providers.add(identity.provider);
+    if (identity?.provider === "google") {
+      const identityData = identity.identity_data as Json | undefined;
+      const candidate = identityData?.sub ?? identity.id;
+      if (typeof candidate === "string" && candidate.length >= 1 && candidate.length <= 256) googleSubject = candidate;
+    }
   }
   if (!providers.has("google")) throw failure("GOOGLE_AUTH_REQUIRED", 403);
+  if (!googleSubject) throw failure("GOOGLE_SUBJECT_REQUIRED", 403);
   const authEmail = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
   if (!authEmail || authEmail.length > 320) throw failure("GOOGLE_AUTH_REQUIRED", 403);
-  return { auth_user_id: user.id, auth_email: authEmail, provider: "google", environment: "beta" };
+  return { auth_user_id: user.id, auth_email: authEmail, google_subject: googleSubject, provider: "google", environment: "beta" };
 }
 
-async function resolveNativeIdentity(admin: any, authUserId: string): Promise<Json> {
+async function resolveNativeIdentity(admin: any, authUserId: string, required = true): Promise<Json | null> {
   const { data, error } = await admin.rpc("beta_resolve_native_auth_identity", {
     p_auth_user_id: authUserId,
   });
   if (error) throw databaseFailure(error);
   const identity = Array.isArray(data) ? data[0] as Json : null;
   if (!identity || identity.environment !== "beta" || identity.provider !== "google") {
+    if (!required) return null;
     throw failure("NATIVE_IDENTITY_NOT_LINKED", 401);
   }
   return identity;

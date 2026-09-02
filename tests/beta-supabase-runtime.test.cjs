@@ -72,8 +72,11 @@ test('native Android auth verifies Google-backed Supabase JWT and links canonica
   const migration = read('supabase/migrations/20260831000913_android_native_auth_identity_link.sql');
   assert.match(source, /admin\.auth\.getUser\(token\)/u);
   assert.match(source, /providers\.has\("google"\)/u);
-  assert.match(source, /ACCOUNT_IDENTITY_MISMATCH/u);
-  assert.match(source, /nativeUser\.auth_email !== webIdentity\.email/u);
+  assert.match(source, /identityData\?\.sub \?\? identity\.id/u);
+  assert.match(source, /sha256\(String\(nativeUser\.google_subject\)\)/u);
+  assert.match(source, /CLIENT_IDENTITY_FORBIDDEN/u);
+  assert.match(source, /"canonical_user_id", "user_id", "owner_id"/u);
+  assert.doesNotMatch(source, /nativeUser\.auth_email !== webIdentity\.email/u);
   assert.match(source, /beta_link_native_auth_identity/u);
   assert.match(source, /beta_resolve_native_auth_identity/u);
   assert.match(migration, /auth_user_id uuid primary key references auth\.users\(id\)/u);
@@ -81,6 +84,13 @@ test('native Android auth verifies Google-backed Supabase JWT and links canonica
   assert.match(migration, /revoke all on table private\.beta_native_auth_identities from public, anon, authenticated/u);
   assert.match(migration, /to service_role/u);
   assert.doesNotMatch(`${source}\n${migration}`, /console\.(?:log|debug|info)|service[_-]?role key/iu);
+});
+
+test('native Android login no longer depends on the legacy Apps Script web session bridge', () => {
+  const android = read('android-helper/app/src/main/java/app/healthcompanion/sync/NativeGoogleAuth.kt');
+  assert.match(android, /linkCanonicalIdentity\(\)/u);
+  assert.match(android, /JSONObject\(\)\.toString\(\)/u);
+  assert.doesNotMatch(android, /createExistingWebSession|web_session_token|WEB_AUTH_API_URL/u);
 });
 
 test('iOS Shortcut uses its canonical envelope and a scoped revocable session', () => {

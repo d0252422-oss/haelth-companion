@@ -4,6 +4,12 @@
 
 `NATIVE_GOOGLE_ID_TOKEN`
 
+Beta 0.1.0-beta.5 removes the obsolete post-login Apps Script bridge. After
+Supabase verifies the Google ID token, the Beta Edge runtime derives the
+canonical binding from the verified Google provider subject. Client-provided
+user identifiers, email addresses, and legacy web-session tokens are rejected
+on the native linking route.
+
 The Android companion uses Android Credential Manager and Google ID Services. A Google ID token is exchanged through the official Supabase Auth client. The Beta Edge Function validates the resulting Supabase access token with `auth.getUser`, requires a Google-backed identity, and resolves the canonical Health Companion user from a private one-to-one mapping.
 
 The same Google ID token is also presented to the existing Health Companion web-auth service once during account linking. The returned short-lived web session is verified server-side and is used only to bind the Supabase auth UUID to the existing canonical user. Client-supplied user IDs are never trusted.
@@ -42,7 +48,7 @@ No redirect URI is required by the selected native ID-token flow. Do not add the
 ### Current development-signed artifact identity
 
 - Package: `app.healthcompanion.sync.beta.debug`
-- Version: `0.1.0-beta.4-debug` (`versionCode 4`)
+- Version: `0.1.0-beta.5-debug` (`versionCode 5`)
 - Signing certificate SHA-1: `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`
 - Signing certificate SHA-256: `43:5E:F9:65:1E:6B:6C:31:41:EC:FC:33:70:B5:7E:15:E9:3D:3E:CF:3C:2A:72:2D:ED:8B:6A:A8:75:42:43:00`
 

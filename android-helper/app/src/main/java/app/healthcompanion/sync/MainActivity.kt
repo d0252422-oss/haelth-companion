@@ -43,7 +43,6 @@ class MainActivity : ComponentActivity() {
             BuildConfig.SUPABASE_URL,
             BuildConfig.SUPABASE_PUBLISHABLE_KEY,
             BuildConfig.GOOGLE_WEB_CLIENT_ID,
-            BuildConfig.WEB_AUTH_API_URL,
             BuildConfig.API_BASE_URL,
         )
         checkpoints = SyncCheckpointStore(this)

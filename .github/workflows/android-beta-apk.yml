@@ -19,7 +19,6 @@ jobs:
       HEALTH_COMPANION_BETA_SUPABASE_URL: https://uavimjgccigpbwqmfkhh.supabase.co
       HEALTH_COMPANION_BETA_SUPABASE_PUBLISHABLE_KEY: ${{ vars.HEALTH_COMPANION_BETA_SUPABASE_PUBLISHABLE_KEY }}
       HEALTH_COMPANION_GOOGLE_WEB_CLIENT_ID: ${{ vars.HEALTH_COMPANION_GOOGLE_WEB_CLIENT_ID }}
-      HEALTH_COMPANION_WEB_AUTH_API_URL: https://script.google.com/macros/s/AKfycbwc9OBZtGgFiXk2n1_bquNZqkFkX9OzgAxlh7rljySrvNiF6ywsxEpBzNv5V4onRv5h/exec
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

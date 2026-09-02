@@ -33,7 +33,6 @@ class NativeGoogleAuth(
     private val supabaseUrl: String,
     private val publishableKey: String,
     private val googleWebClientId: String,
-    private val webAuthApiUrl: String,
     private val betaApiBaseUrl: String,
 ) {
     private val appContext = context.applicationContext
@@ -77,8 +76,7 @@ class NativeGoogleAuth(
                 this.idToken = idToken
                 nonce = rawNonce
             }
-            val webSession = createExistingWebSession(idToken)
-            return linkCanonicalIdentity(webSession)
+            return linkCanonicalIdentity()
         } catch (error: Exception) {
             runCatching { supabase.auth.signOut() }
             throw error
@@ -105,23 +103,11 @@ class NativeGoogleAuth(
         runCatching { credentialManager.clearCredentialState(ClearCredentialStateRequest()) }
     }
 
-    private suspend fun createExistingWebSession(idToken: String): String = withContext(Dispatchers.IO) {
-        val response = postJson(
-            webAuthApiUrl,
-            JSONObject().put("action", "createSession").put("idToken", idToken).toString(),
-            null,
-        )
-        val root = JSONObject(response)
-        val first = unwrap(root)
-        val second = unwrap(first)
-        second.optString("sessionToken").takeIf { it.isNotBlank() } ?: throw NativeAuthRejected()
-    }
-
-    private suspend fun linkCanonicalIdentity(webSession: String): NativeAuthSession = withContext(Dispatchers.IO) {
+    private suspend fun linkCanonicalIdentity(): NativeAuthSession = withContext(Dispatchers.IO) {
         val token = currentAccessToken()
         val response = postJson(
             "$betaApiBaseUrl/v1/mobile/native-auth/link",
-            JSONObject().put("web_session_token", webSession).toString(),
+            JSONObject().toString(),
             token,
         )
         parseNativeSession(JSONObject(response), token)
@@ -147,7 +133,7 @@ class NativeGoogleAuth(
     private fun postJson(url: String, body: String, bearer: String?): String {
         val connection = connection(url, "POST", bearer).apply {
             doOutput = true
-            setRequestProperty("Content-Type", if (url == webAuthApiUrl) "text/plain;charset=utf-8" else "application/json")
+            setRequestProperty("Content-Type", "application/json")
             outputStream.use { it.write(body.toByteArray()) }
         }
         return connection.useResponse { status, response ->
@@ -172,18 +158,9 @@ class NativeGoogleAuth(
         disconnect()
     }
 
-    private fun unwrap(value: JSONObject): JSONObject {
-        for (key in listOf("data", "result")) {
-            val nested = value.optJSONObject(key)
-            if (nested != null) return nested
-        }
-        return value
-    }
-
     private fun requireConfigured() {
         if (!supabaseUrl.startsWith("https://") || supabaseUrl.contains(".invalid")
             || !betaApiBaseUrl.startsWith("https://") || betaApiBaseUrl.contains(".invalid")
-            || !webAuthApiUrl.startsWith("https://") || webAuthApiUrl.contains(".invalid")
             || !googleWebClientId.endsWith(".apps.googleusercontent.com")
             || publishableKey == "missing" || publishableKey.isBlank()
         ) throw NativeAuthConfiguration()
