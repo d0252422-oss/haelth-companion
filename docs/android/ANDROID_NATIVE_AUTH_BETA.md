@@ -4,7 +4,8 @@
 
 `NATIVE_GOOGLE_ID_TOKEN`
 
-Beta 0.1.0-beta.5 removes the obsolete post-login Apps Script bridge. After
+Beta 0.1.0-beta.6 keeps the native auth path and adds bounded foreground sync,
+paginated Health Connect reads, and best-effort WorkManager history backfill. After
 Supabase verifies the Google ID token, the Beta Edge runtime derives the
 canonical binding from the verified Google provider subject. Client-provided
 user identifiers, email addresses, and legacy web-session tokens are rejected
@@ -48,7 +49,10 @@ No redirect URI is required by the selected native ID-token flow. Do not add the
 ### Current development-signed artifact identity
 
 - Package: `app.healthcompanion.sync.beta.debug`
-- Version: `0.1.0-beta.5-debug` (`versionCode 5`)
+- Version: `0.1.0-beta.6-debug` (`versionCode 6`)
+- Foreground window: 7 days with a 120-second terminal deadline
+- History window: 30 days through unique, network-constrained WorkManager jobs
+- Background execution is OS-scheduled best effort; it is not advertised as real-time.
 - Signing certificate SHA-1: `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`
 - Signing certificate SHA-256: `43:5E:F9:65:1E:6B:6C:31:41:EC:FC:33:70:B5:7E:15:E9:3D:3E:CF:3C:2A:72:2D:ED:8B:6A:A8:75:42:43:00`
 

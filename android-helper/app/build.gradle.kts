@@ -17,8 +17,8 @@ android {
         applicationId = "app.healthcompanion.sync.beta"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.1.0-beta.5"
+        versionCode = 6
+        versionName = "0.1.0-beta.6"
         buildConfigField("String", "API_BASE_URL", "\"$betaApiBaseUrl\"")
         buildConfigField("String", "AUTH_SETUP_URL", "\"$betaAuthSetupUrl\"")
         buildConfigField("String", "APP_LINK_HOST", "\"$betaAppLinkHost\"")
@@ -52,6 +52,7 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.ktor:ktor-client-android:3.3.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
 }

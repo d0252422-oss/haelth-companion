@@ -12,6 +12,8 @@ const identity = read('android-helper/app/src/main/java/app/healthcompanion/sync
 const nativeAuth = read('android-helper/app/src/main/java/app/healthcompanion/sync/NativeGoogleAuth.kt');
 const secureStorage = read('android-helper/app/src/main/java/app/healthcompanion/sync/SecureSupabaseAuthStorage.kt');
 const manifest = read('android-helper/app/src/main/AndroidManifest.xml');
+const health = read('android-helper/app/src/main/java/app/healthcompanion/sync/HealthConnectGateway.kt');
+const background = read('android-helper/app/src/main/java/app/healthcompanion/sync/BackgroundHealthSync.kt');
 
 test('normal Android UX uses native Google auth and never requests a connection code', () => {
   assert.match(main, /使用 Google 帳號登入/u);
@@ -40,4 +42,21 @@ test('legacy claim stays isolated while native session credentials never appear 
   assert.match(identity, /\/v1\/mobile\/sessions\/refresh/u);
   assert.match(identity, /\/v1\/mobile\/sessions\/current/u);
   assert.doesNotMatch(`${main}\n${nativeAuth}\n${secureStorage}\n${identity}\n${ingestion}`, /Log\.|println\(|printStackTrace|service[_-]?role/iu);
+});
+
+test('sync performance is bounded, resumable, observable, and background-capable', () => {
+  assert.match(health, /pageToken = token/u);
+  assert.match(health, /MAX_PAGES_PER_DOMAIN = 50/u);
+  assert.match(health, /PaginationGuard\.isRepeated/u);
+  assert.match(health, /MAX_CONCURRENT_DOMAIN_READS = 2/u);
+  assert.match(main, /FOREGROUND_SYNC_DEADLINE_MS = 120_000L/u);
+  assert.match(main, /正在讀取 \$domain/u);
+  assert.match(main, /正在上傳健康資料/u);
+  assert.match(background, /CoroutineWorker/u);
+  assert.match(background, /enqueueUniqueWork/u);
+  assert.match(background, /ExistingWorkPolicy\.KEEP/u);
+  assert.match(background, /MAX_RETRY_ATTEMPTS = 3/u);
+  assert.match(background, /INCREMENTAL_OVERLAP_HOURS = 1L/u);
+  assert.match(manifest, /READ_HEALTH_DATA_IN_BACKGROUND/u);
+  assert.doesNotMatch(`${main}\n${health}\n${background}`, /Log\.|println\(|printStackTrace/iu);
 });
