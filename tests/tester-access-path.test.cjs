@@ -64,7 +64,7 @@ test('distribution config and Shortcut manifest contain no credential or fabrica
   const beta = JSON.parse(config).beta;
   assert.equal(beta.ANDROID_BETA_APK_URL, '');
   assert.equal(beta.ANDROID_BETA_APK_VERSION, '0.1.0-beta.4-debug');
-  assert.equal(beta.ANDROID_BETA_APK_SIZE_BYTES, 22136199);
+  assert.equal(beta.ANDROID_BETA_APK_SIZE_BYTES, 22136363);
   assert.match(beta.ANDROID_BETA_APK_SHA256, /^[0-9a-f]{64}$/u);
 });
 

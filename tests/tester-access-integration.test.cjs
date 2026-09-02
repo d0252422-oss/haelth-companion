@@ -23,7 +23,7 @@ test('Web tester UI has manual selection, config-driven links, and no fake href'
   assert.match(html, /data-connector-platform="IOS"/u);
   assert.match(html, /ANDROID_BETA_APK_URL:""/u);
   assert.match(html, /ANDROID_BETA_APK_VERSION:"0\.1\.0-beta\.4-debug"/u);
-  assert.match(html, /ANDROID_BETA_APK_SHA256:"5e68bc543015c988593fcd059febe9c2dd256ceb138c83c77498ebc47c04ab17"/u);
+  assert.match(html, /ANDROID_BETA_APK_SHA256:"61ff81ea12e4d62fbb4f86ac74c0f15b5c0ea7412e9dd4cbcc86bea91eafd67b"/u);
   assert.match(html, /IOS_SHORTCUT_SHARE_URL:""/u);
   assert.match(html, /window\.HEALTH_CONNECTOR_CONFIG/u);
   assert.doesNotMatch(html, /id="android-claim-code"/u);
