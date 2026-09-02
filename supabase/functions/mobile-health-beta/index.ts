@@ -1,6 +1,8 @@
 import { withSupabase } from "@supabase/server";
 import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+
 const webAuthVerifyUrl = Deno.env.get("BETA_WEB_AUTH_VERIFY_URL") ?? "";
 const allowedOrigin = Deno.env.get("BETA_ALLOWED_ORIGIN") ?? "";
 const androidCallbackUri = Deno.env.get("BETA_ANDROID_CALLBACK_URI") ?? "";
@@ -356,19 +358,35 @@ async function reportStatus(request: Request, admin: any, origin: string): Promi
   const body = await readJson(request);
   const session = await authorizeSession(request, admin);
   if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
+  const lastResult = String(body.last_result || "UNKNOWN");
+  const successfulSync = ["SYNCED", "SYNCED_RECENT", "SYNCED_PARTIAL", "NO_DATA"].includes(lastResult);
+  const lastAttemptAt = body.last_attempt_at || new Date().toISOString();
   const { error } = await admin.rpc("beta_report_connector_status", {
     p_canonical_user_id: session.canonical_user_id,
     p_platform: body.platform,
     p_connector_type: body.connector_type,
     p_connector_version: body.connector_version,
-    p_last_attempt_at: body.last_attempt_at || null,
-    p_last_success_at: body.last_success_at || null,
-    p_last_result: body.last_result || "UNKNOWN",
+    p_last_attempt_at: lastAttemptAt,
+    p_last_success_at: body.last_success_at || (successfulSync ? lastAttemptAt : null),
+    p_last_result: lastResult,
     p_available_domains: Array.isArray(body.available_domains) ? body.available_domains : [],
     p_permission_state: body.permission_state_if_known || "UNKNOWN",
   });
   if (error) throw databaseFailure(error);
-  return json(200, { status: "RECORDED" }, origin);
+  if (successfulSync) scheduleScoreRecompute(admin, String(session.canonical_user_id));
+  return json(200, { status: "RECORDED", score_recompute: successfulSync ? "QUEUED" : "NOT_QUEUED" }, origin);
+}
+
+function scheduleScoreRecompute(admin: any, userId: string): void {
+  EdgeRuntime.waitUntil((async () => {
+    try {
+      const dirtyDates = await listDirtyScoreDates(admin, userId);
+      await recomputeDates(admin, userId, new Set(dirtyDates));
+    } catch {
+      // The durable dirty-date queue remains available for a later bounded attempt.
+      console.error("SCORE_BACKGROUND_RECOMPUTE_FAILED");
+    }
+  })());
 }
 
 async function getStatus(request: Request, admin: any, origin: string): Promise<Response> {

@@ -4,7 +4,8 @@
 
 `NATIVE_GOOGLE_ID_TOKEN`
 
-Beta 0.1.0-beta.6 keeps the native auth path and adds bounded foreground sync,
+Beta 0.1.0-beta.7 keeps the native auth path and adds user-scoped background state,
+single-flight manual sync, bounded foreground sync,
 paginated Health Connect reads, and best-effort WorkManager history backfill. After
 Supabase verifies the Google ID token, the Beta Edge runtime derives the
 canonical binding from the verified Google provider subject. Client-provided
@@ -49,7 +50,13 @@ No redirect URI is required by the selected native ID-token flow. Do not add the
 ### Current development-signed artifact identity
 
 - Package: `app.healthcompanion.sync.beta.debug`
-- Version: `0.1.0-beta.6-debug` (`versionCode 6`)
+- Version: `0.1.0-beta.7-debug` (`versionCode 7`)
+- Periodic work: unique `health-sync-periodic`, every 12 hours, `ExistingPeriodicWorkPolicy.KEEP`.
+- Historical backfill: unique one-time `health-sync-history-backfill`, `ExistingWorkPolicy.KEEP`.
+- Constraints: connected network; no permanent foreground service, wake lock, or polling loop.
+- Retry: exponential 30-second WorkManager backoff, at most three worker attempts, eight-minute worker deadline.
+- Incremental window: last successful sync minus one hour through now; seven-day fallback; pending history remains bounded to 30 days.
+- Local timestamps, background result, and history state are scoped by a hash of the canonical user ID and cleared on logout.
 - Foreground window: 7 days with a 120-second terminal deadline
 - History window: 30 days through unique, network-constrained WorkManager jobs
 - Background execution is OS-scheduled best effort; it is not advertised as real-time.

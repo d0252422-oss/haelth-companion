@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 class SyncPerformancePolicyTest {
     @Test fun paginationTerminatesOnRepeatedToken() {
@@ -33,5 +34,29 @@ class SyncPerformancePolicyTest {
         assertEquals(records.size, plan.batches.sumOf { it.recordCount })
         assertTrue(plan.batches.all { it.recordCount <= BatchPlanner.MAX_RECORDS_PER_BATCH })
         assertTrue(plan.batches.all { it.body.toByteArray().size <= BatchPlanner.MAX_APPROX_SERIALIZED_BYTES_PER_BATCH })
+    }
+
+    @Test fun backgroundWindowFallsBackWhenNoSuccessExists() {
+        val now = Instant.parse("2026-09-03T00:00:00Z")
+        assertEquals(Instant.parse("2026-08-27T00:00:00Z"), SyncWindowPolicy.background(now, null, false).start)
+    }
+
+    @Test fun incrementalWindowUsesOneHourOverlap() {
+        val now = Instant.parse("2026-09-03T00:00:00Z")
+        val last = Instant.parse("2026-09-02T20:00:00Z")
+        assertEquals(Instant.parse("2026-09-02T19:00:00Z"), SyncWindowPolicy.background(now, last, false).start)
+    }
+
+    @Test fun pendingHistoryUsesBoundedThirtyDayWindow() {
+        val now = Instant.parse("2026-09-03T00:00:00Z")
+        assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.background(now, now, true).start)
+    }
+
+    @Test fun syncSingleFlightRejectsOverlapAndReopensAfterCompletion() {
+        val gate = SyncSingleFlight()
+        assertTrue(gate.tryStart())
+        assertFalse(gate.tryStart())
+        gate.finish()
+        assertTrue(gate.tryStart())
     }
 }

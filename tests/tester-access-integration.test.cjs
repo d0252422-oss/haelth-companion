@@ -21,9 +21,9 @@ test('Web tester UI has manual selection, config-driven links, and no fake href'
   const html = fs.readFileSync('index.html', 'utf8');
   assert.match(html, /data-connector-platform="ANDROID"/u);
   assert.match(html, /data-connector-platform="IOS"/u);
-  assert.match(html, /ANDROID_BETA_APK_URL:"https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\/android-beta-v0\.1\.0-beta\.6\/health-sync-companion-beta-0\.1\.0-beta\.6-debug\.apk"/u);
-  assert.match(html, /ANDROID_BETA_APK_VERSION:"0\.1\.0-beta\.6-debug"/u);
-  assert.match(html, /ANDROID_BETA_APK_SHA256:"a96b5eff16a287027e287680cf5530497b03fe4730e9805cd88bb83344fc4da0"/u);
+  assert.match(html, /ANDROID_BETA_APK_URL:"https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\/android-beta-v0\.1\.0-beta\.7\/health-sync-companion-beta-0\.1\.0-beta\.7-debug\.apk"/u);
+  assert.match(html, /ANDROID_BETA_APK_VERSION:"0\.1\.0-beta\.7-debug"/u);
+  assert.match(html, /ANDROID_BETA_APK_SHA256:"029c7b5facb54bd9b7ff99fc24f05d925f6f80ecd12c8227af4cd1d41498fa21"/u);
   assert.match(html, /IOS_SHORTCUT_SHARE_URL:""/u);
   assert.match(html, /window\.HEALTH_CONNECTOR_CONFIG/u);
   assert.doesNotMatch(html, /id="android-claim-code"/u);

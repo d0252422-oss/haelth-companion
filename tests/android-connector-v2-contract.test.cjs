@@ -14,6 +14,7 @@ const secureStorage = read('android-helper/app/src/main/java/app/healthcompanion
 const manifest = read('android-helper/app/src/main/AndroidManifest.xml');
 const health = read('android-helper/app/src/main/java/app/healthcompanion/sync/HealthConnectGateway.kt');
 const background = read('android-helper/app/src/main/java/app/healthcompanion/sync/BackgroundHealthSync.kt');
+const performance = read('android-helper/app/src/main/java/app/healthcompanion/sync/SyncPerformancePolicy.kt');
 
 test('normal Android UX uses native Google auth and never requests a connection code', () => {
   assert.match(main, /使用 Google 帳號登入/u);
@@ -55,8 +56,15 @@ test('sync performance is bounded, resumable, observable, and background-capable
   assert.match(background, /CoroutineWorker/u);
   assert.match(background, /enqueueUniqueWork/u);
   assert.match(background, /ExistingWorkPolicy\.KEEP/u);
+  assert.match(background, /enqueueUniquePeriodicWork/u);
+  assert.match(background, /ExistingPeriodicWorkPolicy\.KEEP/u);
+  assert.match(background, /PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>\(12, TimeUnit\.HOURS\)/u);
   assert.match(background, /MAX_RETRY_ATTEMPTS = 3/u);
-  assert.match(background, /INCREMENTAL_OVERLAP_HOURS = 1L/u);
+  assert.match(performance, /INCREMENTAL_OVERLAP_HOURS = 1L/u);
+  assert.match(performance, /class SyncSingleFlight/u);
+  assert.match(main, /syncSingleFlight\.tryStart\(\)/u);
+  assert.match(main, /syncSingleFlight\.finish\(\)/u);
+  assert.match(background, /CanonicalIdentity\.sha256\(userId\)/u);
   assert.match(manifest, /READ_HEALTH_DATA_IN_BACKGROUND/u);
   assert.doesNotMatch(`${main}\n${health}\n${background}`, /Log\.|println\(|printStackTrace/iu);
 });

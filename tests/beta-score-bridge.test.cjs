@@ -53,6 +53,9 @@ test('ingestion queues scores and authenticated score reads perform bounded reco
   assert.match(edge, /beta_list_dirty_score_dates/u);
   assert.match(edge, /recomputeDates\(admin, userId, new Set\(dirtyDates\)\)/u);
   assert.doesNotMatch(androidIngest, /recomputeDates|recomputeBetaScore/u);
+  assert.match(edge, /EdgeRuntime\.waitUntil/u);
+  assert.match(edge, /scheduleScoreRecompute\(admin, String\(session\.canonical_user_id\)\)/u);
+  assert.match(edge, /SCORE_BACKGROUND_RECOMPUTE_FAILED/u);
   assert.match(edge, /dates\.size > 31/u);
   assert.match(edge, /const subject = await verifyWebSession\(bearer\(request\)\)/u);
   assert.match(edge, /uuidFromHash\(await sha256\(subject\)\)/u);
@@ -61,6 +64,13 @@ test('ingestion queues scores and authenticated score reads perform bounded reco
   assert.match(dirtyDates, /affected_dates := affected_dates \|\| old\.affected_local_dates/u);
   assert.match(dirtyDates, /select distinct unnest\(affected_dates\)/u);
   assert.doesNotMatch(bridge, /service_role|SUPABASE_SERVICE_ROLE_KEY/u);
+});
+
+test('successful connector terminal states record success and schedule score work', () => {
+  const edge = read('supabase/functions/mobile-health-beta/index.ts');
+  assert.match(edge, /\["SYNCED", "SYNCED_RECENT", "SYNCED_PARTIAL", "NO_DATA"\]/u);
+  assert.match(edge, /p_last_success_at: body\.last_success_at \|\| \(successfulSync \? lastAttemptAt : null\)/u);
+  assert.match(edge, /score_recompute: successfulSync \? "QUEUED" : "NOT_QUEUED"/u);
 });
 
 test('assembler preserves missing data and does not invent training or nutrition evidence', () => {

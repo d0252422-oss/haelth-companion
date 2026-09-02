@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<Set<String>>
     private var currentSession: NativeAuthSession? = null
     private var currentState = ConnectorUiState.SIGNED_OUT
+    private val syncSingleFlight = SyncSingleFlight()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,12 +125,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun firstSync() {
-        if (currentState == ConnectorUiState.SYNCING) return
+        if (!syncSingleFlight.tryStart()) return
         scope.launch {
-            var session = currentSession
-            if (session == null) { render(ConnectorUiState.SIGNED_OUT); return@launch }
-            render(ConnectorUiState.SYNCING, "正在讀取最近健康資料…")
-            runCatching {
+            try {
+                var session = currentSession
+                if (session == null) { render(ConnectorUiState.SIGNED_OUT); return@launch }
+                render(ConnectorUiState.SYNCING, "正在讀取最近健康資料…")
+                runCatching {
                 withTimeout(FOREGROUND_SYNC_DEADLINE_MS) {
                     val granted = health.grantedReadPermissions()
                     if (granted.isEmpty()) throw HealthPermissionMissing()
@@ -156,12 +158,12 @@ class MainActivity : ComponentActivity() {
                     withContext(Dispatchers.IO) { client.reportStatus(session!!, read.records, result, permissionState) }
                     ForegroundSyncResult(read.records.isNotEmpty(), read.isPartial)
                 }
-            }.onSuccess { result ->
-                saveLastSync()
-                SyncRuntimeStateStore(this@MainActivity).markHistoryPending()
+                }.onSuccess { result ->
+                saveLastSync(session!!.canonicalUserId)
+                SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session!!.canonicalUserId)
                 if (health.supportsBackgroundRead() && health.hasBackgroundReadPermission()) BackgroundSyncScheduler.enqueue(this@MainActivity)
                 render(SyncTerminalPolicy.state(result.hasData, result.partial, timedOut = false))
-            }.onFailure { error ->
+                }.onFailure { error ->
                 when (error) {
                     is HealthPermissionMissing -> render(ConnectorUiState.HEALTH_PERMISSION_DENIED)
                     is AuthenticationRequired, is NativeAuthRejected -> {
@@ -169,17 +171,21 @@ class MainActivity : ComponentActivity() {
                         render(ConnectorUiState.AUTH_ERROR)
                     }
                     is TimeoutCancellationException -> {
-                        SyncRuntimeStateStore(this@MainActivity).markHistoryPending()
+                        SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session!!.canonicalUserId)
                         if (health.supportsBackgroundRead() && health.hasBackgroundReadPermission()) BackgroundSyncScheduler.enqueue(this@MainActivity)
                         render(ConnectorUiState.SYNC_TIMEOUT)
                     }
                     else -> render(ConnectorUiState.SYNC_ERROR)
                 }
+                }
+            } finally {
+                syncSingleFlight.finish()
             }
         }
     }
 
     private fun logout() {
+        currentSession?.canonicalUserId?.let { SyncRuntimeStateStore(this).clear(it) }
         currentSession = null
         checkpoints.clear()
         BackgroundSyncScheduler.cancel(this)
@@ -187,16 +193,24 @@ class MainActivity : ComponentActivity() {
         scope.launch { auth.signOut() }
     }
 
-    private fun saveLastSync() {
+    private fun saveLastSync(userId: String) {
         val value = Instant.now().toString()
-        getSharedPreferences("sync_status", MODE_PRIVATE).edit().putString("last_success", value).apply()
-        updateLastSync(value)
+        SyncRuntimeStateStore(this).saveLastSuccessfulSync(userId, Instant.parse(value))
+        updateLastSync()
     }
 
-    private fun updateLastSync(value: String? = getSharedPreferences("sync_status", MODE_PRIVATE).getString("last_success", null)) {
+    private fun updateLastSync() {
+        val userId = currentSession?.canonicalUserId
+        val state = SyncRuntimeStateStore(this)
+        val value = userId?.let(state::lastSuccessfulSync)
         lastSync.text = value?.let {
-            val formatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(it))
-            "最近同步：$formatted"
+            val formatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(it)
+            val background = userId?.let(state::backgroundSummary)
+            val backgroundText = background?.second?.let { at ->
+                val atText = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(at)
+                "\n背景同步：${background.first ?: "UNKNOWN"} · $atText"
+            } ?: ""
+            "最近同步：$formatted$backgroundText"
         } ?: "尚未完成同步"
     }
 
