@@ -131,11 +131,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handoffToBackground(session: NativeAuthSession) {
+    private suspend fun handoffToBackground(session: NativeAuthSession) {
         val state = SyncRuntimeStateStore(this)
         if (state.lastSuccessfulSync(session.canonicalUserId) == null) state.markHistoryPending(session.canonicalUserId)
-        state.saveBackgroundResult(session.canonicalUserId, "SYNCING")
-        BackgroundSyncScheduler.enqueue(this, session.canonicalUserId)
+        BackgroundSyncScheduler.reconcileAndEnqueue(this, session.canonicalUserId)
         render(ConnectorUiState.BACKGROUND_SYNCING, "健康資料已連接\n背景資料更新中，你可以繼續使用 App。")
     }
 
@@ -239,6 +238,8 @@ class MainActivity : ComponentActivity() {
                 val atText = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(at)
                 val resultText = when (background.first) {
                     "SYNCING" -> "同步中"
+                    "ENQUEUED" -> "已排程"
+                    "STALE_RECOVERED" -> "已恢復並重新排程"
                     "SUCCESS" -> "已更新"
                     "PARTIAL" -> "部分完成，將繼續更新"
                     "RETRY_PENDING" -> "將自動重試"

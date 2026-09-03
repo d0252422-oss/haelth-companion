@@ -65,4 +65,43 @@ class SyncPerformancePolicyTest {
         assertFalse(BackgroundWorkNames.immediate("user-a") == BackgroundWorkNames.immediate("user-b"))
         assertFalse(BackgroundWorkNames.periodic("user-a") == BackgroundWorkNames.immediate("user-a"))
     }
+
+    @Test fun staleRunningMetadataIsReplacedEvenWhenWorkManagerStillSaysRunning() {
+        val now = Instant.parse("2026-09-03T12:00:00Z")
+        assertEquals(
+            WorkRecoveryAction.REPLACE_STALE,
+            BackgroundWorkRecoveryPolicy.decide(
+                "SYNCING", now.minusSeconds(11 * 60), setOf(DurableWorkState.RUNNING), now,
+            ),
+        )
+    }
+
+    @Test fun recentRunningMetadataKeepsExistingWork() {
+        val now = Instant.parse("2026-09-03T12:00:00Z")
+        assertEquals(
+            WorkRecoveryAction.KEEP,
+            BackgroundWorkRecoveryPolicy.decide(
+                "SYNCING", now.minusSeconds(60), setOf(DurableWorkState.RUNNING), now,
+            ),
+        )
+    }
+
+    @Test fun missingOrTerminalWorkIsEnqueuedAgain() {
+        val now = Instant.parse("2026-09-03T12:00:00Z")
+        assertEquals(WorkRecoveryAction.ENQUEUE, BackgroundWorkRecoveryPolicy.decide("FAILED", now, emptySet(), now))
+        assertEquals(
+            WorkRecoveryAction.ENQUEUE,
+            BackgroundWorkRecoveryPolicy.decide("SYNCING", now.minusSeconds(60), setOf(DurableWorkState.FAILED), now),
+        )
+    }
+
+    @Test fun constrainedEnqueuedWorkIsNotCancelledMerelyForWaiting() {
+        val now = Instant.parse("2026-09-03T12:00:00Z")
+        assertEquals(
+            WorkRecoveryAction.KEEP,
+            BackgroundWorkRecoveryPolicy.decide(
+                "ENQUEUED", now.minusSeconds(60 * 60), setOf(DurableWorkState.ENQUEUED), now,
+            ),
+        )
+    }
 }

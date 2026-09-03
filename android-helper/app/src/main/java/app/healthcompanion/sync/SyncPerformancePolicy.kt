@@ -51,6 +51,24 @@ object AppSyncSingleFlight {
 
 enum class BackgroundSyncMode { INCREMENTAL, BACKFILL }
 
+enum class DurableWorkState { ENQUEUED, RUNNING, BLOCKED, SUCCEEDED, FAILED, CANCELLED, UNKNOWN }
+enum class WorkRecoveryAction { KEEP, ENQUEUE, REPLACE_STALE }
+
+object BackgroundWorkRecoveryPolicy {
+    const val STALE_AFTER_MINUTES = 10L
+
+    fun decide(localResult: String?, lastProgressAt: Instant?, actualStates: Set<DurableWorkState>, now: Instant): WorkRecoveryAction {
+        val active = actualStates.any { it in setOf(DurableWorkState.ENQUEUED, DurableWorkState.RUNNING, DurableWorkState.BLOCKED) }
+        val stale = localResult == "SYNCING" &&
+            (lastProgressAt == null || lastProgressAt.plus(STALE_AFTER_MINUTES, ChronoUnit.MINUTES).isBefore(now))
+        return when {
+            stale -> WorkRecoveryAction.REPLACE_STALE
+            active -> WorkRecoveryAction.KEEP
+            else -> WorkRecoveryAction.ENQUEUE
+        }
+    }
+}
+
 object BackgroundWorkNames {
     fun userKey(userId: String): String = CanonicalIdentity.sha256(userId).take(16)
     fun immediate(userId: String): String = "health-sync-immediate-${userKey(userId)}"
