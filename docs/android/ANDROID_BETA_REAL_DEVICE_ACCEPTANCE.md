@@ -21,7 +21,9 @@ These results apply only to the tested device and dataset. Samsung, Xiaomi, Pixe
 
 Background sync is best-effort Android OS scheduling, not real-time execution or a permanent background service. Testers do not need to sign in, reauthorize, or press Sync every day unless the session or permission has been revoked.
 
-For the next field gate, install `0.1.0-beta.7-debug` over beta.6 without clearing app data. Its SHA-256 is `029c7b5facb54bd9b7ff99fc24f05d925f6f80ecd12c8227af4cd1d41498fa21`; its debug signing SHA-1 remains `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`.
+For the regression retest, install `0.1.0-beta.8-debug` directly over the current beta.7 without clearing app data. Its SHA-256 is `1b2c4b2629c70c73db6f35462d2d790170918ea249bab85f828e5d9747f2edd7`; its debug signing SHA-1 remains `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`.
+
+Beta.7 was packaged locally without the required public Beta runtime configuration. That made both encrypted-session restore and the Google login fallback fail before any network request. Beta.8 adds a fail-closed packaging check and restores beta.6's unscoped sync metadata only after the encrypted session and canonical user have been resolved. The migration never reads or clears the separate authentication store.
 
 1. Uninstall the older debug APK if its application ID or signing certificate differs; otherwise install the update normally.
 2. Open **生活小助手**.

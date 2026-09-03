@@ -44,6 +44,35 @@ class SyncRuntimeStateStore(context: Context) {
         contextPreferences.edit().remove(key(userId, LAST_SUCCESS)).apply()
     }
 
+    /**
+     * Claims beta.6's unscoped sync metadata only after an existing authenticated
+     * session has been restored and its canonical user is known. Auth credentials
+     * live in a separate encrypted store and are never read, changed, or cleared here.
+     */
+    fun migrateLegacyStateAfterSessionRestore(userId: String) {
+        val prefix = CanonicalIdentity.sha256(userId).take(16)
+        val runtimeEditor = preferences.edit()
+        migrateString(preferences, runtimeEditor, BACKGROUND_RESULT, key(userId, BACKGROUND_RESULT))
+        migrateString(preferences, runtimeEditor, BACKGROUND_RESULT_AT, key(userId, BACKGROUND_RESULT_AT))
+        if (!preferences.contains(key(userId, HISTORY_PENDING)) && preferences.contains(HISTORY_PENDING)) {
+            runtimeEditor.putBoolean(key(userId, HISTORY_PENDING), preferences.getBoolean(HISTORY_PENDING, false))
+        }
+        runtimeEditor
+            .remove(HISTORY_PENDING)
+            .remove(BACKGROUND_RESULT)
+            .remove(BACKGROUND_RESULT_AT)
+            .putBoolean("${prefix}_$LEGACY_MIGRATED", true)
+            .apply()
+
+        val syncEditor = contextPreferences.edit()
+        migrateString(contextPreferences, syncEditor, LAST_SUCCESS, key(userId, LAST_SUCCESS))
+        syncEditor.remove(LAST_SUCCESS).apply()
+    }
+
+    private fun migrateString(source: android.content.SharedPreferences, editor: android.content.SharedPreferences.Editor, legacyKey: String, scopedKey: String) {
+        if (!source.contains(scopedKey)) source.getString(legacyKey, null)?.let { editor.putString(scopedKey, it) }
+    }
+
     private fun key(userId: String, name: String) = "${CanonicalIdentity.sha256(userId).take(16)}_$name"
 
     private val contextPreferences = context.getSharedPreferences("sync_status", Context.MODE_PRIVATE)
@@ -53,6 +82,7 @@ class SyncRuntimeStateStore(context: Context) {
         const val BACKGROUND_RESULT = "background_result"
         const val BACKGROUND_RESULT_AT = "background_result_at"
         const val LAST_SUCCESS = "last_success"
+        const val LEGACY_MIGRATED = "legacy_state_migrated_v1"
     }
 }
 

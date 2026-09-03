@@ -55,3 +55,8 @@ object OnboardingStateMachine {
         ConnectorEvent.SYNC_FAILED -> ConnectorUiState.SYNC_ERROR
     }
 }
+
+object SessionUpgradePolicy {
+    fun shouldMigrateLegacySyncState(restoredSession: Boolean, canonicalUserId: String?): Boolean =
+        restoredSession && !canonicalUserId.isNullOrBlank()
+}

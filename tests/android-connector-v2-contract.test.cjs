@@ -15,6 +15,7 @@ const manifest = read('android-helper/app/src/main/AndroidManifest.xml');
 const health = read('android-helper/app/src/main/java/app/healthcompanion/sync/HealthConnectGateway.kt');
 const background = read('android-helper/app/src/main/java/app/healthcompanion/sync/BackgroundHealthSync.kt');
 const performance = read('android-helper/app/src/main/java/app/healthcompanion/sync/SyncPerformancePolicy.kt');
+const gradle = read('android-helper/app/build.gradle.kts');
 
 test('normal Android UX uses native Google auth and never requests a connection code', () => {
   assert.match(main, /使用 Google 帳號登入/u);
@@ -67,4 +68,16 @@ test('sync performance is bounded, resumable, observable, and background-capable
   assert.match(background, /CanonicalIdentity\.sha256\(userId\)/u);
   assert.match(manifest, /READ_HEALTH_DATA_IN_BACKGROUND/u);
   assert.doesNotMatch(`${main}\n${health}\n${background}`, /Log\.|println\(|printStackTrace/iu);
+});
+
+test('beta upgrade restores auth before migrating legacy sync state and packaging fails closed', () => {
+  assert.match(main, /auth\.restore\(\)/u);
+  assert.match(main, /afterAuthentication\(restoredSession = true\)/u);
+  assert.match(main, /shouldMigrateLegacySyncState\(restoredSession, session\.canonicalUserId\)/u);
+  assert.match(background, /migrateLegacyStateAfterSessionRestore/u);
+  assert.match(background, /Auth credentials[\s\S]*never read, changed, or cleared here/u);
+  assert.match(gradle, /verifyBetaRuntimeConfiguration/u);
+  assert.match(gradle, /tasks\.matching \{ it\.name == "assembleDebug" \}\.configureEach \{ dependsOn\(verifyBetaRuntimeConfiguration\) \}/u);
+  assert.match(gradle, /uavimjgccigpbwqmfkhh/u);
+  assert.doesNotMatch(`${main}\n${background}`, /supabase_auth_secure|health-sync-supabase-auth-aes/u);
 });

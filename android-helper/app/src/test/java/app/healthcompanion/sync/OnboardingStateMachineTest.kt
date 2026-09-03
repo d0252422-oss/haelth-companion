@@ -38,4 +38,25 @@ class OnboardingStateMachineTest {
         ConnectorUiState.SYNCING,
         OnboardingStateMachine.transition(ConnectorUiState.SYNCING, ConnectorEvent.LOGIN_STARTED),
     )
+
+    @Test fun restoredAuthenticatedSessionEnablesLegacyStateMigration() = assertEquals(
+        true,
+        SessionUpgradePolicy.shouldMigrateLegacySyncState(restoredSession = true, canonicalUserId = "canonical-user"),
+    )
+
+    @Test fun freshLoginNeverClaimsLegacyStateFromAnotherAccount() = assertEquals(
+        false,
+        SessionUpgradePolicy.shouldMigrateLegacySyncState(restoredSession = false, canonicalUserId = "canonical-user"),
+    )
+
+    @Test fun failedRestoreLeavesLoginFallbackAvailable() {
+        assertEquals(
+            ConnectorUiState.AUTH_ERROR,
+            OnboardingStateMachine.transition(ConnectorUiState.AUTHENTICATING, ConnectorEvent.LOGIN_FAILED),
+        )
+        assertEquals(
+            ConnectorUiState.AUTHENTICATING,
+            OnboardingStateMachine.transition(ConnectorUiState.AUTH_ERROR, ConnectorEvent.LOGIN_STARTED),
+        )
+    }
 }

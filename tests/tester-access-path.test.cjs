@@ -62,9 +62,9 @@ test('distribution config and Shortcut manifest contain no credential or fabrica
   assert.doesNotMatch(`${config}\n${shortcut}`, /(?:access_token|refresh_token|service_role|client_secret|password)/iu);
   assert.equal(JSON.parse(shortcut).share_url, '');
   const beta = JSON.parse(config).beta;
-  assert.match(beta.ANDROID_BETA_APK_URL, /^https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\/android-beta-v0\.1\.0-beta\.7\//u);
-  assert.equal(beta.ANDROID_BETA_APK_VERSION, '0.1.0-beta.7-debug');
-  assert.equal(beta.ANDROID_BETA_APK_SIZE_BYTES, 23604165);
+  assert.match(beta.ANDROID_BETA_APK_URL, /^https:\/\/github\.com\/d0252422-oss\/haelth-companion\/releases\/download\/android-beta-v0\.1\.0-beta\.8\//u);
+  assert.equal(beta.ANDROID_BETA_APK_VERSION, '0.1.0-beta.8-debug');
+  assert.equal(beta.ANDROID_BETA_APK_SIZE_BYTES, 23606385);
   assert.match(beta.ANDROID_BETA_APK_SHA256, /^[0-9a-f]{64}$/u);
 });
 

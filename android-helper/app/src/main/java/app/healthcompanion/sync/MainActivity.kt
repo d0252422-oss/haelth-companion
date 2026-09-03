@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
         render(ConnectorUiState.AUTHENTICATING)
         scope.launch {
             runCatching { auth.signIn(this@MainActivity) }
-                .onSuccess { session -> currentSession = session; afterAuthentication() }
+                .onSuccess { session -> currentSession = session; afterAuthentication(restoredSession = false) }
                 .onFailure { error ->
                     render(
                         if (error is NativeAuthCancelled) ConnectorUiState.SIGNED_OUT else ConnectorUiState.AUTH_ERROR,
@@ -98,12 +98,16 @@ class MainActivity : ComponentActivity() {
         runCatching { auth.restore() }
             .onSuccess { session ->
                 currentSession = session
-                if (session == null) render(ConnectorUiState.SIGNED_OUT) else afterAuthentication()
+                if (session == null) render(ConnectorUiState.SIGNED_OUT) else afterAuthentication(restoredSession = true)
             }
             .onFailure { render(ConnectorUiState.AUTH_ERROR) }
     }
 
-    private fun afterAuthentication() {
+    private fun afterAuthentication(restoredSession: Boolean) {
+        val session = currentSession ?: return render(ConnectorUiState.SIGNED_OUT)
+        if (SessionUpgradePolicy.shouldMigrateLegacySyncState(restoredSession, session.canonicalUserId)) {
+            SyncRuntimeStateStore(this).migrateLegacyStateAfterSessionRestore(session.canonicalUserId)
+        }
         render(ConnectorUiState.AUTHENTICATED)
         when (health.availability) {
             HealthConnectClient.SDK_AVAILABLE -> scope.launch {

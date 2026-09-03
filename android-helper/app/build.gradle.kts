@@ -3,29 +3,49 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val betaApiBaseUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_API_BASE_URL").orElse("https://beta.invalid")
+val betaAuthSetupUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_AUTH_SETUP_URL").orElse("https://beta.invalid")
+val betaAppLinkHost = providers.environmentVariable("HEALTH_COMPANION_BETA_APP_LINK_HOST").orElse("beta.invalid")
+val betaSupabaseUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_SUPABASE_URL").orElse("https://beta.invalid")
+val betaSupabasePublishableKey = providers.environmentVariable("HEALTH_COMPANION_BETA_SUPABASE_PUBLISHABLE_KEY").orElse("missing")
+val googleWebClientId = providers.environmentVariable("HEALTH_COMPANION_GOOGLE_WEB_CLIENT_ID").orElse("missing")
+
+val verifyBetaRuntimeConfiguration by tasks.registering {
+    group = "verification"
+    description = "Fails closed before packaging an unusable beta APK."
+    doLast {
+        check(betaApiBaseUrl.get().startsWith("https://uavimjgccigpbwqmfkhh.supabase.co/")) {
+            "Beta API configuration is missing or targets an unexpected project"
+        }
+        check(betaSupabaseUrl.get() == "https://uavimjgccigpbwqmfkhh.supabase.co") {
+            "Beta Supabase configuration is missing or targets an unexpected project"
+        }
+        check(betaSupabasePublishableKey.get().isNotBlank() && betaSupabasePublishableKey.get() != "missing") {
+            "Beta Supabase publishable key is missing"
+        }
+        check(googleWebClientId.get().endsWith(".apps.googleusercontent.com")) {
+            "Google web client ID is missing"
+        }
+    }
+}
+
 android {
     namespace = "app.healthcompanion.sync"
     compileSdk = 36
 
     defaultConfig {
-        val betaApiBaseUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_API_BASE_URL").orElse("https://beta.invalid").get()
-        val betaAuthSetupUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_AUTH_SETUP_URL").orElse("https://beta.invalid").get()
-        val betaAppLinkHost = providers.environmentVariable("HEALTH_COMPANION_BETA_APP_LINK_HOST").orElse("beta.invalid").get()
-        val betaSupabaseUrl = providers.environmentVariable("HEALTH_COMPANION_BETA_SUPABASE_URL").orElse("https://beta.invalid").get()
-        val betaSupabasePublishableKey = providers.environmentVariable("HEALTH_COMPANION_BETA_SUPABASE_PUBLISHABLE_KEY").orElse("missing").get()
-        val googleWebClientId = providers.environmentVariable("HEALTH_COMPANION_GOOGLE_WEB_CLIENT_ID").orElse("missing").get()
         applicationId = "app.healthcompanion.sync.beta"
         minSdk = 28
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.0-beta.7"
-        buildConfigField("String", "API_BASE_URL", "\"$betaApiBaseUrl\"")
-        buildConfigField("String", "AUTH_SETUP_URL", "\"$betaAuthSetupUrl\"")
-        buildConfigField("String", "APP_LINK_HOST", "\"$betaAppLinkHost\"")
-        buildConfigField("String", "SUPABASE_URL", "\"$betaSupabaseUrl\"")
-        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$betaSupabasePublishableKey\"")
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
-        manifestPlaceholders["appLinkHost"] = betaAppLinkHost
+        versionCode = 8
+        versionName = "0.1.0-beta.8"
+        buildConfigField("String", "API_BASE_URL", "\"${betaApiBaseUrl.get()}\"")
+        buildConfigField("String", "AUTH_SETUP_URL", "\"${betaAuthSetupUrl.get()}\"")
+        buildConfigField("String", "APP_LINK_HOST", "\"${betaAppLinkHost.get()}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"${betaSupabaseUrl.get()}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${betaSupabasePublishableKey.get()}\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${googleWebClientId.get()}\"")
+        manifestPlaceholders["appLinkHost"] = betaAppLinkHost.get()
     }
 
     buildTypes {
@@ -41,6 +61,8 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
+
+tasks.matching { it.name == "assembleDebug" }.configureEach { dependsOn(verifyBetaRuntimeConfiguration) }
 
 dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
