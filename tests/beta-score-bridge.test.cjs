@@ -57,8 +57,8 @@ test('ingestion queues scores and durable processor performs bounded recompute',
   assert.match(edge, /scheduleScoreRecompute\(admin, String\(session\.canonical_user_id\)\)/u);
   assert.match(edge, /SCORE_BACKGROUND_RECOMPUTE_FAILED/u);
   assert.match(edge, /Math\.min\(Math\.max\(Number\(body\.limit\), 1\), 5\)/u);
-  assert.match(edge, /const subject = await verifyWebSession\(bearer\(request\)\)/u);
-  assert.match(edge, /uuidFromHash\(await sha256\(subject\)\)/u);
+  assert.match(edge, /resolveCanonicalWebIdentity\(request, admin\)/u);
+  assert.match(edge, /beta_resolve_web_canonical_identity/u);
   assert.match(bridge, /\.eq\("operation", "UPSERT"\)\.is\("invalidated_at", null\)/u);
   assert.match(bridge, /SCORE_INPUT_BOUND_EXCEEDED/u);
   assert.match(dirtyDates, /affected_dates := affected_dates \|\| old\.affected_local_dates/u);

@@ -42,7 +42,7 @@ test('custom Edge authentication fails closed without exposing secrets', () => {
   const source = read('supabase/functions/mobile-health-beta/index.ts');
   const config = read('supabase/config.toml');
   assert.match(config, /\[functions\.mobile-health-beta\][\s\S]*verify_jwt = false/u);
-  assert.match(source, /verifyWebSession\(bearer\(request\)\)/u);
+  assert.match(source, /resolveCanonicalWebIdentity\(request, admin\)/u);
   assert.match(source, /authorizeSession\(request, admin\)/u);
   assert.match(source, /beta_rotate_app_session/u);
   assert.match(source, /beta_revoke_app_session/u);
@@ -77,7 +77,8 @@ test('native Android auth verifies Google-backed Supabase JWT and links canonica
   assert.match(source, /CLIENT_IDENTITY_FORBIDDEN/u);
   assert.match(source, /"canonical_user_id", "user_id", "owner_id"/u);
   assert.doesNotMatch(source, /nativeUser\.auth_email !== webIdentity\.email/u);
-  assert.match(source, /beta_link_native_auth_identity/u);
+  assert.match(source, /beta_link_native_auth_identity_v2/u);
+  assert.match(source, /p_verified_email_hash: emailHash/u);
   assert.match(source, /beta_resolve_native_auth_identity/u);
   assert.match(migration, /auth_user_id uuid primary key references auth\.users\(id\)/u);
   assert.match(migration, /canonical_user_id uuid not null unique/u);

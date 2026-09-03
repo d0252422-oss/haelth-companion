@@ -97,16 +97,17 @@ async function ensureNativeIdentity(admin: any, nativeUser: Json): Promise<Json>
   const existing = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id), false);
   if (existing) return existing;
   const subjectHash = await sha256(String(nativeUser.google_subject));
+  const emailHash = await sha256(String(nativeUser.auth_email));
   const canonicalUserId = uuidFromHash(subjectHash);
-  const { data, error } = await admin.rpc("beta_link_native_auth_identity", {
+  const { data, error } = await admin.rpc("beta_link_native_auth_identity_v2", {
     p_auth_user_id: nativeUser.auth_user_id,
-    p_canonical_user_id: canonicalUserId,
-    p_external_subject_hash: subjectHash,
-    p_provider: "google",
+    p_candidate_canonical_user_id: canonicalUserId,
+    p_google_subject_hash: subjectHash,
+    p_verified_email_hash: emailHash,
   });
   if (error) throw databaseFailure(error);
-  if (String(data) !== canonicalUserId) throw failure("CANONICAL_IDENTITY_CONFLICT", 409);
-  return { canonical_user_id: canonicalUserId, provider: "google", environment: "beta" };
+  if (!/^[0-9a-f-]{36}$/i.test(String(data))) throw failure("CANONICAL_IDENTITY_CONFLICT", 409);
+  return { canonical_user_id: String(data), provider: "google", environment: "beta" };
 }
 
 async function getNativeIdentity(request: Request, admin: any, origin: string): Promise<Response> {
@@ -126,12 +127,11 @@ async function issueClaim(request: Request, admin: any, origin: string): Promise
       || (bindingMethod === "ONE_TIME_CODE" && fingerprint !== null)) {
     throw failure("INVALID_INSTALL_BINDING", 400);
   }
-  const subject = await verifyWebSession(bearer(request));
-  const subjectHash = await sha256(subject);
+  const webIdentity = await resolveCanonicalWebIdentity(request, admin);
   const claim = randomToken(32);
   const { error } = await admin.rpc("beta_issue_install_claim", {
-    p_canonical_user_id: uuidFromHash(subjectHash),
-    p_external_subject_hash: subjectHash,
+    p_canonical_user_id: webIdentity.canonical_user_id,
+    p_external_subject_hash: webIdentity.web_subject_hash,
     p_platform: body.platform,
     p_claim_digest: await sha256(claim),
     p_expires_at: new Date(Date.now() + 300_000).toISOString(),
@@ -391,8 +391,8 @@ function scheduleScoreRecompute(admin: any, userId: string): void {
 }
 
 async function getStatus(request: Request, admin: any, origin: string): Promise<Response> {
-  const subject = await verifyWebSession(bearer(request));
-  const userId = uuidFromHash(await sha256(subject));
+  const identity = await resolveCanonicalWebIdentity(request, admin);
+  const userId = String(identity.canonical_user_id);
   const { data, error } = await admin.from("beta_connector_status")
     .select("platform,connector_type,connector_version,last_attempt_at,last_success_at,last_result,available_domains,permission_state")
     .eq("canonical_user_id", userId);
@@ -401,8 +401,8 @@ async function getStatus(request: Request, admin: any, origin: string): Promise<
 }
 
 async function getScores(request: Request, admin: any, origin: string): Promise<Response> {
-  const subject = await verifyWebSession(bearer(request));
-  const userId = uuidFromHash(await sha256(subject));
+  const identity = await resolveCanonicalWebIdentity(request, admin);
+  const userId = String(identity.canonical_user_id);
   const date = new URL(request.url).searchParams.get("date") ?? undefined;
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw failure("INVALID_SCORE_DATE", 400);
   const scores = await readBetaScores(admin, userId, date);
@@ -410,8 +410,8 @@ async function getScores(request: Request, admin: any, origin: string): Promise<
 }
 
 async function getLatestHealth(request: Request, admin: any, origin: string): Promise<Response> {
-  const subject = await verifyWebSession(bearer(request));
-  const userId = uuidFromHash(await sha256(subject));
+  const identity = await resolveCanonicalWebIdentity(request, admin);
+  const userId = String(identity.canonical_user_id);
   const { data, error } = await admin.rpc("beta_get_health_freshness", { p_canonical_user_id: userId });
   if (error) throw databaseFailure(error);
   const freshness = Array.isArray(data) ? data[0] ?? {} : {};
@@ -547,8 +547,22 @@ async function authorizeShortcutSession(request: Request, admin: any): Promise<J
   return session;
 }
 
-async function verifyWebSession(token: string): Promise<string> {
-  return (await verifyWebIdentity(token)).subject;
+async function resolveCanonicalWebIdentity(request: Request, admin: any): Promise<Json> {
+  const verified = await verifyWebIdentity(bearer(request));
+  if (!verified.email) throw failure("WEB_IDENTITY_EMAIL_REQUIRED", 401);
+  const webSubjectHash = await sha256(verified.subject);
+  const emailHash = await sha256(verified.email);
+  const { data, error } = await admin.rpc("beta_resolve_web_canonical_identity", {
+    p_web_subject_hash: webSubjectHash,
+    p_verified_email_hash: emailHash,
+    p_candidate_canonical_user_id: uuidFromHash(emailHash),
+  });
+  if (error) throw databaseFailure(error);
+  const identity = Array.isArray(data) ? data[0] as Json : null;
+  if (!identity || identity.environment !== "beta" || identity.provider !== "google") {
+    throw failure("WEB_IDENTITY_NOT_LINKED", 401);
+  }
+  return { ...identity, web_subject_hash: webSubjectHash };
 }
 
 async function verifyWebIdentity(token: string): Promise<{ subject: string; email: string }> {
