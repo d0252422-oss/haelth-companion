@@ -88,7 +88,8 @@ test('authenticated startup renders ready and hands durable work to WorkManager'
   const scheduled = main.indexOf('BackgroundSyncScheduler.reconcileAndEnqueue');
   assert.ok(restored >= 0 && migrated > restored && scheduled > migrated);
   assert.match(main, /BackgroundHealthReadState\.GRANTED -> handoffToBackground\(session\)/u);
-  assert.match(main, /ConnectorUiState\.BACKGROUND_SYNCING/u);
+  assert.match(main, /renderBackground\(runtime\)/u);
+  assert.match(main, /Worker: \$\{runtime\.name\}/u);
   assert.match(main, /背景資料更新中，你可以繼續使用 App/u);
   assert.doesNotMatch(main, /hasAnyPermission\(\) && health\.hasBackgroundReadPermission\(\)[\s\S]{0,160}firstSync\(\)/u);
   assert.match(background, /CoroutineWorker/u);
@@ -98,6 +99,8 @@ test('authenticated startup renders ready and hands durable work to WorkManager'
 test('startup and periodic work are user-scoped, unique, checkpointed, and single-flight', () => {
   assert.match(background, /val immediatePolicy = if \(replaceImmediate\) ExistingWorkPolicy\.REPLACE else ExistingWorkPolicy\.KEEP/u);
   assert.match(background, /beginUniqueWork\(BackgroundWorkNames\.immediate\(userId\), immediatePolicy/u);
+  assert.match(background, /BackgroundWorkNames\.backfill\(userId\)/u);
+  assert.doesNotMatch(background, /continuation\.then\(backfill\)/u);
   assert.match(background, /enqueueUniquePeriodicWork\(BackgroundWorkNames\.periodic\(userId\), ExistingPeriodicWorkPolicy\.KEEP/u);
   assert.match(background, /setExpedited\(OutOfQuotaPolicy\.RUN_AS_NON_EXPEDITED_WORK_REQUEST\)/u);
   assert.match(background, /BackgroundSyncMode\.INCREMENTAL/u);
@@ -112,7 +115,9 @@ test('startup and periodic work are user-scoped, unique, checkpointed, and singl
   assert.match(background, /BACKGROUND_WORK_ID/u);
   assert.match(background, /BACKGROUND_LAST_PROGRESS_AT/u);
   assert.match(background, /WorkRecoveryAction\.REPLACE_STALE/u);
-  assert.match(performance, /STALE_AFTER_MINUTES = 10L/u);
+  assert.match(performance, /STALE_AFTER_MINUTES = 8L/u);
+  assert.match(performance, /actual\.state == DurableWorkState\.ENQUEUED/u);
+  assert.match(performance, /BackgroundRuntimeStatus\.WAITING_FOR_CONSTRAINT/u);
 });
 
 test('background outcomes terminate safely and score recompute stays server-decoupled', () => {
@@ -122,6 +127,10 @@ test('background outcomes terminate safely and score recompute stays server-deco
   assert.match(background, /runAttemptCount < MAX_RETRY_ATTEMPTS - 1/u);
   assert.match(background, /HEALTH_READ_TIMEOUT_MS = 3 \* 60_000L/u);
   assert.match(background, /UPLOAD_TIMEOUT_MS = 4 \* 60_000L/u);
+  assert.match(background, /SESSION_TIMEOUT_MS = 30_000L/u);
+  assert.match(background, /PERMISSION_TIMEOUT_MS = 30_000L/u);
+  assert.match(background, /setProgress\(workDataOf/u);
+  assert.match(background, /catch \(cancelled: CancellationException\)/u);
   assert.match(background, /state\.clearActiveWindow/u);
   assert.match(main, /"RETRY_PENDING" -> "將自動重試"/u);
   assert.doesNotMatch(`${main}\n${background}`, /while\s*\(true\)|WakeLock|startForegroundService|Log\.|println\(|printStackTrace/u);

@@ -11,8 +11,10 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -28,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var checkpoints: SyncCheckpointStore
     private lateinit var status: TextView
     private lateinit var lastSync: TextView
+    private lateinit var workerDiagnostic: TextView
     private lateinit var login: Button
     private lateinit var allow: Button
     private lateinit var sync: Button
@@ -35,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<Set<String>>
     private var currentSession: NativeAuthSession? = null
     private var currentState = ConnectorUiState.SIGNED_OUT
+    private var backgroundObserver: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +65,7 @@ class MainActivity : ComponentActivity() {
         val title = TextView(this).apply { text = "生活小助手\n健康資料同步"; textSize = 24f }
         status = TextView(this).apply { textSize = 16f }
         lastSync = TextView(this).apply { textSize = 14f }
+        workerDiagnostic = TextView(this).apply { textSize = 11f; text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: IDLE" }
         login = Button(this).apply { text = "使用 Google 帳號登入"; setOnClickListener { startLogin() } }
         allow = Button(this).apply { text = "允許 Health Connect"; setOnClickListener { requestPermission() } }
         sync = Button(this).apply { text = "立即同步"; setOnClickListener { firstSync() } }
@@ -68,7 +73,7 @@ class MainActivity : ComponentActivity() {
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 80, 48, 48)
-            addView(title); addView(status); addView(lastSync); addView(login); addView(allow); addView(sync); addView(logout)
+            addView(title); addView(status); addView(lastSync); addView(workerDiagnostic); addView(login); addView(allow); addView(sync); addView(logout)
         })
         render(ConnectorUiState.SIGNED_OUT)
     }
@@ -134,8 +139,34 @@ class MainActivity : ComponentActivity() {
     private suspend fun handoffToBackground(session: NativeAuthSession) {
         val state = SyncRuntimeStateStore(this)
         if (state.lastSuccessfulSync(session.canonicalUserId) == null) state.markHistoryPending(session.canonicalUserId)
-        BackgroundSyncScheduler.reconcileAndEnqueue(this, session.canonicalUserId)
-        render(ConnectorUiState.BACKGROUND_SYNCING, "健康資料已連接\n背景資料更新中，你可以繼續使用 App。")
+        val runtime = BackgroundSyncScheduler.reconcileAndEnqueue(this, session.canonicalUserId)
+        renderBackground(runtime)
+        backgroundObserver?.cancel()
+        backgroundObserver = scope.launch {
+            BackgroundSyncScheduler.observe(this@MainActivity, session.canonicalUserId).collect { observed ->
+                if (currentState != ConnectorUiState.SYNCING) renderBackground(observed)
+            }
+        }
+    }
+
+    private fun renderBackground(runtime: BackgroundRuntimeStatus) {
+        workerDiagnostic.text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: ${runtime.name}"
+        when (runtime) {
+            BackgroundRuntimeStatus.RUNNING ->
+                render(ConnectorUiState.BACKGROUND_SYNCING, "健康資料已連接\n背景同步中，你可以繼續使用 App。")
+            BackgroundRuntimeStatus.ENQUEUED ->
+                render(ConnectorUiState.READY_TO_SYNC, "健康資料已連接\n背景同步：等待系統執行")
+            BackgroundRuntimeStatus.WAITING_FOR_CONSTRAINT ->
+                render(ConnectorUiState.READY_TO_SYNC, "健康資料已連接\n背景同步：等待網路或系統排程")
+            BackgroundRuntimeStatus.RETRY_PENDING ->
+                render(ConnectorUiState.SYNC_PARTIAL, "健康資料已連接\n背景同步將自動重試")
+            BackgroundRuntimeStatus.UP_TO_DATE ->
+                render(ConnectorUiState.SYNC_SUCCESS, "✓ 健康資料已連接\n背景同步：最新")
+            BackgroundRuntimeStatus.STALE_RECOVERED ->
+                render(ConnectorUiState.READY_TO_SYNC, "健康資料已連接\n已恢復背景工作並重新排程")
+            BackgroundRuntimeStatus.FAILED ->
+                render(ConnectorUiState.SYNC_ERROR, "背景同步未完成，可按立即同步重試")
+        }
     }
 
     private fun requestPermission() {
@@ -217,6 +248,8 @@ class MainActivity : ComponentActivity() {
         currentSession = null
         checkpoints.clear()
         BackgroundSyncScheduler.cancel(this, userId)
+        backgroundObserver?.cancel()
+        workerDiagnostic.text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: IDLE"
         render(ConnectorUiState.SIGNED_OUT)
         scope.launch { auth.signOut() }
     }
@@ -239,6 +272,8 @@ class MainActivity : ComponentActivity() {
                 val resultText = when (background.first) {
                     "SYNCING" -> "同步中"
                     "ENQUEUED" -> "已排程"
+                    "WAITING_FOR_CONSTRAINT" -> "等待網路或系統排程"
+                    "UP_TO_DATE" -> "最新"
                     "STALE_RECOVERED" -> "已恢復並重新排程"
                     "SUCCESS" -> "已更新"
                     "PARTIAL" -> "部分完成，將繼續更新"
@@ -283,6 +318,11 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() { scope.cancel(); super.onDestroy() }
+
+    override fun onResume() {
+        super.onResume()
+        if (currentSession != null && ::health.isInitialized) scope.launch { continueAfterPermissionCheck() }
+    }
 }
 
 class HealthPermissionMissing : Exception("HEALTH_PERMISSION_MISSING")

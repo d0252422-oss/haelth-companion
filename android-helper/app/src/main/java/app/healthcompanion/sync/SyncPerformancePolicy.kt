@@ -53,18 +53,58 @@ enum class BackgroundSyncMode { INCREMENTAL, BACKFILL }
 
 enum class DurableWorkState { ENQUEUED, RUNNING, BLOCKED, SUCCEEDED, FAILED, CANCELLED, UNKNOWN }
 enum class WorkRecoveryAction { KEEP, ENQUEUE, REPLACE_STALE }
+enum class BackgroundRuntimeStatus {
+    ENQUEUED,
+    WAITING_FOR_CONSTRAINT,
+    RUNNING,
+    RETRY_PENDING,
+    UP_TO_DATE,
+    FAILED,
+    STALE_RECOVERED,
+}
+
+data class WorkRuntimeSnapshot(
+    val state: DurableWorkState,
+    val runAttemptCount: Int = 0,
+    val hasRunnablePredecessor: Boolean = false,
+)
+
+data class WorkRecoveryDecision(
+    val action: WorkRecoveryAction,
+    val status: BackgroundRuntimeStatus,
+)
 
 object BackgroundWorkRecoveryPolicy {
-    const val STALE_AFTER_MINUTES = 10L
+    const val STALE_AFTER_MINUTES = 8L
 
-    fun decide(localResult: String?, lastProgressAt: Instant?, actualStates: Set<DurableWorkState>, now: Instant): WorkRecoveryAction {
-        val active = actualStates.any { it in setOf(DurableWorkState.ENQUEUED, DurableWorkState.RUNNING, DurableWorkState.BLOCKED) }
-        val stale = localResult == "SYNCING" &&
+    fun decide(
+        localResult: String?,
+        lastProgressAt: Instant?,
+        actual: WorkRuntimeSnapshot?,
+        now: Instant,
+    ): WorkRecoveryDecision {
+        val staleRunning = actual?.state == DurableWorkState.RUNNING &&
             (lastProgressAt == null || lastProgressAt.plus(STALE_AFTER_MINUTES, ChronoUnit.MINUTES).isBefore(now))
         return when {
-            stale -> WorkRecoveryAction.REPLACE_STALE
-            active -> WorkRecoveryAction.KEEP
-            else -> WorkRecoveryAction.ENQUEUE
+            staleRunning -> WorkRecoveryDecision(WorkRecoveryAction.REPLACE_STALE, BackgroundRuntimeStatus.STALE_RECOVERED)
+            actual == null && localResult == "SYNCING" ->
+                WorkRecoveryDecision(WorkRecoveryAction.REPLACE_STALE, BackgroundRuntimeStatus.STALE_RECOVERED)
+            actual == null -> WorkRecoveryDecision(WorkRecoveryAction.ENQUEUE, BackgroundRuntimeStatus.ENQUEUED)
+            actual.state == DurableWorkState.RUNNING ->
+                WorkRecoveryDecision(WorkRecoveryAction.KEEP, BackgroundRuntimeStatus.RUNNING)
+            actual.state == DurableWorkState.ENQUEUED -> WorkRecoveryDecision(
+                WorkRecoveryAction.KEEP,
+                if (actual.runAttemptCount > 0) BackgroundRuntimeStatus.RETRY_PENDING else BackgroundRuntimeStatus.ENQUEUED,
+            )
+            actual.state == DurableWorkState.BLOCKED && !actual.hasRunnablePredecessor ->
+                WorkRecoveryDecision(WorkRecoveryAction.REPLACE_STALE, BackgroundRuntimeStatus.STALE_RECOVERED)
+            actual.state == DurableWorkState.BLOCKED ->
+                WorkRecoveryDecision(WorkRecoveryAction.KEEP, BackgroundRuntimeStatus.WAITING_FOR_CONSTRAINT)
+            actual.state == DurableWorkState.SUCCEEDED ->
+                WorkRecoveryDecision(WorkRecoveryAction.ENQUEUE, BackgroundRuntimeStatus.UP_TO_DATE)
+            actual.state in setOf(DurableWorkState.FAILED, DurableWorkState.CANCELLED, DurableWorkState.UNKNOWN) ->
+                WorkRecoveryDecision(WorkRecoveryAction.ENQUEUE, BackgroundRuntimeStatus.RETRY_PENDING)
+            else -> WorkRecoveryDecision(WorkRecoveryAction.ENQUEUE, BackgroundRuntimeStatus.FAILED)
         }
     }
 }
@@ -72,5 +112,6 @@ object BackgroundWorkRecoveryPolicy {
 object BackgroundWorkNames {
     fun userKey(userId: String): String = CanonicalIdentity.sha256(userId).take(16)
     fun immediate(userId: String): String = "health-sync-immediate-${userKey(userId)}"
+    fun backfill(userId: String): String = "health-sync-backfill-${userKey(userId)}"
     fun periodic(userId: String): String = "health-sync-periodic-${userKey(userId)}"
 }
