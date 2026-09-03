@@ -20,7 +20,6 @@ import kotlinx.coroutines.TimeoutCancellationException
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 
 class MainActivity : ComponentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -36,7 +35,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<Set<String>>
     private var currentSession: NativeAuthSession? = null
     private var currentState = ConnectorUiState.SIGNED_OUT
-    private val syncSingleFlight = SyncSingleFlight()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,10 +50,7 @@ class MainActivity : ComponentActivity() {
         if (health.availability == HealthConnectClient.SDK_AVAILABLE) {
             permissionLauncher = registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
                 if (granted.isEmpty()) render(ConnectorUiState.HEALTH_PERMISSION_DENIED)
-                else {
-                    render(ConnectorUiState.READY_TO_SYNC, if (granted.containsAll(health.readPermissions)) "已授權，準備同步" else "已授權可用資料，準備同步")
-                    firstSync()
-                }
+                else scope.launch { continueAfterPermissionCheck() }
             }
         }
         buildUi()
@@ -111,15 +106,37 @@ class MainActivity : ComponentActivity() {
         render(ConnectorUiState.AUTHENTICATED)
         when (health.availability) {
             HealthConnectClient.SDK_AVAILABLE -> scope.launch {
-                if (health.hasAnyPermission() && health.hasBackgroundReadPermission()) {
-                    render(ConnectorUiState.READY_TO_SYNC)
-                    firstSync()
-                } else render(ConnectorUiState.HEALTH_PERMISSION_REQUIRED, if (health.hasAnyPermission()) "請允許背景健康資料同步" else null)
+                continueAfterPermissionCheck()
             }
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
                 render(ConnectorUiState.HEALTH_CONNECT_UNAVAILABLE, "請安裝或更新 Health Connect")
             else -> render(ConnectorUiState.HEALTH_CONNECT_UNAVAILABLE, "此裝置無法使用 Health Connect")
         }
+    }
+
+    private suspend fun continueAfterPermissionCheck() {
+        val session = currentSession ?: return render(ConnectorUiState.SIGNED_OUT)
+        if (!health.hasAnyPermission()) {
+            render(ConnectorUiState.HEALTH_PERMISSION_REQUIRED)
+            return
+        }
+        when (health.backgroundReadState()) {
+            BackgroundHealthReadState.GRANTED -> handoffToBackground(session)
+            BackgroundHealthReadState.PERMISSION_REQUIRED ->
+                render(ConnectorUiState.HEALTH_PERMISSION_REQUIRED, "請允許背景健康資料同步")
+            BackgroundHealthReadState.UNSUPPORTED -> {
+                render(ConnectorUiState.READY_TO_SYNC, "健康資料已連接；此裝置需在 App 開啟時更新")
+                firstSync()
+            }
+        }
+    }
+
+    private fun handoffToBackground(session: NativeAuthSession) {
+        val state = SyncRuntimeStateStore(this)
+        if (state.lastSuccessfulSync(session.canonicalUserId) == null) state.markHistoryPending(session.canonicalUserId)
+        state.saveBackgroundResult(session.canonicalUserId, "SYNCING")
+        BackgroundSyncScheduler.enqueue(this, session.canonicalUserId)
+        render(ConnectorUiState.BACKGROUND_SYNCING, "健康資料已連接\n背景資料更新中，你可以繼續使用 App。")
     }
 
     private fun requestPermission() {
@@ -129,7 +146,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun firstSync() {
-        if (!syncSingleFlight.tryStart()) return
+        if (!AppSyncSingleFlight.gate.tryStart()) {
+            render(ConnectorUiState.BACKGROUND_SYNCING, "背景同步進行中，你可以稍後查看更新。")
+            return
+        }
         scope.launch {
             try {
                 var session = currentSession
@@ -140,8 +160,12 @@ class MainActivity : ComponentActivity() {
                     val granted = health.grantedReadPermissions()
                     if (granted.isEmpty()) throw HealthPermissionMissing()
                     val end = Instant.now()
+                    val window = SyncWindowPolicy.incremental(
+                        end,
+                        SyncRuntimeStateStore(this@MainActivity).lastSuccessfulSync(session!!.canonicalUserId),
+                    )
                     val read = withContext(Dispatchers.IO) {
-                        health.readBounded(end.minus(FOREGROUND_LOOKBACK_DAYS, ChronoUnit.DAYS), end) { domain, done, total ->
+                        health.readBounded(window.start, window.end) { domain, done, total ->
                             scope.launch { status.text = "正在讀取 $domain… $done/$total" }
                         }
                     }
@@ -165,7 +189,7 @@ class MainActivity : ComponentActivity() {
                 }.onSuccess { result ->
                 saveLastSync(session!!.canonicalUserId)
                 SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session!!.canonicalUserId)
-                if (health.supportsBackgroundRead() && health.hasBackgroundReadPermission()) BackgroundSyncScheduler.enqueue(this@MainActivity)
+                if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session!!.canonicalUserId)
                 render(SyncTerminalPolicy.state(result.hasData, result.partial, timedOut = false))
                 }.onFailure { error ->
                 when (error) {
@@ -176,23 +200,24 @@ class MainActivity : ComponentActivity() {
                     }
                     is TimeoutCancellationException -> {
                         SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session!!.canonicalUserId)
-                        if (health.supportsBackgroundRead() && health.hasBackgroundReadPermission()) BackgroundSyncScheduler.enqueue(this@MainActivity)
+                        if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session!!.canonicalUserId)
                         render(ConnectorUiState.SYNC_TIMEOUT)
                     }
                     else -> render(ConnectorUiState.SYNC_ERROR)
                 }
                 }
             } finally {
-                syncSingleFlight.finish()
+                AppSyncSingleFlight.gate.finish()
             }
         }
     }
 
     private fun logout() {
-        currentSession?.canonicalUserId?.let { SyncRuntimeStateStore(this).clear(it) }
+        val userId = currentSession?.canonicalUserId
+        userId?.let { SyncRuntimeStateStore(this).clear(it) }
         currentSession = null
         checkpoints.clear()
-        BackgroundSyncScheduler.cancel(this)
+        BackgroundSyncScheduler.cancel(this, userId)
         render(ConnectorUiState.SIGNED_OUT)
         scope.launch { auth.signOut() }
     }
@@ -212,7 +237,17 @@ class MainActivity : ComponentActivity() {
             val background = userId?.let(state::backgroundSummary)
             val backgroundText = background?.second?.let { at ->
                 val atText = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(at)
-                "\n背景同步：${background.first ?: "UNKNOWN"} · $atText"
+                val resultText = when (background.first) {
+                    "SYNCING" -> "同步中"
+                    "SUCCESS" -> "已更新"
+                    "PARTIAL" -> "部分完成，將繼續更新"
+                    "RETRY_PENDING" -> "將自動重試"
+                    "TIMEOUT", "FAILED" -> "未完成，可按立即同步重試"
+                    "FAILED_AUTH" -> "登入已失效"
+                    "PERMISSION_REQUIRED" -> "需要背景讀取權限"
+                    else -> background.first ?: "UNKNOWN"
+                }
+                "\n背景同步：$resultText · $atText"
             } ?: ""
             "最近同步：$formatted$backgroundText"
         } ?: "尚未完成同步"
@@ -228,6 +263,7 @@ class MainActivity : ComponentActivity() {
             ConnectorUiState.HEALTH_PERMISSION_REQUIRED -> "請允許生活小助手讀取你選擇的健康資料"
             ConnectorUiState.HEALTH_PERMISSION_DENIED -> "尚未取得健康資料權限，可重新授權"
             ConnectorUiState.READY_TO_SYNC -> "權限已就緒"
+            ConnectorUiState.BACKGROUND_SYNCING -> "健康資料已連接\n背景資料更新中，你可以繼續使用 App。"
             ConnectorUiState.SYNCING -> "正在同步健康資料…"
             ConnectorUiState.SYNC_PARTIAL -> "✓ 最近健康資料已同步\n歷史資料將在背景繼續，分數會自動更新"
             ConnectorUiState.SYNC_TIMEOUT -> "前景同步已停止等待\n未完成資料將在背景安全續傳"
@@ -239,7 +275,7 @@ class MainActivity : ComponentActivity() {
         val busy = state in setOf(ConnectorUiState.AUTHENTICATING, ConnectorUiState.SYNCING)
         login.visibility = if (state in setOf(ConnectorUiState.SIGNED_OUT, ConnectorUiState.AUTH_ERROR)) View.VISIBLE else View.GONE
         allow.visibility = if (state in setOf(ConnectorUiState.HEALTH_PERMISSION_REQUIRED, ConnectorUiState.HEALTH_PERMISSION_DENIED)) View.VISIBLE else View.GONE
-        sync.visibility = if (state in setOf(ConnectorUiState.SYNC_SUCCESS, ConnectorUiState.SYNC_PARTIAL, ConnectorUiState.SYNC_TIMEOUT, ConnectorUiState.SYNC_NO_DATA, ConnectorUiState.SYNC_ERROR, ConnectorUiState.READY_TO_SYNC)) View.VISIBLE else View.GONE
+        sync.visibility = if (state in setOf(ConnectorUiState.SYNC_SUCCESS, ConnectorUiState.SYNC_PARTIAL, ConnectorUiState.SYNC_TIMEOUT, ConnectorUiState.SYNC_NO_DATA, ConnectorUiState.SYNC_ERROR, ConnectorUiState.READY_TO_SYNC, ConnectorUiState.BACKGROUND_SYNCING)) View.VISIBLE else View.GONE
         logout.visibility = if (currentSession != null) View.VISIBLE else View.GONE
         login.isEnabled = !busy; allow.isEnabled = !busy; sync.isEnabled = !busy; logout.isEnabled = !busy
         updateLastSync()
@@ -251,5 +287,4 @@ class MainActivity : ComponentActivity() {
 class HealthPermissionMissing : Exception("HEALTH_PERMISSION_MISSING")
 data class ForegroundSyncResult(val hasData: Boolean, val partial: Boolean)
 
-private const val FOREGROUND_LOOKBACK_DAYS = 7L
 private const val FOREGROUND_SYNC_DEADLINE_MS = 120_000L

@@ -36,20 +36,20 @@ class SyncPerformancePolicyTest {
         assertTrue(plan.batches.all { it.body.toByteArray().size <= BatchPlanner.MAX_APPROX_SERIALIZED_BYTES_PER_BATCH })
     }
 
-    @Test fun backgroundWindowFallsBackWhenNoSuccessExists() {
+    @Test fun startupIncrementalWindowIsSmallWhenNoSuccessExists() {
         val now = Instant.parse("2026-09-03T00:00:00Z")
-        assertEquals(Instant.parse("2026-08-27T00:00:00Z"), SyncWindowPolicy.background(now, null, false).start)
+        assertEquals(Instant.parse("2026-09-02T18:00:00Z"), SyncWindowPolicy.incremental(now, null).start)
     }
 
     @Test fun incrementalWindowUsesOneHourOverlap() {
         val now = Instant.parse("2026-09-03T00:00:00Z")
         val last = Instant.parse("2026-09-02T20:00:00Z")
-        assertEquals(Instant.parse("2026-09-02T19:00:00Z"), SyncWindowPolicy.background(now, last, false).start)
+        assertEquals(Instant.parse("2026-09-02T19:00:00Z"), SyncWindowPolicy.incremental(now, last).start)
     }
 
-    @Test fun pendingHistoryUsesBoundedThirtyDayWindow() {
+    @Test fun backfillUsesBoundedThirtyDayWindow() {
         val now = Instant.parse("2026-09-03T00:00:00Z")
-        assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.background(now, now, true).start)
+        assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.backfill(now).start)
     }
 
     @Test fun syncSingleFlightRejectsOverlapAndReopensAfterCompletion() {
@@ -58,5 +58,11 @@ class SyncPerformancePolicyTest {
         assertFalse(gate.tryStart())
         gate.finish()
         assertTrue(gate.tryStart())
+    }
+
+    @Test fun workNamesAreDeterministicAndUserScoped() {
+        assertEquals(BackgroundWorkNames.immediate("user-a"), BackgroundWorkNames.immediate("user-a"))
+        assertFalse(BackgroundWorkNames.immediate("user-a") == BackgroundWorkNames.immediate("user-b"))
+        assertFalse(BackgroundWorkNames.periodic("user-a") == BackgroundWorkNames.immediate("user-a"))
     }
 }

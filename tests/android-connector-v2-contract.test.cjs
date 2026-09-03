@@ -55,7 +55,7 @@ test('sync performance is bounded, resumable, observable, and background-capable
   assert.match(main, /正在讀取 \$domain/u);
   assert.match(main, /正在上傳健康資料/u);
   assert.match(background, /CoroutineWorker/u);
-  assert.match(background, /enqueueUniqueWork/u);
+  assert.match(background, /beginUniqueWork/u);
   assert.match(background, /ExistingWorkPolicy\.KEEP/u);
   assert.match(background, /enqueueUniquePeriodicWork/u);
   assert.match(background, /ExistingPeriodicWorkPolicy\.KEEP/u);
@@ -63,8 +63,8 @@ test('sync performance is bounded, resumable, observable, and background-capable
   assert.match(background, /MAX_RETRY_ATTEMPTS = 3/u);
   assert.match(performance, /INCREMENTAL_OVERLAP_HOURS = 1L/u);
   assert.match(performance, /class SyncSingleFlight/u);
-  assert.match(main, /syncSingleFlight\.tryStart\(\)/u);
-  assert.match(main, /syncSingleFlight\.finish\(\)/u);
+  assert.match(main, /AppSyncSingleFlight\.gate\.tryStart\(\)/u);
+  assert.match(main, /AppSyncSingleFlight\.gate\.finish\(\)/u);
   assert.match(background, /CanonicalIdentity\.sha256\(userId\)/u);
   assert.match(manifest, /READ_HEALTH_DATA_IN_BACKGROUND/u);
   assert.doesNotMatch(`${main}\n${health}\n${background}`, /Log\.|println\(|printStackTrace/iu);
@@ -80,4 +80,40 @@ test('beta upgrade restores auth before migrating legacy sync state and packagin
   assert.match(gradle, /tasks\.matching \{ it\.name == "assembleDebug" \}\.configureEach \{ dependsOn\(verifyBetaRuntimeConfiguration\) \}/u);
   assert.match(gradle, /uavimjgccigpbwqmfkhh/u);
   assert.doesNotMatch(`${main}\n${background}`, /supabase_auth_secure|health-sync-supabase-auth-aes/u);
+});
+
+test('authenticated startup renders ready and hands durable work to WorkManager', () => {
+  const restored = main.indexOf('auth.restore()');
+  const migrated = main.indexOf('migrateLegacyStateAfterSessionRestore');
+  const scheduled = main.indexOf('BackgroundSyncScheduler.enqueue');
+  assert.ok(restored >= 0 && migrated > restored && scheduled > migrated);
+  assert.match(main, /BackgroundHealthReadState\.GRANTED -> handoffToBackground\(session\)/u);
+  assert.match(main, /ConnectorUiState\.BACKGROUND_SYNCING/u);
+  assert.match(main, /背景資料更新中，你可以繼續使用 App/u);
+  assert.doesNotMatch(main, /hasAnyPermission\(\) && health\.hasBackgroundReadPermission\(\)[\s\S]{0,160}firstSync\(\)/u);
+  assert.match(background, /CoroutineWorker/u);
+});
+
+test('startup and periodic work are user-scoped, unique, checkpointed, and single-flight', () => {
+  assert.match(background, /beginUniqueWork\(BackgroundWorkNames\.immediate\(userId\), ExistingWorkPolicy\.KEEP/u);
+  assert.match(background, /enqueueUniquePeriodicWork\(BackgroundWorkNames\.periodic\(userId\), ExistingPeriodicWorkPolicy\.KEEP/u);
+  assert.match(background, /setExpedited\(OutOfQuotaPolicy\.RUN_AS_NON_EXPEDITED_WORK_REQUEST\)/u);
+  assert.match(background, /BackgroundSyncMode\.INCREMENTAL/u);
+  assert.match(background, /BackgroundSyncMode\.BACKFILL/u);
+  assert.match(background, /activeWindowEnd/u);
+  assert.match(background, /SyncCheckpointStore/u);
+  assert.match(background, /AppSyncSingleFlight\.gate\.tryStart\(\)/u);
+  assert.match(main, /AppSyncSingleFlight\.gate\.tryStart\(\)/u);
+  assert.match(background, /BackgroundWorkNames\.userKey\(session\.canonicalUserId\) != expectedUserKey/u);
+  assert.match(main, /BackgroundSyncScheduler\.cancel\(this, userId\)/u);
+});
+
+test('background outcomes terminate safely and score recompute stays server-decoupled', () => {
+  for (const state of ['SUCCESS', 'PARTIAL', 'RETRY_PENDING', 'TIMEOUT', 'FAILED_AUTH', 'PERMISSION_REQUIRED']) {
+    assert.match(background, new RegExp(`"${state}"`, 'u'));
+  }
+  assert.match(background, /runAttemptCount < MAX_RETRY_ATTEMPTS - 1/u);
+  assert.match(background, /state\.clearActiveWindow/u);
+  assert.match(main, /"RETRY_PENDING" -> "將自動重試"/u);
+  assert.doesNotMatch(`${main}\n${background}`, /while\s*\(true\)|WakeLock|startForegroundService|Log\.|println\(|printStackTrace/u);
 });

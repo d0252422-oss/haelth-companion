@@ -4,9 +4,8 @@
 
 `NATIVE_GOOGLE_ID_TOKEN`
 
-Beta 0.1.0-beta.8 keeps the native auth path, repairs upgrade session restoration, and retains user-scoped background state,
-single-flight manual sync, bounded foreground sync,
-paginated Health Connect reads, and best-effort WorkManager history backfill. After
+Beta 0.1.0-beta.9 keeps the beta.8 native-auth/session-restore path and moves startup synchronization out of the Activity lifecycle.
+After the session and user-scoped state are restored, the app renders a usable connected state and enqueues unique, user-scoped WorkManager jobs for an immediate incremental sync, a bounded history backfill, and 12-hour periodic incremental sync. Manual sync shares the same process single-flight gate. After
 Supabase verifies the Google ID token, the Beta Edge runtime derives the
 canonical binding from the verified Google provider subject. Client-provided
 user identifiers, email addresses, and legacy web-session tokens are rejected
@@ -21,8 +20,8 @@ The same Google ID token is also presented to the existing Health Companion web-
 1. Install and open the Beta APK.
 2. Tap **使用 Google 帳號登入** and choose an account.
 3. Approve the existing least-privilege Health Connect read permissions.
-4. The app performs the first bounded, authenticated sync automatically.
-5. The app shows sync success, no-data, or a recoverable error state.
+4. The app schedules the first bounded, authenticated sync automatically and immediately shows that background work is in progress.
+5. The user may leave the app; Android continues best-effort work subject to OS scheduling and reports a terminal result or automatic retry state.
 
 No connection code, token, server URL, account ID, or technical configuration is entered by the user.
 
@@ -50,17 +49,18 @@ No redirect URI is required by the selected native ID-token flow. Do not add the
 ### Current development-signed artifact identity
 
 - Package: `app.healthcompanion.sync.beta.debug`
-- Version: `0.1.0-beta.8-debug` (`versionCode 8`)
+- Version: `0.1.0-beta.9-debug` (`versionCode 9`)
 - Upgrade contract: restore encrypted session, resolve canonical user, migrate legacy sync metadata, then schedule work.
 - Packaging contract: `assembleDebug` fails closed unless the Beta API, Beta Supabase URL, publishable key, and Google web client ID are configured.
-- Periodic work: unique `health-sync-periodic`, every 12 hours, `ExistingPeriodicWorkPolicy.KEEP`.
-- Historical backfill: unique one-time `health-sync-history-backfill`, `ExistingWorkPolicy.KEEP`.
+- Immediate work: expedited when quota permits, otherwise regular; deterministic `health-sync-immediate-<user hash>`, `ExistingWorkPolicy.KEEP`.
+- Periodic work: deterministic `health-sync-periodic-<user hash>`, every 12 hours, `ExistingPeriodicWorkPolicy.KEEP`.
+- Historical backfill: a regular, network-constrained worker chained after the immediate delta when history remains pending.
 - Constraints: connected network; no permanent foreground service, wake lock, or polling loop.
 - Retry: exponential 30-second WorkManager backoff, at most three worker attempts, eight-minute worker deadline.
-- Incremental window: last successful sync minus one hour through now; seven-day fallback; pending history remains bounded to 30 days.
+- Incremental window: last successful sync minus one hour through a stable retry-window end; six-hour fallback when no success exists. Pending history remains bounded to 30 days.
 - Local timestamps, background result, and history state are scoped by a hash of the canonical user ID and cleared on logout.
-- Foreground window: 7 days with a 120-second terminal deadline
-- History window: 30 days through unique, network-constrained WorkManager jobs
+- Foreground fallback: only for devices that do not support Health Connect background reads; it uses the same small incremental window and a 120-second terminal deadline.
+- History window: 30 days through durable, checkpointed, network-constrained WorkManager work.
 - Background execution is OS-scheduled best effort; it is not advertised as real-time.
 - Signing certificate SHA-1: `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`
 - Signing certificate SHA-256: `43:5E:F9:65:1E:6B:6C:31:41:EC:FC:33:70:B5:7E:15:E9:3D:3E:CF:3C:2A:72:2D:ED:8B:6A:A8:75:42:43:00`
@@ -69,4 +69,4 @@ This debug certificate identity is suitable only for the current development-sig
 
 ## Runtime gate
 
-Code and static tests do not prove Google OAuth, account identity convergence, Health Connect permissions, or real data. Those remain a real-device gate after external Beta configuration and a new APK artifact are ready.
+Beta.8 real-device evidence already proves session restore and authenticated ingestion. Beta.9 still requires a direct-over-beta.8 device test to prove that the UI is immediately usable and that Android completes the new background handoff after the Activity is left.

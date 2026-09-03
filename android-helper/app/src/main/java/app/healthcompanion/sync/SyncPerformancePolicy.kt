@@ -21,17 +21,16 @@ data class SyncWindow(val start: Instant, val end: Instant)
 
 object SyncWindowPolicy {
     const val HISTORY_LOOKBACK_DAYS = 30L
-    const val FALLBACK_LOOKBACK_DAYS = 7L
+    const val STARTUP_FALLBACK_HOURS = 6L
     const val INCREMENTAL_OVERLAP_HOURS = 1L
 
-    fun background(now: Instant, lastSuccess: Instant?, historyPending: Boolean): SyncWindow {
-        val start = when {
-            historyPending -> now.minus(HISTORY_LOOKBACK_DAYS, ChronoUnit.DAYS)
-            lastSuccess != null -> lastSuccess.minus(INCREMENTAL_OVERLAP_HOURS, ChronoUnit.HOURS)
-            else -> now.minus(FALLBACK_LOOKBACK_DAYS, ChronoUnit.DAYS)
-        }
-        return SyncWindow(start, now)
-    }
+    fun incremental(now: Instant, lastSuccess: Instant?): SyncWindow = SyncWindow(
+        lastSuccess?.minus(INCREMENTAL_OVERLAP_HOURS, ChronoUnit.HOURS)
+            ?: now.minus(STARTUP_FALLBACK_HOURS, ChronoUnit.HOURS),
+        now,
+    )
+
+    fun backfill(now: Instant): SyncWindow = SyncWindow(now.minus(HISTORY_LOOKBACK_DAYS, ChronoUnit.DAYS), now)
 }
 
 class SyncSingleFlight {
@@ -44,4 +43,16 @@ class SyncSingleFlight {
     }
 
     @Synchronized fun finish() { running = false }
+}
+
+object AppSyncSingleFlight {
+    val gate = SyncSingleFlight()
+}
+
+enum class BackgroundSyncMode { INCREMENTAL, BACKFILL }
+
+object BackgroundWorkNames {
+    fun userKey(userId: String): String = CanonicalIdentity.sha256(userId).take(16)
+    fun immediate(userId: String): String = "health-sync-immediate-${userKey(userId)}"
+    fun periodic(userId: String): String = "health-sync-periodic-${userKey(userId)}"
 }

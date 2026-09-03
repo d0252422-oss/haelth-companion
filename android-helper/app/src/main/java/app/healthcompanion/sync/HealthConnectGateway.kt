@@ -68,8 +68,14 @@ class HealthConnectGateway(private val context: Context) {
     suspend fun hasAllPermissions(): Boolean = client.permissionController.getGrantedPermissions().containsAll(readPermissions)
     suspend fun hasAnyPermission(): Boolean = client.permissionController.getGrantedPermissions().any { it in readPermissions }
     suspend fun grantedReadPermissions(): Set<String> = client.permissionController.getGrantedPermissions().intersect(readPermissions)
-    suspend fun hasBackgroundReadPermission(): Boolean = !supportsBackgroundRead() ||
+    suspend fun hasBackgroundReadPermission(): Boolean = supportsBackgroundRead() &&
         HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in client.permissionController.getGrantedPermissions()
+
+    suspend fun backgroundReadState(): BackgroundHealthReadState = when {
+        !supportsBackgroundRead() -> BackgroundHealthReadState.UNSUPPORTED
+        hasBackgroundReadPermission() -> BackgroundHealthReadState.GRANTED
+        else -> BackgroundHealthReadState.PERMISSION_REQUIRED
+    }
 
     suspend fun readBounded(
         start: Instant,
@@ -159,3 +165,5 @@ class HealthConnectGateway(private val context: Context) {
         const val PER_DOMAIN_TIMEOUT_MS = 30_000L
     }
 }
+
+enum class BackgroundHealthReadState { GRANTED, PERMISSION_REQUIRED, UNSUPPORTED }

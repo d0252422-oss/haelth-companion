@@ -21,21 +21,21 @@ These results apply only to the tested device and dataset. Samsung, Xiaomi, Pixe
 
 Background sync is best-effort Android OS scheduling, not real-time execution or a permanent background service. Testers do not need to sign in, reauthorize, or press Sync every day unless the session or permission has been revoked.
 
-For the regression retest, install `0.1.0-beta.8-debug` directly over the current beta.7 without clearing app data. Its SHA-256 is `1b2c4b2629c70c73db6f35462d2d790170918ea249bab85f828e5d9747f2edd7`; its debug signing SHA-1 remains `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`.
+For the background-handoff retest, install `0.1.0-beta.9-debug` directly over the working beta.8 without clearing app data. Its SHA-256 is `6f2d6c1e86a21161e8b6f123819482486eaed9e7c87c113e87cdd3ef963d3ae5`; its debug signing SHA-1 remains `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`.
 
 Beta.7 was packaged locally without the required public Beta runtime configuration. That made both encrypted-session restore and the Google login fallback fail before any network request. Beta.8 adds a fail-closed packaging check and restores beta.6's unscoped sync metadata only after the encrypted session and canonical user have been resolved. The migration never reads or clears the separate authentication store.
 
-1. Uninstall the older debug APK if its application ID or signing certificate differs; otherwise install the update normally.
-2. Open **生活小助手**.
-3. Tap **使用 Google 帳號登入** and choose the same Google account used by Health Companion Web.
-4. Tap **允許 Health Connect** if prompted.
-5. In the official Android permission screen, approve the health domains you are comfortable sharing.
-6. Wait for automatic first sync.
+1. Install beta.9 over beta.8. Do not clear app data and do not uninstall.
+2. Open **生活小助手**; the beta.8 session and Health Connect authorization should remain available.
+3. Confirm the app promptly shows **健康資料已連接** and **背景資料更新中，你可以繼續使用 App** rather than a blocking batch counter.
+4. Leave the app without pressing **立即同步**.
+5. After Health Connect or the wearable has new data and Android has had a reasonable scheduling opportunity, reopen the app or Beta Web and check whether the last-background-sync time, data, and final score changed.
 
 Expected outcomes:
 
 - No connection code, copy/paste, token, endpoint, or account-ID field appears.
-- The app must leave the loading state within 120 seconds. Expected terminal text is recent-data success, partial/background continuation, explicit timeout/background continuation, or no-data; an endless spinner is a failure.
+- Startup must not wait for all upload batches. Activity recreation and leaving the app must not cancel the WorkManager-owned sync.
+- `RETRY_PENDING` should read as automatic background retry; manual action is offered only after retries are exhausted.
 - Approve the additional Health Connect background-read permission when Android presents it. No reinstall, logout, OAuth repeat, ADB, token, or connection code is required.
 - Reopening the app restores the authenticated session without another login unless the session was revoked.
 
