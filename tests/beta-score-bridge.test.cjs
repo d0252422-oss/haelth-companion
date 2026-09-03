@@ -44,19 +44,19 @@ test('score storage is default-deny, version-frozen, and fingerprint-idempotent'
   assert.match(sql, /generation = p_generation/u);
 });
 
-test('ingestion queues scores and authenticated score reads perform bounded recompute', () => {
+test('ingestion queues scores and durable processor performs bounded recompute', () => {
   const edge = read('supabase/functions/mobile-health-beta/index.ts');
   const androidIngest = edge.slice(edge.indexOf('async function ingest('), edge.indexOf('async function reportStatus('));
   const bridge = read('supabase/functions/mobile-health-beta/score-bridge.ts');
   const dirtyDates = read('supabase/migrations/20260829135430_beta_score_dirty_old_dates.sql');
   assert.match(edge, /beta_ingest_health_mutation_batch/u);
-  assert.match(edge, /beta_list_dirty_score_dates/u);
-  assert.match(edge, /recomputeDates\(admin, userId, new Set\(dirtyDates\)\)/u);
+  assert.match(edge, /beta_claim_score_recompute/u);
+  assert.match(edge, /processScoreQueue\(admin, userId, 3\)/u);
   assert.doesNotMatch(androidIngest, /recomputeDates|recomputeBetaScore/u);
   assert.match(edge, /EdgeRuntime\.waitUntil/u);
   assert.match(edge, /scheduleScoreRecompute\(admin, String\(session\.canonical_user_id\)\)/u);
   assert.match(edge, /SCORE_BACKGROUND_RECOMPUTE_FAILED/u);
-  assert.match(edge, /dates\.size > 31/u);
+  assert.match(edge, /Math\.min\(Math\.max\(Number\(body\.limit\), 1\), 5\)/u);
   assert.match(edge, /const subject = await verifyWebSession\(bearer\(request\)\)/u);
   assert.match(edge, /uuidFromHash\(await sha256\(subject\)\)/u);
   assert.match(bridge, /\.eq\("operation", "UPSERT"\)\.is\("invalidated_at", null\)/u);

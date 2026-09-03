@@ -25,6 +25,9 @@ test('tester entry documents native Android login and removes Android claim cont
   assert.doesNotMatch(html, /android-claim|continueAndroidSetup|connector_setup|installation_key_fingerprint/u);
   assert.doesNotMatch(html, /Android 一次性連接碼|APK 貼上代碼/u);
   assert.match(html, /\/v1\/scores\/daily/u);
+  assert.match(html, /\/v1\/health\/latest/u);
+  assert.match(html, /健康資料已更新，分析更新中/u);
+  assert.match(html, /睡眠最新日期/u);
   assert.match(html, /Authorization.*Bearer/u);
   assert.match(html, /sessionStorage\.setItem\("healthCompanionBetaSession"/u);
 });

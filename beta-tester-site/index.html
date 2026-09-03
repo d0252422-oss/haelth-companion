@@ -39,6 +39,7 @@
 
     <article class="card wide">
       <h2>Beta 健康分數</h2>
+      <div id="health-data-status" class="status">登入後可確認自己的 Beta 健康資料更新時間。</div>
       <div id="score-status" class="status">登入後可讀取自己的 Beta 分數。</div>
       <div id="scores" class="scores"></div>
       <button id="refresh" class="button secondary" type="button" disabled>重新整理同步狀態與分數</button>
@@ -104,12 +105,16 @@
     const target=document.getElementById("scores"),scores=payload.scores||{};
     target.innerHTML=Object.entries(labels).map(([type,label])=>{const row=scores[type]||{};const value=row.score==null?"—":Math.round(Number(row.score));return `<div class="score"><span>${label}</span><b>${value}</b><small class="muted">${row.status||"NOT_AVAILABLE"} · ${row.confidence||"—"}</small></div>`}).join("");
     const overall=scores.health_overall||{};const missing=Array.isArray(overall.missing_components)?overall.missing_components:[];
-    setText("score-status",payload.local_date?`${payload.local_date} · Overall ${overall.score==null?"—":Math.round(Number(overall.score))}`:"尚無 Beta 分數；完成首次健康資料同步後會自動計算。");
-    setText("score-meta",`Completeness ${overall.completeness==null?"—":Math.round(Number(overall.completeness)*100)+"%"} · Confidence ${overall.confidence||"—"} · Missing ${missing.length?missing.join(", "):"—"} · ${payload.algorithm_version||"health-score-v1.0"}`);
+    const headline=payload.local_date?`${payload.local_date} · Overall ${overall.score==null?"—":Math.round(Number(overall.score))}`:"尚無 Beta 分數；完成首次健康資料同步後會自動計算。";
+    setText("score-status",payload.score_freshness==="UPDATING"?`健康資料已更新，分析更新中 · ${headline}`:payload.score_freshness==="PARTIAL"?`部分日期分析未完成 · ${headline}`:headline);
+    setText("score-meta",`Completeness ${overall.completeness==null?"—":Math.round(Number(overall.completeness)*100)+"%"} · Confidence ${overall.confidence||"—"} · Missing ${missing.length?missing.join(", "):"—"} · Health ${payload.health_data_updated_at||"—"} · Score ${payload.score_updated_at||"—"} · ${payload.algorithm_version||"health-score-v1.0"}`);
   }
+  function renderHealthFreshness(payload){setText("health-data-status",payload.latest_sleep_date?`健康資料最新日期 ${payload.latest_health_data_date||"—"} · 睡眠最新日期 ${payload.latest_sleep_date} · 更新時間 ${payload.health_data_updated_at||"—"}`:"目前尚無可顯示的 Beta 睡眠資料。")}
   async function refreshBeta(){
     if(!sessionToken)return;
-    try{renderScores(await betaRequest("/v1/scores/daily"))}catch(error){setText("score-status",`分數讀取失敗：${error.message}`)}
+    const [health,scores]=await Promise.allSettled([betaRequest("/v1/health/latest"),betaRequest("/v1/scores/daily")]);
+    if(health.status==="fulfilled")renderHealthFreshness(health.value);else setText("health-data-status",`健康資料狀態讀取失敗：${health.reason.message}`);
+    if(scores.status==="fulfilled")renderScores(scores.value);else setText("score-status",`分數讀取失敗：${scores.reason.message}`);
   }
   document.getElementById("ios-claim").onclick=()=>issueClaim("ios");
   document.getElementById("refresh").onclick=refreshBeta;

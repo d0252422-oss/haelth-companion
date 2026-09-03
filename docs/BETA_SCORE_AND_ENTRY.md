@@ -42,13 +42,33 @@ mutation, or model training.
 - A record create, update, or tombstone increments the affected date's
   recompute generation. A source update that moves dates marks both its old and
   new dates dirty.
-- The Edge function recomputes at most 31 dates per request and reads at most
-  5,000 active rows over the current/prior window.
+- The dirty-date queue is processed by a durable one-minute `pg_cron` schedule.
+  Postgres owns bounded claims, `SKIP LOCKED` concurrency, two-minute leases,
+  exponential retry metadata, and the terminal `FAILED` state after five
+  attempts. Edge `waitUntil` remains only an opportunistic accelerator and is
+  not the durability boundary.
+- Each worker invocation claims at most five dates. The assembler pages at most
+  20,000 active records over the current/prior window; this covers the observed
+  9,077 relevant records while retaining a hard resource bound.
 - A deterministic input fingerprint covers the user, date, algorithm version,
   and active source identities/revisions/content hashes.
 - The unique identity is user + date + score type + algorithm version.
 - An unchanged fingerprint produces no score-row update.
 - A stale generation cannot persist over newer input.
+
+## Freshness contract
+
+- `GET /v1/health/latest` reads user-scoped active HDL v2 evidence and returns
+  only freshness metadata: latest health date, latest sleep date, per-domain
+  latest dates, and the newest health update timestamp.
+- `GET /v1/scores/daily` reports the score calculation timestamp separately and
+  returns `score_freshness` as `UPDATING`, `PARTIAL`, or `UP_TO_DATE`.
+- The isolated Beta UI therefore distinguishes “health data is current while
+  analysis is updating” from a fully current score. It never presents an old
+  score as if it were calculated from newer health evidence.
+- The production/current Web sleep screen still reads the Apps Script API. It
+  is intentionally not switched to Beta in this gate; the Beta tester entry is
+  the supported view for Beta HDL v2 freshness.
 
 ## Access model
 
@@ -71,6 +91,10 @@ mutation, or model training.
   persistence, and test-data cleanup.
 - Direct anonymous REST reads/writes and unauthenticated score API reads are
   rejected.
+- On 2026-09-03 the durable processor drained the real Beta backlog from 31
+  `DIRTY` rows to zero. All 32 known queue dates reached `COMPLETE`; the latest
+  active health, sleep, and derived score dates were all 2026-09-03. No raw
+  health values or user identifiers were used as operational evidence.
 
 This is integration evidence, not real-device health evidence. Android is ready
 for the next real-device gate once the published Beta page is verified live.

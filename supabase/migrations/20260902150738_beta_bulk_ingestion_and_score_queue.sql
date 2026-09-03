@@ -81,4 +81,3 @@ revoke all on function public.beta_ingest_health_mutation_batch(uuid,jsonb) from
 revoke all on function public.beta_list_dirty_score_dates(uuid,integer) from public, anon, authenticated;
 grant execute on function public.beta_ingest_health_mutation_batch(uuid,jsonb) to service_role;
 grant execute on function public.beta_list_dirty_score_dates(uuid,integer) to service_role;
-

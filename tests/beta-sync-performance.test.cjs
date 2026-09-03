@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
 
-const migration = fs.readFileSync('supabase/migrations/20260902163000_beta_bulk_ingestion_and_score_queue.sql', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/20260902150738_beta_bulk_ingestion_and_score_queue.sql', 'utf8');
 const edge = fs.readFileSync('supabase/functions/mobile-health-beta/index.ts', 'utf8');
 
 test('Beta bulk ingestion preserves existing reconciliation function and service-role-only boundary', () => {

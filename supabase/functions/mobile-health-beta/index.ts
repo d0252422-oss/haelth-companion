@@ -69,6 +69,12 @@ export default {
       if (request.method === "GET" && path === "/v1/scores/daily") {
         return await getScores(request, ctx.supabaseAdmin, origin);
       }
+      if (request.method === "GET" && path === "/v1/health/latest") {
+        return await getLatestHealth(request, ctx.supabaseAdmin, origin);
+      }
+      if (request.method === "POST" && path === "/internal/score-recompute/drain") {
+        return await drainScoreQueue(request, ctx.supabaseAdmin, origin);
+      }
       throw failure("NOT_FOUND", 404);
     } catch (error) {
       const safe = error instanceof SafeError ? error : failure("INTERNAL_ERROR", 500);
@@ -378,15 +384,10 @@ async function reportStatus(request: Request, admin: any, origin: string): Promi
 }
 
 function scheduleScoreRecompute(admin: any, userId: string): void {
-  EdgeRuntime.waitUntil((async () => {
-    try {
-      const dirtyDates = await listDirtyScoreDates(admin, userId);
-      await recomputeDates(admin, userId, new Set(dirtyDates));
-    } catch {
-      // The durable dirty-date queue remains available for a later bounded attempt.
-      console.error("SCORE_BACKGROUND_RECOMPUTE_FAILED");
-    }
-  })());
+  EdgeRuntime.waitUntil(processScoreQueue(admin, userId, 3).catch(() => {
+    // Postgres keeps the item retryable; logs intentionally exclude identity and health data.
+    console.error("SCORE_BACKGROUND_RECOMPUTE_FAILED");
+  }));
 }
 
 async function getStatus(request: Request, admin: any, origin: string): Promise<Response> {
@@ -404,9 +405,56 @@ async function getScores(request: Request, admin: any, origin: string): Promise<
   const userId = uuidFromHash(await sha256(subject));
   const date = new URL(request.url).searchParams.get("date") ?? undefined;
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw failure("INVALID_SCORE_DATE", 400);
-  const dirtyDates = date ? [date] : await listDirtyScoreDates(admin, userId);
-  await recomputeDates(admin, userId, new Set(dirtyDates));
-  return json(200, { ...(await readBetaScores(admin, userId, date)), recompute_status: dirtyDates.length ? "COMPLETE" : "CURRENT" }, origin);
+  const scores = await readBetaScores(admin, userId, date);
+  return json(200, { ...scores, recompute_status: scores.score_freshness === "UPDATING" ? "QUEUED" : "CURRENT" }, origin);
+}
+
+async function getLatestHealth(request: Request, admin: any, origin: string): Promise<Response> {
+  const subject = await verifyWebSession(bearer(request));
+  const userId = uuidFromHash(await sha256(subject));
+  const { data, error } = await admin.rpc("beta_get_health_freshness", { p_canonical_user_id: userId });
+  if (error) throw databaseFailure(error);
+  const freshness = Array.isArray(data) ? data[0] ?? {} : {};
+  return json(200, { ...freshness, environment: "beta" }, origin);
+}
+
+async function drainScoreQueue(request: Request, admin: any, origin: string): Promise<Response> {
+  const { data: authorized, error: authError } = await admin.rpc("beta_authorize_score_worker", {
+    p_secret: request.headers.get("x-score-worker-secret") ?? "",
+  });
+  if (authError || authorized !== true) {
+    throw failure("WORKER_AUTH_REJECTED", 401);
+  }
+  const body = await readJson(request);
+  const limit = Number.isSafeInteger(body.limit) ? Math.min(Math.max(Number(body.limit), 1), 5) : 3;
+  return json(200, await processScoreQueue(admin, null, limit), origin);
+}
+
+async function processScoreQueue(admin: any, userId: string | null, limit: number): Promise<Json> {
+  const workerToken = crypto.randomUUID();
+  const { data, error } = await admin.rpc("beta_claim_score_recompute", {
+    p_worker_token: workerToken, p_canonical_user_id: userId, p_limit: limit,
+  });
+  if (error) throw databaseFailure(error);
+  const claimed = Array.isArray(data) ? data : [];
+  let completed = 0;
+  let failed = 0;
+  for (const row of claimed as Json[]) {
+    try {
+      await recomputeBetaScore(admin, String(row.canonical_user_id), String(row.score_date));
+      completed += 1;
+    } catch (error) {
+      failed += 1;
+      const errorCode = scoreErrorCode(error);
+      const { error: releaseError } = await admin.rpc("beta_fail_score_recompute", {
+        p_canonical_user_id: row.canonical_user_id, p_score_date: row.score_date,
+        p_generation: row.generation, p_worker_token: workerToken,
+        p_error_code: errorCode, p_retryable: errorCode !== "SCORE_INPUT_BOUND_EXCEEDED",
+      });
+      if (releaseError) console.error("SCORE_QUEUE_RELEASE_FAILED");
+    }
+  }
+  return { claimed: claimed.length, completed, failed };
 }
 
 async function listDirtyScoreDates(admin: any, userId: string): Promise<string[]> {
@@ -420,6 +468,12 @@ async function listDirtyScoreDates(admin: any, userId: string): Promise<string[]
 async function recomputeDates(admin: any, userId: string, dates: Set<string>): Promise<void> {
   if (dates.size > 31) throw failure("SCORE_RECOMPUTE_BOUND_EXCEEDED", 400);
   for (const date of [...dates].sort()) await recomputeBetaScore(admin, userId, date);
+}
+
+function scoreErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  return message.includes("SCORE_INPUT_BOUND_EXCEEDED") ? "SCORE_INPUT_BOUND_EXCEEDED" :
+    message.includes("STALE_SCORE_INPUT") ? "STALE_SCORE_INPUT" : "SCORE_RECOMPUTE_FAILED";
 }
 
 async function authorizeSession(request: Request, admin: any): Promise<Json> {

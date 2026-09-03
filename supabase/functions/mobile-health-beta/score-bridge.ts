@@ -39,6 +39,8 @@ if (!runtime || runtime.algorithmVersion !== "health-score-v1.0") throw new Erro
 const SCORE_TYPES = [
   "sleep", "activity", "training", "nutrition", "body_composition", "recovery", "fatigue", "health_overall",
 ] as const;
+const SCORE_INPUT_PAGE_SIZE = 1000;
+const MAX_SCORE_INPUT_ROWS = 20_000;
 
 export async function recomputeBetaScore(admin: any, userId: string, localDate: string): Promise<Json> {
   if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)) throw new Error("INVALID_SCORE_SCOPE");
@@ -47,7 +49,7 @@ export async function recomputeBetaScore(admin: any, userId: string, localDate: 
   });
   if (generationError) throw generationError;
   const queue = Array.isArray(generationRows) ? generationRows[0] : null;
-  if (!queue || queue.status !== "DIRTY") return { status: "NOT_DIRTY", local_date: localDate };
+  if (!queue || !["DIRTY", "PROCESSING"].includes(String(queue.status))) return { status: "NOT_DIRTY", local_date: localDate };
 
   const dates = boundedDates(localDate, 29);
   const rows = await loadActiveRows(admin, userId, dates);
@@ -97,7 +99,28 @@ export async function readBetaScores(admin: any, userId: string, localDate?: str
   if (error) throw error;
   const rows = Array.isArray(data) ? data : [];
   const byType = Object.fromEntries(rows.map((row: Json) => [String(row.score_type), row]));
-  return { local_date: rows[0]?.score_date ?? localDate ?? null, algorithm_version: runtime.algorithmVersion, scores: byType };
+  const [{ data: healthRows, error: healthError }, { data: queueRows, error: queueError }] = await Promise.all([
+    admin.rpc("beta_get_health_freshness", { p_canonical_user_id: userId }),
+    admin.rpc("beta_get_score_queue_summary", { p_canonical_user_id: userId }),
+  ]);
+  if (healthError) throw healthError;
+  if (queueError) throw queueError;
+  const health = Array.isArray(healthRows) ? healthRows[0] ?? {} : {};
+  const queue = Array.isArray(queueRows) ? queueRows[0] ?? {} : {};
+  const scoreUpdatedAt = rows.map((row: Json) => String(row.calculated_at ?? "")).filter(Boolean).sort().at(-1) ?? null;
+  const pending = Number(queue.dirty_count ?? 0) + Number(queue.processing_count ?? 0);
+  return {
+    local_date: rows[0]?.score_date ?? localDate ?? null,
+    algorithm_version: runtime.algorithmVersion,
+    scores: byType,
+    health_data_updated_at: health.health_data_updated_at ?? null,
+    latest_health_data_date: health.latest_health_data_date ?? null,
+    latest_sleep_date: health.latest_sleep_date ?? null,
+    domain_latest_dates: health.domain_latest_dates ?? {},
+    score_updated_at: scoreUpdatedAt,
+    score_freshness: pending > 0 ? "UPDATING" : Number(queue.failed_count ?? 0) > 0 ? "PARTIAL" : "UP_TO_DATE",
+    pending_score_dates: pending,
+  };
 }
 
 function assembleInputs(currentRows: HealthRow[], priorRows: HealthRow[]): Record<string, Json> {
@@ -137,17 +160,17 @@ function assembleInputs(currentRows: HealthRow[], priorRows: HealthRow[]): Recor
 
 async function loadActiveRows(admin: any, userId: string, dates: string[]): Promise<HealthRow[]> {
   const output: HealthRow[] = [];
-  for (let page = 0; page < 5; page += 1) {
-    const start = page * 1000;
+  for (let start = 0; start < MAX_SCORE_INPUT_ROWS; start += SCORE_INPUT_PAGE_SIZE) {
     const { data, error } = await admin.from("beta_health_records")
       .select("id,domain,source_app,source_record_id,source_revision,source_updated_at,source_content_hash,canonical_record,affected_local_dates,updated_at")
       .eq("canonical_user_id", userId).eq("operation", "UPSERT").is("invalidated_at", null)
       .in("domain", ["steps", "sleep", "sleep_stage", "weight", "hrv", "resting_heart_rate"])
-      .overlaps("affected_local_dates", dates).order("updated_at", { ascending: true }).range(start, start + 999);
+      .overlaps("affected_local_dates", dates).order("updated_at", { ascending: true })
+      .range(start, start + SCORE_INPUT_PAGE_SIZE - 1);
     if (error) throw error;
     const pageRows = (data ?? []) as HealthRow[];
     output.push(...pageRows);
-    if (pageRows.length < 1000) return output;
+    if (pageRows.length < SCORE_INPUT_PAGE_SIZE) return output;
   }
   throw new Error("SCORE_INPUT_BOUND_EXCEEDED");
 }
