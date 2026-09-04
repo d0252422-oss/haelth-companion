@@ -25,6 +25,16 @@ The same Google ID token is also presented to the existing Health Companion web-
 
 No connection code, token, server URL, account ID, or technical configuration is entered by the user.
 
+## Closed-app background contract
+
+- `APP_MUST_STAY_OPEN = NO` and `MANUAL_SYNC_REQUIRED = NO` during normal operation.
+- `BACKGROUND_SYNC_PRODUCT_CONTRACT = ANDROID_BEST_EFFORT`; there is no real-time or exact-time guarantee.
+- Pressing Home, switching apps, locking the screen, destroying/recreating the Activity, and removing the app from Recent Apps do not call the logout/cancellation path. WorkManager owns the accepted one-time and periodic requests independently of the Activity coroutine scope.
+- WorkManager's internal database, the encrypted auth session, and the user-scoped upload/backfill checkpoints are the recovery sources after process recreation. A reopen restores the session, queries WorkInfo, and reconciles the displayed state without restarting a complete 30-day scan.
+- Screen-off execution is supported on a best-effort basis. Doze, battery optimization, network constraints, standby buckets, and OEM scheduling may delay execution.
+- **Android Settings → Force Stop is an explicit platform boundary.** Background jobs may remain suppressed until the user launches the app again. The app does not attempt to bypass Force Stop; the next launch restores the session, reconciles WorkInfo, and resumes normal scheduling.
+- Swiping the app away is not treated as logout. No Activity, Fragment, ViewModel, foreground-service binding, wake lock, polling loop, or UI callback owns successful completion of the Worker.
+
 ## Session security
 
 - Supabase access/refresh session state is managed by the official client.
@@ -63,6 +73,7 @@ No redirect URI is required by the selected native ID-token flow. Do not add the
 - Foreground fallback: only for devices that do not support Health Connect background reads; it uses the same small incremental window and a 120-second terminal deadline.
 - History window: 30 days through durable, checkpointed, network-constrained WorkManager work.
 - Background execution is OS-scheduled best effort; it is not advertised as real-time.
+- `REAL_TIME_GUARANTEE = NO`; screen-off and swipe-away continuity require device/OEM field evidence even though the code ownership contract is verified.
 - Signing certificate SHA-1: `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`
 - Signing certificate SHA-256: `43:5E:F9:65:1E:6B:6C:31:41:EC:FC:33:70:B5:7E:15:E9:3D:3E:CF:3C:2A:72:2D:ED:8B:6A:A8:75:42:43:00`
 

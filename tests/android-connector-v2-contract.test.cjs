@@ -135,3 +135,29 @@ test('background outcomes terminate safely and score recompute stays server-deco
   assert.match(main, /"RETRY_PENDING" -> "將自動重試"/u);
   assert.doesNotMatch(`${main}\n${background}`, /while\s*\(true\)|WakeLock|startForegroundService|Log\.|println\(|printStackTrace/u);
 });
+
+test('background work survives Activity teardown and is owned by WorkManager', () => {
+  const onDestroy = main.match(/override fun onDestroy\(\) \{([^}]*)\}/u);
+  assert.ok(onDestroy, 'MainActivity must have an explicit UI-scope teardown');
+  assert.match(onDestroy[1], /scope\.cancel\(\)/u);
+  assert.doesNotMatch(onDestroy[1], /BackgroundSyncScheduler\.cancel|cancelUniqueWork|cancelWork/u);
+  assert.doesNotMatch(main, /override fun onStop[\s\S]{0,240}(?:BackgroundSyncScheduler\.cancel|cancelUniqueWork|cancelWork)/u);
+  assert.match(background, /class BackgroundHealthSyncWorker\(appContext: Context,[\s\S]*CoroutineWorker\(appContext, params\)/u);
+  assert.match(background, /WorkManager\.getInstance\(context\)/u);
+  assert.match(background, /SyncCheckpointStore\(applicationContext\)/u);
+  assert.match(background, /NativeGoogleAuth\(\s*applicationContext/u);
+  assert.match(background, /enqueueUniquePeriodicWork/u);
+});
+
+test('closed-app product contract stays best-effort and documents the force-stop boundary', () => {
+  const acceptance = read('docs/android/ANDROID_BETA_REAL_DEVICE_ACCEPTANCE.md');
+  const authDoc = read('docs/android/ANDROID_NATIVE_AUTH_BETA.md');
+  assert.match(acceptance, /APP_MUST_STAY_OPEN = NO/u);
+  assert.match(acceptance, /Force Stop/u);
+  assert.match(acceptance, /APP_SWIPE_AWAY_SYNC/u);
+  assert.match(acceptance, /SCREEN_OFF_SYNC/u);
+  assert.match(authDoc, /ANDROID_BEST_EFFORT/u);
+  assert.match(authDoc, /Doze/u);
+  assert.match(authDoc, /Force Stop/u);
+  assert.doesNotMatch(`${acceptance}\n${authDoc}`, /REAL_TIME_GUARANTEE = YES/u);
+});

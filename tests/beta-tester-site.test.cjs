@@ -32,6 +32,12 @@ test('tester entry documents native Android login and removes Android claim cont
   assert.match(html, /sessionStorage\.setItem\("healthCompanionBetaSession"/u);
 });
 
+test('Android Beta copy explains best-effort background sync without requiring the app to stay open', () => {
+  assert.match(html, /不需要讓 App 保持開啟/u);
+  assert.match(html, /Android 系統可能.*延後背景工作/u);
+  assert.doesNotMatch(html, /請保持 App 開啟|(?:需要|請)每天按.*立即同步/u);
+});
+
 test('tester entry has no production mutation action or embedded private credential', () => {
   assert.doesNotMatch(html, /upsert|saveMeal|saveWorkout|service[_-]?role|client_secret|refresh_token|access_token/iu);
   assert.doesNotMatch(html, /sk_live_|sb_secret_|eyJ[a-zA-Z0-9_-]{20,}/u);

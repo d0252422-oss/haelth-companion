@@ -15,9 +15,9 @@ These results apply only to the tested device and dataset. Samsung, Xiaomi, Pixe
 
 ## Friends-and-family device matrix
 
-| Android | Manufacturer | Health Connect | Wearable source | Steps | Heart rate | Sleep | Foreground | Background | Score |
-|---|---|---|---|---|---|---|---|---|---|
-| ACTUAL DEVICE (redacted) | UNKNOWN | PASS | UNKNOWN | EVIDENCE RECEIVED | EVIDENCE RECEIVED | EVIDENCE RECEIVED | PASS | PASS | PASS_SERVER |
+| Android | Manufacturer | Health Connect | Wearable source | Steps | Heart rate | Sleep | Foreground | Background | App swiped away | Screen off | Auto retry | Periodic | Battery optimization effect | Score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ACTUAL DEVICE (redacted) | UNKNOWN | PASS | UNKNOWN | EVIDENCE RECEIVED | EVIDENCE RECEIVED | EVIDENCE RECEIVED | PASS | PASS | PENDING | PENDING | PENDING | PENDING | UNKNOWN | PASS_SERVER |
 
 Background sync is best-effort Android OS scheduling, not real-time execution or a permanent background service. Testers do not need to sign in, reauthorize, or press Sync every day unless the session or permission has been revoked.
 
@@ -30,6 +30,29 @@ Beta.7 was packaged locally without the required public Beta runtime configurati
 3. Confirm the beta-only diagnostic says `Beta 0.1.0-beta.11-debug`; the stale prior **同步中** state must become `ENQUEUED`, `WAITING_FOR_CONSTRAINT`, `RUNNING`, or `RETRY_PENDING` according to WorkManager rather than remaining falsely stuck.
 4. Leave the app without pressing **立即同步**.
 5. After Health Connect or the wearable has new data and Android has had a reasonable scheduling opportunity, reopen the app or Beta Web and check whether the last-background-sync time, data, and final score changed.
+
+### Closed-app continuity gate
+
+`APP_MUST_STAY_OPEN = NO`. This gate excludes **Android Settings → Force Stop**, which can suppress scheduled background execution until the app is launched again.
+
+1. Confirm the app shows an accepted WorkManager state (`ENQUEUED`, `WAITING_FOR_CONSTRAINT`, or `RUNNING`).
+2. Press Home or switch to another app; optionally remove **生活小助手** from Recent Apps. Do not press **立即同步**.
+3. Lock the screen and allow Android a reasonable, non-exact scheduling opportunity after Health Connect receives new data.
+4. Reopen the app. The session must remain restored and the UI must reconcile the persisted WorkInfo rather than restart onboarding or a complete 30-day scan.
+5. Verify that authenticated ingestion eventually reaches the Beta server, the checkpoint advances, retry reaches an explicit state when needed, and the work reaches a terminal result.
+
+Evidence fields per device:
+
+- `APP_SWIPE_AWAY_SYNC`
+- `SCREEN_OFF_SYNC`
+- `AUTO_RETRY`
+- `PERIODIC_SYNC`
+- `BATTERY_OPTIMIZATION_EFFECT`
+- `LAST_BACKGROUND_SYNC_AT` before/after
+- `CHECKPOINT_ADVANCED`
+- `TERMINAL_STATE`
+
+Until collected on beta.11, `APP_BACKGROUND_SYNC`, `APP_SWIPE_AWAY_CONTINUITY`, and `SCREEN_OFF_BACKGROUND` remain real-device `PENDING`. Xiaomi, Samsung, Pixel, and other OEMs must be recorded independently and are not inferred from code-level validation.
 
 Expected outcomes:
 
