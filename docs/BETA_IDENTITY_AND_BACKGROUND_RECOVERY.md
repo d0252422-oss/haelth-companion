@@ -25,5 +25,6 @@ No token, email or raw health value is stored in the recovery metadata. Beta.10 
 - Beta project: `uavimjgccigpbwqmfkhh`; production target guard passed before migration and Edge deployment.
 - Before alias activation: 2 canonical slots, 1 native Google mapping, 35,616 health rows, 256 score rows, latest health/sleep/score date 2026-09-03.
 - The resolver transaction test selected the existing native canonical owner and rolled back without persisting a test alias.
-- Android beta.10 compile, lint, unit tests and debug APK assembly passed.
-- Runtime identity convergence and beta.10 stale-worker recovery still require their explicit Web-session/device gates; automated evidence is not labeled as real-device PASS.
+- Web/native identity convergence and score visibility have passed the real Beta runtime gate.
+- Android beta.10 failed its real-device worker-state gate: it showed `SYNCING` for more than five minutes without a health-ingestion request.
+- Android beta.11 compile, lint, 57 unit tests, debug APK assembly, and CI passed. Its WorkInfo-based state reconciliation and direct-over-beta.10 upgrade still require explicit real-device verification; automated evidence is not labeled as real-device PASS.

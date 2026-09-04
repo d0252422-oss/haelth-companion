@@ -4,7 +4,7 @@
 
 `NATIVE_GOOGLE_ID_TOKEN`
 
-Beta 0.1.0-beta.10 keeps the beta.8 native-auth/session-restore path and beta.9 background-sync architecture. It additionally reconciles persisted local work metadata with WorkManager's durable state at startup so a killed or missing worker cannot leave the UI in `SYNCING` indefinitely.
+Beta 0.1.0-beta.11 keeps the beta.8 native-auth/session-restore path and beta.9 background-sync architecture. It treats WorkManager as the runtime source of truth: queued, blocked, running, retrying, successful, failed, cancelled, and missing work no longer collapse into `SYNCING`.
 After the session and user-scoped state are restored, the app renders a usable connected state and enqueues unique, user-scoped WorkManager jobs for an immediate incremental sync, a bounded history backfill, and 12-hour periodic incremental sync. Manual sync shares the same process single-flight gate. After
 Supabase verifies the Google ID token, the Beta Edge runtime derives the
 canonical binding from the verified Google provider subject. Client-provided
@@ -49,15 +49,15 @@ No redirect URI is required by the selected native ID-token flow. Do not add the
 ### Current development-signed artifact identity
 
 - Package: `app.healthcompanion.sync.beta.debug`
-- Version: `0.1.0-beta.10-debug` (`versionCode 10`)
+- Version: `0.1.0-beta.11-debug` (`versionCode 11`)
 - Upgrade contract: restore encrypted session, resolve canonical user, migrate legacy sync metadata, then schedule work.
 - Packaging contract: `assembleDebug` fails closed unless the Beta API, Beta Supabase URL, publishable key, and Google web client ID are configured.
 - Immediate work: expedited when quota permits, otherwise regular; deterministic `health-sync-immediate-<user hash>`, normally `ExistingWorkPolicy.KEEP`. A confirmed stale running state is replaced atomically and resumes from the existing checkpoint.
 - Periodic work: deterministic `health-sync-periodic-<user hash>`, every 12 hours, `ExistingPeriodicWorkPolicy.KEEP`.
-- Historical backfill: a regular, network-constrained worker chained after the immediate delta when history remains pending.
+- Historical backfill: a separately named regular, network-constrained unique worker scheduled after a successful immediate delta. It cannot remain blocked behind a stale prerequisite chain.
 - Constraints: connected network; no permanent foreground service, wake lock, or polling loop.
 - Retry: exponential 30-second WorkManager backoff, at most three worker attempts, eight-minute worker deadline.
-- Recovery metadata records the work ID, enqueue/start/progress/terminal timestamps, current stage and request count. A running state without progress for ten minutes is terminalized as stale and replaced; constrained queued work remains queued rather than being cancelled for lack of network.
+- Recovery metadata records the accepted work ID, enqueue/start/progress/terminal timestamps, current stage and request count. A new ID is never persisted when `KEEP` retains an existing request. A running state without progress for the eight-minute worker deadline is terminalized as stale and replaced; constrained queued work remains queued rather than being mislabeled as running.
 - Incremental window: last successful sync minus one hour through a stable retry-window end; six-hour fallback when no success exists. Pending history remains bounded to 30 days.
 - Local timestamps, background result, and history state are scoped by a hash of the canonical user ID and cleared on logout.
 - Foreground fallback: only for devices that do not support Health Connect background reads; it uses the same small incremental window and a 120-second terminal deadline.
@@ -70,4 +70,4 @@ This debug certificate identity is suitable only for the current development-sig
 
 ## Runtime gate
 
-Beta.8 real-device evidence proves session restore and authenticated ingestion. Beta.9 real-device evidence proves background synchronization and database ingestion. Beta.10 requires a direct-over-beta.9 test only for stale-work recovery; it does not change OAuth, session storage, Health Connect mapping, batching, idempotency or score formulas.
+Beta.8 real-device evidence proves session restore and authenticated ingestion. Beta.9 real-device evidence proves background synchronization and database ingestion. Beta.10 failed the real-device stale-state gate because `KEEP` could suppress a new request after its unaccepted ID was persisted, while Activity rendering still unconditionally claimed `SYNCING`. Beta.11 fixes that state contract without changing OAuth, session storage, Health Connect mapping, batching, idempotency or score formulas; its direct-over-beta.10 real-device result remains pending.

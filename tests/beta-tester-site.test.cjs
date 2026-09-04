@@ -12,9 +12,9 @@ test('beta tester entry is pinned to isolated Beta data target', () => {
 });
 
 test('tester entry exposes Android distribution and fail-closed iOS state', () => {
-  assert.match(html, /0\.1\.0-beta\.10/u);
-  assert.match(html, /releases\/download\/android-beta-v0\.1\.0-beta\.10\/health-sync-companion-beta-0\.1\.0-beta\.10-debug\.apk/u);
-  assert.match(html, /a8f995dd147c/u);
+  assert.match(html, /0\.1\.0-beta\.11/u);
+  assert.match(html, /releases\/download\/android-beta-v0\.1\.0-beta\.11\/health-sync-companion-beta-0\.1\.0-beta\.11-debug\.apk/u);
+  assert.match(html, /e3e992d700f0/u);
   assert.match(html, /安全續傳/u);
   assert.match(html, /等待 iPhone 分享捷徑連結/u);
   assert.doesNotMatch(html, /href=["'][^"']*icloud\.com\/shortcuts\//u);

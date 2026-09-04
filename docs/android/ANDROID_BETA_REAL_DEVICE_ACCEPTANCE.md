@@ -21,13 +21,13 @@ These results apply only to the tested device and dataset. Samsung, Xiaomi, Pixe
 
 Background sync is best-effort Android OS scheduling, not real-time execution or a permanent background service. Testers do not need to sign in, reauthorize, or press Sync every day unless the session or permission has been revoked.
 
-For the stale-worker recovery retest, install `0.1.0-beta.10-debug` directly over beta.9 without clearing app data. Its SHA-256 is `a8f995dd147c2c632c6ae0bfb51fea0e34d1fbf479a7beb2233ae931e455a0d9`; its debug signing SHA-1 remains `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`.
+Beta.10 failed its real-device recovery gate: the UI remained `SYNCING` for more than five minutes while the server received a valid session request but no health ingestion. Install `0.1.0-beta.11-debug` directly over beta.10 without clearing app data. Its SHA-256 is `e3e992d700f0674bdc41499d1e2eb88070c19861dd5032ac31b9c15c9023f739`; its debug signing SHA-1 remains `D1:A7:F6:7A:C2:F5:2B:EF:06:DF:B3:E4:D5:8A:56:47:DF:53:34:65`.
 
 Beta.7 was packaged locally without the required public Beta runtime configuration. That made both encrypted-session restore and the Google login fallback fail before any network request. Beta.8 adds a fail-closed packaging check and restores beta.6's unscoped sync metadata only after the encrypted session and canonical user have been resolved. The migration never reads or clears the separate authentication store.
 
-1. Install beta.10 over beta.9. Do not clear app data and do not uninstall.
+1. Install beta.11 over the current beta.10. Do not clear app data and do not uninstall.
 2. Open **生活小助手**; the existing session and Health Connect authorization should remain available.
-3. Confirm a stale prior **同步中** state is automatically reconciled and the app promptly shows an updated queued/running/retry status rather than remaining stuck.
+3. Confirm the beta-only diagnostic says `Beta 0.1.0-beta.11-debug`; the stale prior **同步中** state must become `ENQUEUED`, `WAITING_FOR_CONSTRAINT`, `RUNNING`, or `RETRY_PENDING` according to WorkManager rather than remaining falsely stuck.
 4. Leave the app without pressing **立即同步**.
 5. After Health Connect or the wearable has new data and Android has had a reasonable scheduling opportunity, reopen the app or Beta Web and check whether the last-background-sync time, data, and final score changed.
 
