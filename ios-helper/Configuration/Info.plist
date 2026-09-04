@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>生活小助手</string>
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleName</key>
+  <string>HealthSyncHelper</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>UILaunchScreen</key>
+  <dict/>
+  <key>NSHealthShareUsageDescription</key>
+  <string>允許生活小助手讀取步數、心率與睡眠資料，用於健康分析與同步。</string>
+  <key>APP_ENV</key>
+  <string>development</string>
+  <key>API_BASE_URL</key>
+  <string>https://REPLACE_WITH_HTTPS_API_HOST</string>
+  <key>WEB_BOOTSTRAP_URL</key>
+  <string>https://REPLACE_WITH_VERIFIED_WEB_HOST/health-sync/ios/start</string>
+  <key>UNIVERSAL_LINK_HOST</key>
+  <string>REPLACE_WITH_VERIFIED_WEB_HOST</string>
+  <key>BGTaskSchedulerPermittedIdentifiers</key>
+  <array>
+    <string>tw.lifehelper.healthsync.refresh</string>
+  </array>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>processing</string>
+  </array>
+</dict>
+</plist>
+

@@ -1,0 +1,37 @@
+{
+  "schema_version": "ALGORITHM_RUNTIME_POLICY_V1",
+  "algorithm": {
+    "algorithm_version": "health-score-v1.0",
+    "fixture_version": "HEALTH_ALGORITHM_GOLDEN_V1",
+    "current_production_runtime": "APPS_SCRIPT_JAVASCRIPT",
+    "future_candidate_canonical_engine": "PYTHON_3_12_PERSISTENT",
+    "future_candidate_frozen": true
+  },
+  "routing": {
+    "states": ["CURRENT", "SHADOW", "CANDIDATE"],
+    "default": "CURRENT",
+    "invalid_config": "CURRENT",
+    "first_deployment_state": "SHADOW",
+    "production_candidate_activation": false
+  },
+  "transport": {
+    "non_production_reference": "BOUNDED_JSONL_OVER_STDIO",
+    "production": "NOT_FROZEN",
+    "max_request_bytes": 1048576,
+    "max_pending_requests": 64,
+    "request_timeout_ms": 3000,
+    "startup_timeout_ms": 5000
+  },
+  "concurrency": {
+    "execution": "SINGLE_THREADED",
+    "request_correlation_required": true,
+    "cross_user_state_allowed": false,
+    "production_throughput_requirement": "NOT_FROZEN"
+  },
+  "promotion": {
+    "minimum_production_like_shadow_sample_count": "NOT_FROZEN",
+    "exact_parity_required": true,
+    "unexplained_divergence_allowed": 0,
+    "candidate_writes_allowed": 0
+  }
+}

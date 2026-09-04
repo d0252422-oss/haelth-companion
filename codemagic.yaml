@@ -1,0 +1,72 @@
+workflows:
+  ios-xcode-gate:
+    name: iOS Xcode gate (unsigned simulator)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: "16.4"
+    scripts:
+      - name: Gate reason and repository preflight
+        script: |
+          set -euo pipefail
+          echo "Gate reason: generate and inspect the iOS project, then compile and run its simulator unit tests."
+          echo "Cloud Mac budget for this run: 30 minutes maximum."
+          test -n "${CM_BUILD_DIR:-}"
+          test -f "$CM_BUILD_DIR/ios-helper/project.yml"
+          sw_vers
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        script: |
+          set -euo pipefail
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          cd "$CM_BUILD_DIR/ios-helper"
+          xcodegen --version
+          xcodegen generate --spec project.yml
+          test -d HealthSyncHelper.xcodeproj
+
+      - name: Inspect generated project and schemes
+        script: |
+          set -euo pipefail
+          mkdir -p "$CM_BUILD_DIR/build/codemagic"
+          cd "$CM_BUILD_DIR/ios-helper"
+          xcodebuild -list -project HealthSyncHelper.xcodeproj \
+            | tee "$CM_BUILD_DIR/build/codemagic/xcode-list.txt"
+          xcodebuild -list -json -project HealthSyncHelper.xcodeproj \
+            > "$CM_BUILD_DIR/build/codemagic/xcode-list.json"
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = Path(os.environ["CM_BUILD_DIR"]) / "build/codemagic/xcode-list.json"
+          project = json.loads(report.read_text())["project"]
+          expected_name = "HealthSyncHelper"
+          expected_targets = {"HealthSyncHelper", "HealthSyncHelperTests"}
+          expected_schemes = {"HealthSyncHelper"}
+
+          assert project["name"] == expected_name, project
+          assert expected_targets.issubset(set(project.get("targets", []))), project
+          assert expected_schemes.issubset(set(project.get("schemes", []))), project
+          print("Generated project, application scheme, and unit-test target verified.")
+          PY
+
+      - name: Build and run simulator unit tests
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/ios-helper"
+          SIMULATOR_UDID="$(xcrun simctl list devices available -j | /usr/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for group in data["devices"].values() for d in group if d.get("isAvailable") and d.get("name", "").startswith("iPhone")]; assert devices, "No available iPhone simulator"; print(devices[0]["udid"])')"
+          xcodebuild test \
+            -project HealthSyncHelper.xcodeproj \
+            -scheme HealthSyncHelper \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath "$CM_BUILD_DIR/build/codemagic/DerivedData" \
+            -resultBundlePath "$CM_BUILD_DIR/build/codemagic/tests.xcresult"
+    artifacts:
+      - build/codemagic/xcode-list.txt
+      - build/codemagic/xcode-list.json
+      - build/codemagic/tests.xcresult
+      - build/codemagic/DerivedData/Logs/**/*.xcactivitylog

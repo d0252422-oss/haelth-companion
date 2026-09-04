@@ -1,0 +1,792 @@
+{
+  "schema_version": "HEALTH_ALGORITHM_GOLDEN_V1",
+  "precision_policy": "SCORE_ONE_DECIMAL_COMPLETENESS_FOUR_DECIMALS",
+  "tolerance_policy": "EXACT_JSON_NUMBER_MATCH_AFTER_CONTRACT_ROUNDING",
+  "fixtures": [
+    {
+      "fixture_id": "sleep-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "sleep",
+      "algorithm_id": "sleep-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "Asia/Taipei",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "sleepMinutes": 480,
+        "sleepRequirementMinutes": 480,
+        "timeInBedMinutes": 510,
+        "deepSleepMinutes": 90,
+        "remSleepMinutes": 100,
+        "awakeMinutes": 20,
+        "bedtimeDeviationMinutes": 10,
+        "nightHeartRate": 60,
+        "restingHeartRateBaseline": 60,
+        "baselineSampleCount": 7
+      },
+      "expected": {
+        "expected_score": 98.1,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "sleep-partial",
+      "class": "PARTIAL_INPUT",
+      "domain": "sleep",
+      "algorithm_id": "sleep-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "sleepMinutes": 360,
+        "baselineSampleCount": 3
+      },
+      "expected": {
+        "expected_score": 75,
+        "expected_completeness": 0.3,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "continuity",
+          "deep",
+          "efficiency",
+          "nightHeartRate",
+          "regularity",
+          "rem"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "sleep-missing",
+      "class": "ALL_MISSING",
+      "domain": "sleep",
+      "algorithm_id": "sleep-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "continuity",
+          "deep",
+          "duration",
+          "efficiency",
+          "nightHeartRate",
+          "regularity",
+          "rem"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "Asia/Taipei",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "steps": 7000,
+        "stepTarget": 7000,
+        "caloriesBurned": 2000,
+        "caloriesBurnedBaseline": 2000,
+        "baselineSampleCount": 7
+      },
+      "expected": {
+        "expected_score": 100,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-zero",
+      "class": "REAL_ZERO",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "steps": 0
+      },
+      "expected": {
+        "expected_score": 0,
+        "expected_completeness": 0.7,
+        "expected_confidence": "MEDIUM",
+        "expected_missing_inputs": [
+          "calories"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-missing",
+      "class": "ALL_MISSING",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "calories",
+          "steps"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-high-boundary",
+      "class": "HIGH_BOUNDARY",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "steps": 8050,
+        "stepTarget": 7000
+      },
+      "expected": {
+        "expected_score": 100,
+        "expected_completeness": 0.7,
+        "expected_confidence": "MEDIUM",
+        "expected_missing_inputs": [
+          "calories"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-out-of-range",
+      "class": "OUT_OF_RANGE",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "steps": -1
+      },
+      "expected": {
+        "expected_score": 0,
+        "expected_completeness": 0.7,
+        "expected_confidence": "MEDIUM",
+        "expected_missing_inputs": [
+          "calories"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-rounding-boundary",
+      "class": "ROUNDING_BOUNDARY",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "steps": 2333,
+        "stepTarget": 7000
+      },
+      "expected": {
+        "expected_score": 33.3,
+        "expected_completeness": 0.7,
+        "expected_confidence": "MEDIUM",
+        "expected_missing_inputs": [
+          "calories"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "activity-taipei-midnight",
+      "class": "TIMEZONE_BOUNDARY",
+      "domain": "activity",
+      "algorithm_id": "activity-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "Asia/Taipei",
+      "input_window": {
+        "start": "2026-08-27T15:59:59Z",
+        "end": "2026-08-27T16:00:00Z"
+      },
+      "canonical_inputs": {
+        "steps": 7000,
+        "stepTarget": 7000
+      },
+      "expected": {
+        "expected_score": 100,
+        "expected_completeness": 0.7,
+        "expected_confidence": "MEDIUM",
+        "expected_missing_inputs": [
+          "calories"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "training-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "training",
+      "algorithm_id": "training-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "trainingLoad": 100,
+        "trainingLoadBaseline": 100,
+        "acuteLoad": 700,
+        "chronicLoad": 700,
+        "consecutiveTrainingDays": 2,
+        "baselineSampleCount": 7
+      },
+      "expected": {
+        "expected_score": 100,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "training-zero",
+      "class": "REAL_ZERO",
+      "domain": "training",
+      "algorithm_id": "training-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "trainingLoad": 0
+      },
+      "expected": {
+        "expected_score": 75,
+        "expected_completeness": 0.45,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "loadBalance",
+          "recoverySpacing"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "training-missing",
+      "class": "ALL_MISSING",
+      "domain": "training",
+      "algorithm_id": "training-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "dailyLoad",
+          "loadBalance",
+          "recoverySpacing"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "nutrition-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "nutrition",
+      "algorithm_id": "nutrition-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "values": {
+          "calories": 2000,
+          "protein": 100,
+          "carbs": 250,
+          "fat": 65,
+          "mealCount": 3
+        },
+        "targets": {
+          "calories": 2000,
+          "protein": 100,
+          "carbs": 250,
+          "fat": 65
+        }
+      },
+      "expected": {
+        "expected_score": 100,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "nutrition-partial",
+      "class": "PARTIAL_INPUT",
+      "domain": "nutrition",
+      "algorithm_id": "nutrition-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "values": {
+          "protein": 100
+        },
+        "targets": {
+          "protein": 100
+        }
+      },
+      "expected": {
+        "expected_score": 100,
+        "expected_completeness": 0.35,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "calories",
+          "carbs",
+          "fat",
+          "mealDistribution"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "nutrition-missing",
+      "class": "ALL_MISSING",
+      "domain": "nutrition",
+      "algorithm_id": "nutrition-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "calories",
+          "carbs",
+          "fat",
+          "mealDistribution",
+          "protein"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "body-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "body_composition",
+      "algorithm_id": "body-composition-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "weight": 70,
+        "fatMass": 14,
+        "targetWeight": 70,
+        "weightBaseline": 70,
+        "fatMassBaseline": 14,
+        "baselineSampleCount": 7
+      },
+      "expected": {
+        "expected_score": 94,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "body-partial",
+      "class": "PARTIAL_INPUT",
+      "domain": "body_composition",
+      "algorithm_id": "body-composition-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "weight": 70,
+        "targetWeight": 65
+      },
+      "expected": {
+        "expected_score": 53.8,
+        "expected_completeness": 0.45,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "fatMassTrend",
+          "weightStability"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "body-missing",
+      "class": "ALL_MISSING",
+      "domain": "body_composition",
+      "algorithm_id": "body-composition-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "fatMassTrend",
+          "goalProgress",
+          "weightStability"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "recovery-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "recovery",
+      "algorithm_id": "recovery-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "hrvRmssd": 50,
+        "hrvBaseline": 50,
+        "restingHeartRate": 60,
+        "restingHeartRateBaseline": 60,
+        "sleepScore": 80,
+        "trainingRecoveryScore": 75,
+        "subjectiveRecoveryScore": 70,
+        "baselineSampleCount": 7
+      },
+      "expected": {
+        "expected_score": 73.3,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "recovery-partial",
+      "class": "PARTIAL_INPUT",
+      "domain": "recovery",
+      "algorithm_id": "recovery-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "sleepScore": 80
+      },
+      "expected": {
+        "expected_score": 80,
+        "expected_completeness": 0.2,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "hrv",
+          "restingHeartRate",
+          "subjective",
+          "training"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "recovery-missing",
+      "class": "ALL_MISSING",
+      "domain": "recovery",
+      "algorithm_id": "recovery-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "hrv",
+          "restingHeartRate",
+          "sleep",
+          "subjective",
+          "training"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "fatigue-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "fatigue",
+      "algorithm_id": "fatigue-index",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "acuteLoad": 700,
+        "chronicLoad": 700,
+        "sleepDebtMinutes": 0,
+        "hrvRmssd": 50,
+        "hrvBaseline": 50,
+        "restingHeartRate": 60,
+        "restingHeartRateBaseline": 60,
+        "consecutiveTrainingDays": 2,
+        "baselineSampleCount": 7
+      },
+      "expected": {
+        "expected_score": 9.5,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "fatigue-zero",
+      "class": "REAL_ZERO",
+      "domain": "fatigue",
+      "algorithm_id": "fatigue-index",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "sleepDebtMinutes": 0
+      },
+      "expected": {
+        "expected_score": 0,
+        "expected_completeness": 0.25,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "consecutiveTrainingDays",
+          "hrvSuppression",
+          "restingHeartRateElevation",
+          "shortTrainingLoad"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "fatigue-missing",
+      "class": "ALL_MISSING",
+      "domain": "fatigue",
+      "algorithm_id": "fatigue-index",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "consecutiveTrainingDays",
+          "hrvSuppression",
+          "restingHeartRateElevation",
+          "shortTrainingLoad",
+          "sleepDebt"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "health-complete",
+      "class": "NORMAL_COMPLETE",
+      "domain": "health_overall",
+      "algorithm_id": "health-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "sleepScore": 80,
+        "recoveryScore": 70,
+        "activityScore": 90,
+        "trainingScore": 75,
+        "nutritionScore": 85,
+        "bodyCompositionScore": 80
+      },
+      "expected": {
+        "expected_score": 80.6,
+        "expected_completeness": 1,
+        "expected_confidence": "HIGH",
+        "expected_missing_inputs": [],
+        "expected_reason_codes": [
+          "RECOVERY_WEIGHT_HALVED_TO_LIMIT_SLEEP_TRAINING_DOUBLE_COUNT"
+        ],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "health-partial-overlap",
+      "class": "PARTIAL_INPUT",
+      "domain": "health_overall",
+      "algorithm_id": "health-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {
+        "sleepScore": 80,
+        "recoveryScore": 60,
+        "activityScore": 100
+      },
+      "expected": {
+        "expected_score": 82,
+        "expected_completeness": 0.5556,
+        "expected_confidence": "MEDIUM",
+        "expected_missing_inputs": [
+          "bodyComposition",
+          "nutrition",
+          "training"
+        ],
+        "expected_reason_codes": [
+          "RECOVERY_WEIGHT_HALVED_TO_LIMIT_SLEEP_TRAINING_DOUBLE_COUNT"
+        ],
+        "algorithm_version": "health-score-v1.0"
+      }
+    },
+    {
+      "fixture_id": "health-missing",
+      "class": "ALL_MISSING",
+      "domain": "health_overall",
+      "algorithm_id": "health-score",
+      "algorithm_version": "health-score-v1.0",
+      "timezone": "UTC",
+      "input_window": {
+        "start": "2026-08-27T00:00:00Z",
+        "end": "2026-08-28T00:00:00Z"
+      },
+      "canonical_inputs": {},
+      "expected": {
+        "expected_score": null,
+        "expected_completeness": 0,
+        "expected_confidence": "LOW",
+        "expected_missing_inputs": [
+          "activity",
+          "bodyComposition",
+          "nutrition",
+          "recovery",
+          "sleep",
+          "training"
+        ],
+        "expected_reason_codes": [],
+        "algorithm_version": "health-score-v1.0"
+      }
+    }
+  ]
+}
