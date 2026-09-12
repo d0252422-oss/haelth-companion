@@ -1,0 +1,346 @@
+{
+  "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
+  "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
+  "full_scope_confirmed": false,
+  "previous_progress": null,
+  "scope_description": "Candidate known-scope union of documented Roadmap V1–V5 and current Health Companion F&F Beta/platform acceptance. NOT a confirmed complete delivery version.",
+  "weight_basis": "PROVISIONAL: 25 independent acceptance units weighted equally4 each, total100; no effort claim, no retrospective completion-based weighting; tooling has zero product weight.",
+  "scope_sources": [
+    "C:/Users/D0252/OneDrive/Documents/健身系統分析專案/docs/ROADMAP.md",
+    "C:/Users/D0252/OneDrive/Documents/健身系統分析專案/docs/PROJECT_PRD.md",
+    "LINE_MINI_APP_WEARABLE_PREPARATION.md",
+    "docs/ENGINE_ARCHITECTURE.md"
+  ],
+  "missing_scope_evidence": [
+    "Approved full-delivery version/cutoff reconciling historical AppsSheet V1–V5 with current Web/Supabase F&F Beta.",
+    "Confirmed iOS native-helper versus Shortcut delivery scope; neither platform gate silently removed.",
+    "Charging/store plans explicitly deferred, not confirmed promised release requirements; retained scope question, no invented billing feature."
+  ],
+  "leaves": [
+    {
+      "id": "canonical_ingestion",
+      "module": "data",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/node-final.xml",
+          "sha256": "932df441786f27cae852fe6119cf56d36e46e602a68b95068c3e8f31ecf1e02c"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/node-final.manifest.json",
+          "sha256": "233761294077803e929767ee5cc719871800c8a1e10363af8aaf252eae2245e3"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/native-junit.xml",
+          "sha256": "c0e56a351ce0b2a19601222fba61255dc2d3709dfaa4f2a49170190ee95ce9d0"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/native-final.manifest.json",
+          "sha256": "febca1bb3915e3126fa932360ef0eabbb08611a966acce52ba087205ab67dd3d"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "local_identity",
+      "module": "data",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/native-junit.xml",
+          "sha256": "c0e56a351ce0b2a19601222fba61255dc2d3709dfaa4f2a49170190ee95ce9d0"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/native-final.manifest.json",
+          "sha256": "febca1bb3915e3126fa932360ef0eabbb08611a966acce52ba087205ab67dd3d"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/rls.json",
+          "sha256": "64a7ba656f3e78757187191002935fec1c9ca26d60f8ef646b881230c431c3da"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "frozen_formula",
+      "module": "engines",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/python.xml",
+          "sha256": "c453e492cdec47aa92a93d8378f1cacac82ec61174141ff892ab3982efb4a6e6"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/python-fresh.manifest.json",
+          "sha256": "3a2b1e5252747f7284f9f2869c570a4ad38d24e6db4d4150c01dff11c622eab8"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/portable-final.xml",
+          "sha256": "ba68744f8e280a91940405d7c6823e2efea6921805249b076a7e46fbb74cd6c0"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/portable-final.manifest.json",
+          "sha256": "ee8d2f558acf9c61a89b96de049fdbe4706cc0185bb0089681ddb1da44a10de6"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "reference_engineering",
+      "module": "engines",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/python.xml",
+          "sha256": "c453e492cdec47aa92a93d8378f1cacac82ec61174141ff892ab3982efb4a6e6"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/python-fresh.manifest.json",
+          "sha256": "3a2b1e5252747f7284f9f2869c570a4ad38d24e6db4d4150c01dff11c622eab8"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "nutrition_label_local",
+      "module": "engines",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/http.xml",
+          "sha256": "3cc4e4abc02ed27814f56be410f8e4bbc2e2c05de20e8acc8391fc2ef721a43a"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/http-ts-pg186.manifest.json",
+          "sha256": "9598875a46ef8f22244d5b423b29a30cee4909b330eaea6315e165b4d51de71c"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "portable_core_parity",
+      "module": "runtime",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/portable-final.xml",
+          "sha256": "ba68744f8e280a91940405d7c6823e2efea6921805249b076a7e46fbb74cd6c0"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/portable-final.manifest.json",
+          "sha256": "ee8d2f558acf9c61a89b96de049fdbe4706cc0185bb0089681ddb1da44a10de6"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/native-junit.xml",
+          "sha256": "c0e56a351ce0b2a19601222fba61255dc2d3709dfaa4f2a49170190ee95ce9d0"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/native-final.manifest.json",
+          "sha256": "febca1bb3915e3126fa932360ef0eabbb08611a966acce52ba087205ab67dd3d"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "edge_execution",
+      "module": "runtime",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "Supabase CLI Edge handler -> canonical identity -> actual engine -> dedicated PostgreSQL passes security/error/resource tests; no host Python or remote fallback.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "postgres_recompute",
+      "module": "data",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/native-junit.xml",
+          "sha256": "c0e56a351ce0b2a19601222fba61255dc2d3709dfaa4f2a49170190ee95ce9d0"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/native-final.manifest.json",
+          "sha256": "febca1bb3915e3126fa932360ef0eabbb08611a966acce52ba087205ab67dd3d"
+        },
+        {
+          "path": ".engine-artifacts/blocker-closure/rls.json",
+          "sha256": "64a7ba656f3e78757187191002935fec1c9ca26d60f8ef646b881230c431c3da"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "existing_browser",
+      "module": "web",
+      "weight": 4,
+      "status": "PASS",
+      "acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
+      "evidence": [
+        {
+          "path": ".engine-artifacts/blocker-closure/browser-ts-deno-9c05576c-9599-4512-8280-11ca495aa502/report.json",
+          "sha256": "1b9406052c0f3da7ea58af3004577f4c52ad8d701390fa736c94e1445d18567d"
+        }
+      ],
+      "evidence_valid": true
+    },
+    {
+      "id": "overview_training_weekly",
+      "module": "web",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Full confirmed-version overview, training/body input,14-day aggregate and rolling7-day reporting UI regression; contracts alone insufficient.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "android_nondevice_build",
+      "module": "android",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "Fresh JVM/lint plus legitimate intended Beta APK variant build with reviewed config; unit-only evidence cannot satisfy build.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "android_oem_device",
+      "module": "android",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "OEM background bounded HTTP/retry/lock/swipe/process-death/idempotency and ingestion-to-score real-device E2E.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "ios_build",
+      "module": "ios",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "Confirmed iOS delivery route build/static acceptance on supported Apple toolchain; optional native helper scope decision remains visible.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "ios_device",
+      "module": "ios",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "iOS Shortcut/HealthKit permitted data -> canonical ingestion -> displayed output on device; platform scope explicitly confirmed.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "photo_model",
+      "module": "photo_food",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Licensed model weights and real inference path, no fixture or external manual handoff substituted.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "photo_reference_accuracy",
+      "module": "photo_food",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Licensed representative photo ground truth and predeclared evaluation; actual accuracy and limitations measured.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "food_reference",
+      "module": "photo_food",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Food reference source/version/license, preparation/edible/portion conversions and values independently validated.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "new_score_validity",
+      "module": "engines",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "New domain formulas have justified populations/thresholds/weights and independent reference/real-world validation.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "remote_beta_oauth",
+      "module": "release",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "Authorized remote Beta API/UI integration, real Google OAuth identity and tenant isolation smoke; local synthetic tokens insufficient.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "line_v4",
+      "module": "roadmap",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Roadmap V4 verified LIFF Google link/unlink, account separation and weekly LINE notification acceptance.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "recovery_v2",
+      "module": "roadmap",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Roadmap V2 full-body/local-muscle load, sleep features and user-feedback recovery acceptance; new adapter alone insufficient.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "guidance_v3",
+      "module": "roadmap",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Roadmap V3 context-based intensity/body-part guidance, RPE/RIR and Deload/imbalance acceptance.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "personalization_v5",
+      "module": "roadmap",
+      "weight": 4,
+      "status": "UNKNOWN",
+      "acceptance": "Roadmap V5 long-term personalization, explainable weight decisions and cross-domain guidance with validation.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "release_security_privacy",
+      "module": "release",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "Pre-release privacy/security, data backup/retention/permissions and legal distribution review; high-risk findings closed.",
+      "evidence": [],
+      "evidence_valid": false
+    },
+    {
+      "id": "authorized_release",
+      "module": "release",
+      "weight": 4,
+      "status": "BLOCKED",
+      "acceptance": "Explicitly authorized release, distribution smoke, backup and rollback acceptance in named environment.",
+      "evidence": [],
+      "evidence_valid": false
+    }
+  ]
+}

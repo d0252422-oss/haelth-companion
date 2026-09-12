@@ -1,5 +1,77 @@
 # Multi-domain engine architecture (non-production)
 
+## 2026-09-12 blocker closure — current execution path
+
+This section supersedes the earlier Python-host limitation below, without erasing its
+historical evidence. Baseline `884ffa280e660f0bb749528bbcae7eeaea1151eb`; no original
+score formula, golden fixture, CURRENT routing or pre-existing Android edit changed.
+
+| Actual node | File / function |
+|---|---|
+| Existing meal UI | `index.html` meal handlers -> `scripts/local-engine-web.js:localEngineRequest` (local flag only) |
+| HTTP | `scripts/local-engine-server.ts` -> `mobile-health-beta/index.ts:dispatchLocalEngine` -> `LocalEngineRuntime.handle` |
+| Verified identity | `scripts/local-engine-auth.ts:createSyntheticAuthority` -> existing `authenticateNativeUser` / `resolveNativeIdentity` -> `beta_resolve_native_auth_identity` |
+| Input / queue | `local-engine-runtime.ts:mutate` -> existing receipt/meal transaction / `engine_enqueue_meal`; canonical ingestion uses existing `beta_ingest_health_mutation` |
+| Computation | `LocalEngineRuntime.compute` -> `engine-portable.ts:PortableEngineRuntime.execute` -> `computeDomainRequest` -> `aggregate`, `derive`, `domainOutputs` |
+| Frozen formulas | Existing `fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js` functions; no duplicate formula implementation |
+| Storage / return | Existing claim/generation/lease checks -> atomic history/head + original score bundle -> PG snapshot -> existing Web panel/meal form |
+| Python | Reference/test-only `domain_runtime.py`, original package and differential fixture generator; no necessary application-path import or subprocess |
+| Supabase CLI Edge execution | **BLOCKED / NOT EXECUTED** before handler startup: Docker engine pipe unavailable after backend socket-access failure |
+
+Only aggregation, empty-catalog confirmed nutrition normalization, exact Python-style
+mean/rounding and domain glue were ported. All score functions are reused. The parity
+contract was written before differential execution; explicitly versioned JS JSON
+fingerprints differ lexically from Python, with immutable history retained. Native PG
+tests separately verify replay, revision sensitivity, tombstones and generation safety.
+
+### Edge preparation is not an Edge PASS
+
+CLI2.115.0 and host Deno2.9.6/V8 15.0/TS6.0.3 were recorded; no upgrade performed.
+Actual Edge Runtime version is UNKNOWN because it never started. `functions serve
+--help` was inspected before a bounded isolated-project serve attempt. No original
+Supabase stack, migrations, outbound cron or remote worker was started. Docker4.88.1
+reported `sailor-ingest.sock` system-access failure then shut down its engines. No
+factory reset, socket removal, permission change, alternate daemon/tunnel or
+substitute `deno run` evidence was used to claim Edge execution.
+
+[Supabase local-runtime documentation](https://supabase.com/docs/guides/functions/development-environment)
+distinguishes CLI Edge Runtime from ordinary Deno. [Official resource limits](https://supabase.com/docs/guides/functions/limits)
+currently list256MB memory,2s CPU/request,150s/400s free/paid wall limits,150s request
+idle limit and20MB CLI bundle (5MB server-created bundle). These are requirements,
+not acceptance results. The frozen+portable source is57,684 raw bytes, not a built
+Edge bundle. Host benchmark5000 synthetic records/28days measured215.70ms wall and
+11,620,488-byte heap delta; neither is actual Edge CPU or peak-memory evidence.
+Actual Edge bundle, resource, connection and Browser tests remain NOT_RUN.
+
+### Reproduce / future enablement package
+
+1. Use a reviewed official PostgreSQL18.6+ portable server. Set only the current
+   shell's `LOCAL_ENGINE_PG_BIN`; harness verifies18.x>=18.6 before initdb, binds
+   loopback and creates a new UUID cluster/database. Original18.4 and DBs stay intact.
+2. Generate Python reference fixtures, run `deno test --config config/engine-local.deno.json
+   --allow-read tests/engine-portable.test.ts`; then `node scripts/test-local-engine-native.mjs`
+   and `node scripts/test-local-engine-http-run.mjs`. No Deno `--allow-run` is granted.
+3. Browser runner requires existing `ENGINE_PLAYWRIGHT_MODULE` and
+   `ENGINE_BROWSER_EXECUTABLE` absolute paths; run `node scripts/test-local-engine-browser.mjs`.
+   It owns a fresh DB, once-only expected native dialogs, trace redaction and cleanup.
+4. After Docker is repaired through authorized host administration, first run
+   `node scripts/check-local-edge-resource.mjs`. This is a resource preflight only.
+   Prepare/verify an isolated CLI function host with a dedicated local PG connection,
+   same canonical identity adapter and portable engine; current loopback DB guard must
+   not be broadened to arbitrary hosts. Run actual handler/auth/PG/resource tests and
+   rerun the Browser workflow through that Edge host. Do not promote resource preflight
+   or host Deno success into Edge PASS.
+5. Any remote Beta enablement needs separate authorization for the named Beta project,
+   additive migrations, server-side canonical mapping/grants, feature flags and deploy.
+   No identity backfill, production auth merge or remote settings change is authorized.
+
+Existing remote/default feature flags stay OFF. Rollback is disabling the local feature
+flag and returning to existing Web routing; persisted versioned history remains intact.
+No new cloud service/dependency is introduced. Future hosted resource/cost impact is
+UNKNOWN until Edge measurement and current-plan review. Beta smoke must include real
+OAuth, A/B/anonymous isolation, actual persistence/recompute and cancel/delete/reload;
+synthetic signatures cannot establish real Google login. No remote operations performed.
+
 ## 2026-09-12 existing-runtime closure (supersedes activation claims below)
 
 Source baseline: reachable ancestors `a3f02ea`, `64aeb3a`, `9cbd260` on

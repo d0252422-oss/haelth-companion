@@ -1,5 +1,51 @@
 # Engine version matrix
 
+## 2026-09-12 runtime / open-source review update
+
+Portable implementation: `engine-portable.ts`, pure TS glue over the existing frozen
+JS score snapshot; Python remains reference/test. No new scoring domain, formula,
+weight, paid API, Node package or Python package was added. The prior food/photo PoC
+inventory was actually inspected in the original workspace (`research/food-intelligence/`
+licensing, model registry and results), but historical imports/adapter candidates are
+not current licensed reference validation, verified model weights or image accuracy.
+PHOTO_MODEL_IMPLEMENTATION=MISSING; FOOD_REFERENCE_VALIDATION=NOT_VERIFIED;
+NEW_SCORE_VALIDITY=EXPERIMENTAL_UNVALIDATED remain unchanged.
+
+| Component | Pinned version / license | Review / residual boundary |
+|---|---|---|
+| Frozen score snapshot | health-score-v1.0, existing repository source | Reused unchanged; separate code provenance from scientific validation |
+| postgres driver |3.4.8 / Unlicense | Existing dependency, no new install hook; real local PG used |
+| jose synthetic auth |6.1.3 / MIT | Existing ES256 verifier, not real OAuth; Deno graph also has transitive jose6.2.10 |
+| Supabase server / JS |1.4.1 /2.112.4 / MIT | Existing pinned graph; no upgrade or new runtime service |
+| PGlite |0.5.8 / Apache-2.0 | Separate WASM proposal regression, not native/server-runtime proof |
+| embedded-postgres Windows package |18.4.0-beta.17 wrapper MIT | Contains PG18.4, known vulnerable; retained but local harness now refuses to execute it |
+| Official EDB portable PostgreSQL |18.6-3 / PostgreSQL core license + bundled third-party notices | Downloaded separately into ignored task tools; no installer, privilege change or old DB upgrade |
+
+Fresh `npm audit --json` and `deno audit --lock config/engine-local.deno.lock` reported
+no advisories in their covered package metadata. **This is not zero security risk**:
+[CVE-2026-16239](https://www.postgresql.org/support/security/CVE-2026-16239/) affects
+PG versions before18.6 and is not identified by that npm wrapper audit. The native
+package remains in the lockfile for provenance; the supported local harness fails
+closed without an explicitly reviewed18.6+ binary. Old PG18.4 evidence is historical.
+
+Official [PostgreSQL Windows](https://www.postgresql.org/download/windows/) ->
+[EDB portable catalog](https://www.enterprisedb.com/download-postgresql-binaries)
+18.6/Windows x86-64 mapping was independently checked. ZIP344,414,106bytes,
+SHA256 `59F8CE701C63C2ED623C665A5E51B3EF6F2E37CCF837B68FFEED0742D0AE6ABD`;
+22,018 archive entries checked for traversal/symlink/case collision before extracting
+only server binaries/libraries/share/docs/notices. Core exe files are NotSigned; no
+independent publisher checksum was observed. Local hash records integrity, not
+publisher signature verification. Full native-library SBOM/scanner/license review is
+incomplete; no redistribution approval is claimed. No unfamiliar install script ran.
+
+Unresolved release risks: existing Android44 warnings unchanged, notably missing
+Android12+ data-extraction rules (OEM D2D may ignore allowBackup=false), and no specific
+NoCredentialException UX (the existing caller catches errors, so not an uncaught-crash
+claim). See [Android backup documentation](https://developer.android.com/identity/data/autobackup)
+and [credential exception API](https://developer.android.com/reference/kotlin/androidx/credentials/exceptions/NoCredentialException).
+These protected existing Android files were not modified. Code licenses, model-weight
+licenses and food-data licenses remain distinct review tracks.
+
 All new adapters are development policies, not clinically validated algorithms. Existing health-score-v1.0 formula and CURRENT routing remain unchanged.
 
 | Output | Version | Policy / required evidence |

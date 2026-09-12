@@ -1,5 +1,119 @@
 # Multi-domain engine test report
 
+## 2026-09-12 — ENGINE_RUNTIME_BROWSER_BUILD_BLOCKER_CLOSURE (current)
+
+整體專案已驗收完成率：UNKNOWN。首次有效基準
+`known-scope-v0.1-provisional-2026-09-12`；暫定已知範圍32.0%，不是全專案進度。
+STATUS=PARTIAL_BLOCKED_NOT_PASS. This section supersedes the historical summaries below.
+
+Baseline reviewed: `884ffa280e660f0bb749528bbcae7eeaea1151eb`, reachable commits
+`788dc4b`, `884ffa2`, `a3f02ea`, `64aeb3a`, `9cbd260`. No checkout/amend/reset/clean,
+remote writes or unrelated Android edits. Audit hashes confirm all10 protected
+Android/frozen files unchanged; separate Android audit preserves34 source hashes.
+Runtime/Browser/build-preflight source is saved in local commit
+`b251afac622a2bbe0d705916e5856c50e87dd800`; test manifests map the baseline plus
+working-source hashes to that commit. Progress/instructions/report changes are saved
+separately. No Android source is included in either scoped commit.
+
+### Current results
+
+| Gate | Result | Fresh evidence in `.engine-artifacts/blocker-closure/` |
+|---|---|---|
+| Progress baseline/tool | PASS_TOOL; overall UNKNOWN | `project-progress.json`;25leaves sum100;10tool tests included in Node suite |
+| Portable runtime | CODE_PREPARED / LOCAL_HANDLER_PASS | `portable-final.*`, module graph and native tests; no necessary Python subprocess |
+| Actual CLI Edge | BLOCKED / NOT_RUN | `edge-cli-preflight.*`, `edge-cli-final.*`; actual serve failed before handler because Docker engine pipe unavailable |
+| Cross-runtime parity | PASS_FOR_TESTED_CONTRACT |57unchanged-reference cases plus3meta tests; original28goldens check score/completeness/confidence/missing/version |
+| Native PostgreSQL18.6 / identity | LOCAL_PASS | `native-final.*`, `native-junit.xml`, `rls.json`, native DB ownership/manifests |
+| Existing Web Browser | LOCAL_PASS; EDGE_BROWSER_BLOCKED | `browser-ts-deno-9c05576c-9599-4512-8280-11ca495aa502/report.json`, trace.zip, screenshots and redacted HTTP |
+| APK preflight | COMPLETE / BUILD_BLOCKED | `android-preflight.json`, configuration-source-audit, original-guard exit1 |
+| Android JVM/lint | FRESH_PASS |60tests;0lint errors/44unchanged warnings;36actionable tasks actually executed |
+| Open source/security review | REVIEW_COMPLETED_WITH_FINDINGS | npm/Deno audits plus independent official PG18.6 acquisition and native-package limitations in version matrix |
+
+Browser root cause is proven native `window.confirm`, not a custom modal or an assumed
+tool resource limit: click stayed pending during a bounded150ms diagnostic hold, then
+completed after a pre-registered once-only expected-message dismiss/accept handler.
+Only this workflow's synthetic meal was targeted. No global auto-accept, confirm
+override, deleted product confirmation or direct DELETE substitution was used.
+
+Pure TS Browser run10:48:53.759–10:50:29.367UTC:1workflow/10stages;40real HTTP responses;
+0page errors,0external requests.150g→300kcal;200g→400kcal. Cancel retains revision2
+and stored heads. Confirm creates revision3 tombstone; nutrition/overall score and
+nutrition aggregate become null/INSUFFICIENT_DATA. Reload does not resurrect input;
+B sees no A data. Error/loading terminates; retry/double-click creates one record.
+Formatter0/null and0.85→85% are separately labeled pure-formatter Browser regressions,
+not fabricated DB fixtures. Trace JWTs were redacted and scanned. The earlier
+legacy-Deno/Python Browser run is retained separately and is not counted again.
+
+### Final fresh counts (no duplicate reports or nested vectors)
+
+| Suite | Cases / checks | Final report |
+|---|---:|---|
+| Python reference |134test cases PASS | `python.xml`, `python-fresh.manifest.json` |
+| Node |185test cases PASS | `node-final.xml`, `node-final.manifest.json` |
+| Portable Deno differential |60test cases PASS | `portable-final.xml`, `portable-final.manifest.json` |
+| Native Deno/PostgreSQL |6test cases PASS | `native-junit.xml`, `native-final.manifest.json` |
+| HTTP |1test case PASS | `http.xml`, `http-ts-pg186.manifest.json` |
+| Android JVM |60test cases PASS | `android-junit/`, `android-fresh-tests-lint.manifest.json` |
+| PGlite proposal regression |9custom checks PASS, not native PG | `pglite-fresh.*` |
+| Browser |1workflow PASS,10stages not10extra cases | `browser-portable-ts.*` and detailed run directory |
+
+Total fresh final test cases=446, failed=0, cached counted=0, skipped=0. Separately:
+9PGlite custom checks and1Browser workflow. The repeated10independent review diagnostics,
+28vectors nested in suites, reruns and old Browser run are not extra test cases.
+Build/check tasks are not test cases. `:app:verifyBetaRuntimeConfiguration` fresh exit1
+is retained as1failed required build-guard task; original APK assembly failure remains
+unresolved. assembleDebug was not re-run without configuration; no localDebug variant
+was created because JVM/lint already cover the available non-device value.
+
+Required packaging environment names missing: `HEALTH_COMPANION_BETA_API_BASE_URL`,
+`HEALTH_COMPANION_BETA_SUPABASE_URL`, `HEALTH_COMPANION_BETA_SUPABASE_PUBLISHABLE_KEY`,
+`HEALTH_COMPANION_GOOGLE_WEB_CLIENT_ID`. Also missing legacy bootstrap names:
+`HEALTH_COMPANION_BETA_AUTH_SETUP_URL`, `HEALTH_COMPANION_BETA_APP_LINK_HOST`.
+Gradle reads process environment only; checked known local sources and user/machine
+presence checks found no usable configuration. No values were printed, invented or
+retrieved remotely. LOCAL_TEST_BUILD=NOT_CREATED; BETA_APK_BUILD=BLOCKED_REQUIRED_CONFIGURATION;
+DISTRIBUTABLE_BETA_READY=NO. Existing guard only covers assembleDebug; release must
+not be used to bypass it. No signing/OAuth/credential change occurred.
+
+Independent review initially reproduced10counterexamples: timestamp canonicalization,
+microseconds, invalid calendar, typed contract/tombstone handling, identity collision,
+exact mean and Santiago midnight DST. All were fixed in glue and re-tested against
+unchanged Python. The independent review report and pre-fix observations remain in
+`review/`; initial type-check diagnostics were tool-output evidence, not test cases.
+No golden expected change or post-hoc tolerance widening occurred. Cross-runtime
+engineering parity does not validate a health rule or an untested numeric population.
+
+Fresh typecheck/lint/Ruff/Mypy/wheel passed; no APK was published. Native PG test data
+is synthetic and loopback-only. Low-privilege authenticated/anon have no superuser or
+BYPASSRLS; service_role has BYPASSRLS, with separately tested server tenant guards.
+Synthetic signed login proves neither Google OAuth nor a full Supabase Auth stack.
+One legacy RLS summary output path was discovered after the first native run and
+redirected to this phase; the original DBs/logs/manifests remain intact. The reused
+role-summary file has no run identity and must not serve as prior-run evidence.
+
+Performance: host Deno5000synthetic steps/28days=215.70ms wall, heap delta11,620,488bytes
+(not peak).1record cold52.81ms,40records18.71ms; order/warmup affects measurements.
+Native PG performance/EXPLAIN and per-job measurements are in `native-performance.json`.
+No production SLA or actual Edge CPU/memory/bundle PASS is claimed; SQLite benchmarks
+were not re-run because the SQLite path did not change.
+
+Remaining gates retain zero acceptance weight: actual Edge+EdgeBrowser; lawful Beta
+APK settings/build; AndroidOEM, iOS, realOAuth/remoteBeta; photo model/accuracy;
+food reference licensing/validation; domain real-world validity; release/privacy risks
+and the remaining documented roadmap. No real-device or remote CI evidence was used.
+PHOTO_MODEL_IMPLEMENTATION=MISSING; FOOD_REFERENCE_VALIDATION=NOT_VERIFIED;
+DOMAIN_SCORE_REAL_WORLD_VALIDITY=EXPERIMENTAL_UNVALIDATED.
+
+NEXT_ACTION: authorized host repair of Docker's socket-access failure without reset or
+permission bypass, then isolated CLI Edge handler/PG/resource and Edge Browser tests;
+when legitimate complete Beta settings are supplied locally, preflight then original
+variant build. Full delivery scope confirmation is separately needed for overall%.
+No local service must depend on production credentials. Raw DBs/evidence are retained;
+only owned test processes are stopped. No automatic session-resume guarantee is made.
+
+REMOTE_PUSH=NO; REMOTE_BETA_WRITES=0; PRODUCTION_WRITES=0; DEPLOYMENTS=0;
+PAID_SERVICES_ADDED=0. Necessary gates remain blocked, so this turn is not overall PASS.
+
 ## 2026-09-12 — ENGINE_EXISTING_RUNTIME_AND_WEB_LOCAL_E2E_CLOSURE
 
 **Overall: PARTIAL / NOT PASS.** The native local runtime, PostgreSQL and HTTP paths
