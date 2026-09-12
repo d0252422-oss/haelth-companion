@@ -1,5 +1,86 @@
 # Multi-domain engine architecture (non-production)
 
+## 2026-09-13 — canonical D workspace and manual SQL continuation
+
+Canonical local development entry:
+`D:/Dev/Projects/health-companion-canonical-20260913-020110`.
+It is an independent, snapshot-derived repository retaining baseline
+`423da056b0ee544bb5aac3b19346542e2e2a5003`, refs, history and original dirty work.
+The two original D folders still have duplicate linked-worktree identity; they were
+not repaired in place, deleted or overwritten. No Git objects/metadata in the new
+checkout depend on the C project. The Codex task's original workspace root was not
+automatically changed; explicitly select this D entry for subsequent development.
+Recovery and detailed topology evidence are in the matching
+`D:/MigrationReports/dual-project/20260912-2035/git-manual-sql-20260913-020110` run.
+
+### Actual local manual call graph
+
+| Node | File / function |
+|---|---|
+| Existing body editor | `index.html:openWeightEditor/loadWeightFormDate`, weight form submit/delete |
+| Same local provider for reads/writes | `scripts/local-engine-web.js:localEngineRequest`; explicit loopback flag only |
+| Authenticated HTTP | `scripts/local-engine-server.ts` -> existing `dispatchLocalEngine` -> `LocalEngineRuntime.handle` |
+| Trusted identity | Existing verified ES256 synthetic subject -> `authenticateNativeUser/resolveNativeIdentity` -> canonical user; no body user ID |
+| Body SQL | `manual-body-local.ts:ManualBodyLocalStore.write/read/status`; receipt and record in one PostgreSQL transaction |
+| Body read-back | `getBodyRecords` under authenticated non-BYPASSRLS role -> existing body record/chart/editor |
+| Meal SQL / engine | Existing `LocalEngineRuntime.mutate` receipt+meal transaction -> existing queue/portable compute -> history/head -> bounded snapshot |
+| Meal read-back | Existing nutrition range/list/editor in `index.html`; same provider, historical dates editable |
+
+Manual body uses `engine_manual_body_records`, not `beta_health_records`.
+`source=MANUAL_WEB` and `analysisStatus=ANALYSIS_PENDING` explicitly distinguish raw
+saved measurements from analysis. Weight and body-fat zero/null semantics are retained.
+Body data is **not** injected into unsupported mobile domains or the frozen score
+bridge; no synthetic goal, fat mass or score is fabricated. No new score is added.
+Nutrition continues confirmed-label arithmetic and existing experimental engines;
+unknown/partial nutrients stay null in the local UI, while actual measured zero stays zero.
+Labels are synthetic fixtures/user supplied provenance, not a verified food database.
+
+Reads accept explicit real-calendar dates, at most366 inclusive days; the old implicit
+28-day restriction is not silently imposed on a selected historical window. Existing
+per-table5000-row guard remains; body allows one active user/day and at most366 rows.
+Today summary cards retain today's meaning while the meal list labels its chosen range.
+User/session/range/sequence guards prevent late body/nutrition responses from replacing
+the current view. Default/remote legacy provider, UI and login remain unchanged.
+
+Body receipts bind a stable UUID to the original request hash and canonical owner.
+Replay is idempotent, mismatched payload rejects, stale revision rejects, tombstones
+do not revive. After response loss the browser queries the actual receipt before
+reporting failure; unresolved/retryable requests retain the original envelope.
+Service-role SQL still has explicit tenant predicates; authenticated reads exercise
+the canonical resolver through RLS, not owner/superuser-only acceptance.
+
+Local PostgreSQL limits: lock2s, statement10s, idle transaction10s, transaction15s,
+connect5s. These are engineering test bounds, **not** a production SLA. HTTP admits
+at most8 active requests; slots are released only when server work actually ends.
+Background polling is non-overlapping. Recognized SQL/connection timeout errors return
+503 with a retryable state. Saved meal rows remain saved when analysis fails;
+analysis is returned as pending and the durable queue remains the source of recovery.
+
+### Future activation package — preparation only
+
+- Additive migration proposal: `20260912182042_manual_body_local_sql.sql`; two tables,
+  owner/date indexes, body SELECT RLS, narrow authenticated/service-role grants.
+  It is rehearsed only in new UUID-named loopback synthetic PostgreSQL18.6 clusters;
+  no existing database is reset. Old tables/columns and mobile ingestion are untouched.
+- Keep `window.HEALTH_ENGINE_LOCAL_CONFIG.enabled` absent/OFF in shipped Web;
+  `HEALTH_ENGINE_LOCAL_ONLY=1` is a local host guard, not a production rollout switch.
+  Never deploy the synthetic login issuer or put privileged credentials in the Web.
+- Before any remote action, separately authorize the exact Supabase project/environment,
+  the specific migration file/hash, real verified-auth/canonical mapping adapter,
+  API deployment and Web flag target, and synthetic-only smoke write/delete identities.
+  Current target identity is unspecified: remote execution remains unauthorized.
+- Require actual Edge/runtime execution and real OAuth integration gates before activation.
+  Windows/Python is not a product server dependency; ordinary local Deno is not Edge.
+- Smoke scope: A/B/anonymous, expired/forged subject, raw body and meal CRUD/read-back,
+  revision/replay/timeout, cancellation/tombstone, and no old score after deleted inputs.
+  Rollback first disables the new route/flag and restores old UI/provider; retain new
+  tables/receipts/data for investigation. No destructive table rollback is automated.
+- No paid resources or external service added. Remote resource/cost expectations are
+  UNKNOWN until the target runtime/environment is approved.
+
+Photo model, food reference validity, new score validity, real Google OAuth, remote
+Beta, Android OEM, iOS and production release remain independent open gates.
+
 ## 2026-09-12 blocker closure — current execution path
 
 This section supersedes the earlier Python-host limitation below, without erasing its

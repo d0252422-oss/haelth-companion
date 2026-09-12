@@ -1,5 +1,84 @@
 # Multi-domain engine test report
 
+## 2026-09-13 — Git ownership and manual SQL local closure (current)
+
+整體專案已驗收完成率：UNKNOWN。相同
+`known-scope-v0.1-provisional-2026-09-12` 已知範圍32.0%，較上一輪+0.0pp。
+This is scoped local acceptance, **not** full-project/Beta/device/release PASS.
+Canonical development: `D:/Dev/Projects/health-companion-canonical-20260913-020110`.
+Tests use preserved HEAD `423da056b0ee544bb5aac3b19346542e2e2a5003` plus explicit
+working-source hashes; the scoped commit containing those source bytes is recorded
+in the external final report. No original Android changes are included.
+
+Evidence root:
+`D:/MigrationReports/dual-project/20260912-2035/git-manual-sql-20260913-020110`.
+The original two D worktrees share a duplicate per-worktree identity. Recovery snapshots,
+independent index review,24 Git checks, dual fsck, and disposable-only stage/commit probe
+support the new standalone alternative; originals remain unchanged. Original1,612
+metadata/source and backup hashes were independently rechecked. No C deletion took place.
+
+| Suite / gate | Latest fresh result | Evidence relative to external root |
+|---|---|---|
+| Python reference |134 named cases PASS; no cached cases | `reference-node-20260912T183643Z` |
+| Node broad regression |180 named cases +5 whole-script assertion entrypoints PASS,185 JUnit rows | `node-rerun-20260912T184847Z` |
+| Actual adapter/render UI units |14 named cases PASS; fetch/DOM stubs only here | `manual-sql-ui-final-timed.xml`, `manual-sql-ui-final-manifest.json` |
+| Portable Deno parity |60 tests PASS;57 reference fixtures+3 meta tests,28 goldens nested not added again | `root-regression-510fa92c-eade-49ac-be62-06e914dfc073` |
+| Type/lint/syntax | Deno check/lint and Web JS syntax PASS; tasks not test cases | same root-regression directory |
+| Existing Web+real HTTP+native PostgreSQL |4 integrated gates PASS; no mocked persistence/engine/authorization | `manual-sql-e2e-d4b46ab6-e2a6-4318-a24c-3555fa248448/report.json` |
+| Android JVM/build/device, iOS, actual Supabase Edge, remote OAuth/Beta |NOT_RUN this scoped continuation | Prior evidence is not fresh credit |
+
+Python3.12.14, pytest9.1.1, Node24.19.0 for broad regression; Node22.23.2 for
+the browser/UI runner; Deno2.9.6/TS6.0.3; PostgreSQL18.6; Chrome152.0.7977.84;
+Playwright1.62.1. Existing dependencies were copied by allowlist/hash, not upgraded.
+No new package/model/service was added. The final integrated run spans
+2026-09-12T18:48:58.306Z–18:50:46.861Z (02:48:58–02:50:46 Asia/Taipei).
+Application source hashes were identical before/after this run.
+
+The4 gates independently establish:
+
+1. Existing body form creates exactly one SQL record, edits the same ID, preserves
+   null/zero, reloads after a new browser-context login, cancels/accepts real native
+   delete confirmation, retains tombstone, and does not leak to B or mobile ingestion.
+   A transport-only injected lost response still calls the real API/DB first; the
+   browser confirms the actual receipt and completes without a duplicate.
+2. Real HTTP rejects anonymous, invalid/expired/missing mapping and forged owner.
+   Auth subject differs from canonical ID. Low-privilege RLS and privileged server
+   authorization are both exercised. Exact replay, changed payload conflict, stale
+   revision, date bounds/collision, tombstone and a real receipt-write failure rollback pass.
+3. A held real advisory lock produces503 `DB_TIMEOUT_RETRYABLE` after2029.938ms
+   (predeclared SQL2s; HTTP ceiling6s), no partial row/receipt. Release then same-ID
+   retry persists once. This is a local lock measurement, not a production SLA.
+4. A40-day-old meal is created through the existing Web: synthetic per100g label
+   200kcal ×150g ->300kcal; edit200g ->400kcal. Actual stored experimental nutrition
+   heads change17.6 ->23.5 with distinct fingerprints. Replay/new-context read-back,
+   cancel-delete, confirmed delete and reload/B isolation pass. Latest aggregate/score
+   becomes null/INSUFFICIENT_DATA after deletion; no old valid output masquerades as current.
+
+The first integrated run correctly FAILED at the historical meal list (SQL already
+contained the row). It is retained under `manual-sql-e2e-74c0f5dc-83d0-4dee-89ae-6c2535e15e7f`.
+The product's today-only list/edit lookup was fixed. Independent review additionally
+found missing SQL bounds and late range/revision-cache races; these were fixed and
+retested, including14 actual-function UI tests. Previous6/10/14 unit runs,33-case
+initial Node smoke and repeated broad/portable runs are **not added** to latest counts.
+Current test failures0; original failures are preserved, not rewritten as successes.
+Do not combine named cases, custom integrated gates, build/check tasks or cached Android
+report rows into one misleading total.
+
+Page JavaScript errors0; external requests0. Console retains expected initial401
+login probes and the deliberate lost-response error, plus3 pre-existing modal focus/
+aria-hidden warnings. Accessibility focus restoration remains a LOW follow-up, not
+a zero-console-warning claim. Only owned test services were stopped; all new UUID
+databases, failed/success evidence and private raw traces remain. External trace
+copies redact synthetic JWTs; no real user credentials/data were used.
+
+Body SQL is saved with `MANUAL_WEB / ANALYSIS_PENDING`, not a new body score.
+Nutrition engine remains experimental. Frozen health-score-v1.0 code/weights/goldens
+are unchanged. Food-reference validation, photo model, domain real-world validity,
+actual Edge, real OAuth, remote Beta, Android OEM, iOS and release gates remain open.
+The new additive body migration is a locally rehearsed proposal only; see the updated
+architecture for exact activation approvals and non-destructive flag rollback.
+REMOTE_BETA_WRITES=0; PRODUCTION_WRITES=0; PUSH/DEPLOYMENT=NOT_PERFORMED.
+
 ## 2026-09-12 — ENGINE_RUNTIME_BROWSER_BUILD_BLOCKER_CLOSURE (current)
 
 整體專案已驗收完成率：UNKNOWN。首次有效基準

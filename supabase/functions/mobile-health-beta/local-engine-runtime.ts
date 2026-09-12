@@ -3,6 +3,7 @@ import postgres from "npm:postgres@3.4.8";
 import { PortableEngineRuntime } from "./engine-portable.ts";
 import { authenticateNativeUser, resolveNativeIdentity } from "./index.ts";
 import { recomputeBetaScore } from "./score-bridge.ts";
+import { ManualBodyLocalStore, localReadRange, manualDate, rejectClientIdentity } from "./manual-body-local.ts";
 
 type Json = Record<string, any>;
 const pgDay = (value: any) =>
@@ -29,14 +30,7 @@ const today = () =>
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-const dateOnly = (value: unknown) => {
-  const s = String(value);
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(s) ||
-    new Date(s).toISOString().slice(0, 10) !== s
-  ) throw Error("INVALID_DATE");
-  return s;
-};
+const dateOnly = manualDate;
 
 // Minimal PostgreSQL implementation of the existing bridge's repository surface; no fake rows.
 export function pgAdmin(
@@ -153,6 +147,8 @@ export class LocalEngineRuntime {
   worker: any;
   verify: (token: string) => Promise<Json>;
   timings: Json[] = [];
+  private activeRequests = 0;
+  manualBody: ManualBodyLocalStore;
   constructor(config: Json, verify: (token: string) => Promise<Json>) {
     if (
       Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1" ||
@@ -161,10 +157,19 @@ export class LocalEngineRuntime {
     ) throw Error("UNSAFE_DATABASE_TARGET");
     this.sql = postgres({
       ...config,
-      connection: { "health.engine.experimental": "on" },
+      max: 8,
+      connect_timeout: 5,
+      connection: {
+        "health.engine.experimental": "on",
+        lock_timeout: 2000,
+        statement_timeout: 10000,
+        idle_in_transaction_session_timeout: 10000,
+        transaction_timeout: 15000,
+      },
     });
     this.verify = verify;
     this.worker = new PortableEngineRuntime();
+    this.manualBody = new ManualBodyLocalStore(this.sql);
   }
   async start() {
     await this.worker.start();
@@ -187,7 +192,7 @@ export class LocalEngineRuntime {
       canonical: String(mapped.canonical_user_id),
     };
   }
-  async read(identity: Json, table: string) {
+  async read(identity: Json, table: string, range = localReadRange()) {
     if (
       !["engine_meals", "engine_output_history", "engine_output_heads"]
         .includes(table)
@@ -199,8 +204,8 @@ export class LocalEngineRuntime {
         ? "local_date"
         : "calculation_date";
       const rows = await tx.unsafe(
-        `select * from public.${table} where canonical_user_id=$1 and ${dateColumn} between $2::date-27 and $2::date limit 5001`,
-        [identity.canonical, today()],
+        `select * from public.${table} where canonical_user_id=$1 and ${dateColumn} between $2::date and $3::date limit 5001`,
+        [identity.canonical, range.start, range.end],
       );
       if (rows.length > 5000) throw Error("READ_BOUND_EXCEEDED");
       return rows;
@@ -229,6 +234,7 @@ export class LocalEngineRuntime {
           0
         ];
       if (input.mealRecordId && !old) throw Error("MEAL_NOT_FOUND");
+      if (old?.deleted) throw Error("MEAL_DELETED");
       if (old && Number(input.revision) !== Number(old.revision)) {
         throw Error("STALE_REVISION");
       }
@@ -424,14 +430,15 @@ export class LocalEngineRuntime {
     }
     return processed;
   }
-  async snapshot(identity: Json) {
+  async snapshot(identity: Json, input: Json = {}) {
+    const range = localReadRange(input);
     const pending = await this
-      .sql`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${today()}::date-27 and ${today()}::date`;
+      .sql`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${range.start}::date and ${range.end}::date`;
     const staleDates = new Set(pending.map((r: Json) => pgDay(r.score_date)));
     const [meals, history, heads] = await Promise.all([
-      this.read(identity, "engine_meals"),
-      this.read(identity, "engine_output_history"),
-      this.read(identity, "engine_output_heads"),
+      this.read(identity, "engine_meals", range),
+      this.read(identity, "engine_output_history", range),
+      this.read(identity, "engine_output_heads", range),
     ]);
     const keys = new Set(
       heads.map((r: Json) =>
@@ -471,10 +478,11 @@ export class LocalEngineRuntime {
       validation: "UNVALIDATED",
     };
   }
-  async legacyTimeline(identity: Json) {
+  async legacyTimeline(identity: Json, input: Json = {}) {
+    const range = localReadRange(input);
     // Privileged repository access is always scoped by verified canonical identity.
     const rows = await this
-      .sql`select * from public.beta_health_scores where canonical_user_id=${identity.canonical} and score_date between ${today()}::date-27 and ${today()}::date order by score_date`;
+      .sql`select * from public.beta_health_scores where canonical_user_id=${identity.canonical} and score_date between ${range.start}::date and ${range.end}::date order by score_date`;
     const names: Json = {
       sleep: "sleepSystemScore",
       activity: "activityScore",
@@ -501,6 +509,11 @@ export class LocalEngineRuntime {
     return Object.values(days);
   }
   async handle(request: Request) {
+    // Bound admission as well as SQL execution; client abort does not release this slot.
+    if (this.activeRequests >= 8) return Response.json({ ok: false, error: "DB_BUSY_RETRYABLE", retryable: true }, {
+      status: 503, headers: { "cache-control": "no-store", "retry-after": "1" },
+    });
+    this.activeRequests++;
     try {
       if (request.method !== "POST") {
         return Response.json({ ok: false, error: "METHOD_NOT_ALLOWED" }, {
@@ -511,14 +524,28 @@ export class LocalEngineRuntime {
       if (text.length > 1048576) throw Error("BODY_TOO_LARGE");
       const { action, payload = {} } = JSON.parse(text),
         identity = await this.identity(request);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw Error("INVALID_PAYLOAD");
+      rejectClientIdentity(payload);
       let data: any;
-      if (action === "upsertMealRecord" || action === "deleteMealRecord") {
+      if (action === "getBodyRecords") {
+        data = await this.manualBody.read(identity, payload);
+      } else if (["addBodyRecord", "upsertBodyRecord", "deleteBodyRecord"].includes(action)) {
+        data = await this.manualBody.write(identity, payload, action === "deleteBodyRecord");
+      } else if (action === "getBodyWriteStatus") {
+        data = await this.manualBody.status(identity, payload);
+      } else if (action === "upsertMealRecord" || action === "deleteMealRecord") {
         data = await this.mutate(
           identity,
           payload,
           action === "deleteMealRecord",
         );
-        await this.drain(identity.canonical);
+        try {
+          await this.drain(identity.canonical);
+          data.analysisStatus = "COMPUTED";
+        } catch {
+          // SQL transaction/receipt already committed. Analysis failure must not hide a saved record.
+          data = { ...data, status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
+        }
       } else if (action === "getCurrentUser") {
         data = {
           user: {
@@ -527,25 +554,30 @@ export class LocalEngineRuntime {
           },
         };
       } else if (action === "localEngineSnapshot") {
-        data = await this.snapshot(identity);
+        data = await this.snapshot(identity, payload);
       } else if (action === "getNutritionRecords") {
-        data = (await this.snapshot(identity)).meals;
+        data = (await this.snapshot(identity, payload)).meals;
       } else if (
         action === "getDashboardData" || action === "getTodaySummary"
       ) {
-        const timeline = await this.legacyTimeline(identity);
+        const requestedDay = payload.date === undefined ? today() : dateOnly(payload.date);
+        const timeline = await this.legacyTimeline(identity, { date: requestedDay });
         data = {
           user: { userId: identity.canonical },
-          today: timeline.find((r: any) => r.date === today()) ?? null,
+          today: timeline.find((r: any) => r.date === requestedDay) ?? null,
           experimental: true,
         };
       } else if (action === "getHealthTimeline") {
-        data = { timeline: await this.legacyTimeline(identity) };
+        data = { timeline: await this.legacyTimeline(identity, payload) };
       } else if (
         action === "refreshDerivedData" || action === "refreshDailyNutrition"
       ) {
-        await this.drain(identity.canonical);
-        data = await this.snapshot(identity);
+        if (payload.recordType === "body") {
+          data = { status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
+        } else {
+          await this.drain(identity.canonical);
+          data = await this.snapshot(identity, payload);
+        }
       } else if (action === "getMealWriteStatus") {
         const receipt = await this
           .sql`select response from private.engine_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${
@@ -557,16 +589,18 @@ export class LocalEngineRuntime {
         headers: { "cache-control": "no-store" },
       });
     } catch (error) {
+      const sqlCode = String((error as Json)?.code || "");
+      const retryable = ["55P03", "57014", "25P03", "25P04", "08000", "08003", "08006", "57P01", "57P03", "53300", "CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "ECONNREFUSED", "ECONNRESET"].includes(sqlCode);
       const message = error instanceof Error ? error.message : "";
-      const code = /^[A-Z_]+$/.test(message)
+      const code = retryable ? "DB_TIMEOUT_RETRYABLE" : /^[A-Z_]+$/.test(message)
         ? message
         : "ENGINE_REQUEST_FAILED";
-      return Response.json({ ok: false, error: code }, {
-        status: code.includes("IDENTITY") || code.includes("SESSION")
+      return Response.json({ ok: false, error: code, retryable }, {
+        status: retryable ? 503 : /IDENTITY|SESSION|AUTH|TOKEN/.test(code)
           ? 401
           : 400,
         headers: { "cache-control": "no-store" },
       });
-    }
+    } finally { this.activeRequests--; }
   }
 }

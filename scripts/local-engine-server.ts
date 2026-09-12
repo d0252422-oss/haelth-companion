@@ -56,7 +56,8 @@ const server = Deno.serve(
           status: 400,
         });
       }
-      const token = await authority.issue(account);
+      // Only this synthetic loopback host can issue an intentionally expired test session.
+      const token = await authority.issue(account, body.expired === true);
       return Response.json({ synthetic: true }, {
         headers: {
           ...headers,
@@ -116,12 +117,16 @@ const server = Deno.serve(
     return new Response("NOT_FOUND", { status: 404 });
   },
 );
+let draining = false;
 const timer = setInterval(async () => {
+  if (draining) return;
+  draining = true;
   try {
     for (const user of Object.values(subjects)) {
       if ("canonical" in user) await runtime.drain(user.canonical);
     }
   } catch { /* durable queue retry remains authoritative */ }
+  finally { draining = false; }
 }, 2000);
 Deno.addSignalListener("SIGINT", async () => {
   clearInterval(timer);

@@ -3,9 +3,11 @@
 整體專案已驗收完成率：UNKNOWN
 
 Baseline: `known-scope-v0.1-provisional-2026-09-12`.
-Status: `PROVISIONAL_KNOWN_SCOPE_ONLY`. Previous progress: `NOT_AVAILABLE`.
+Status: `PROVISIONAL_KNOWN_SCOPE_ONLY`. Previous comparable progress: `32.0%`.
 暫定已知範圍完成率：**32.0%**（32 / 100）；這不是全專案完成率。
-Uncredited weight: 68. Progress change: first valid baseline, not a claimed increase.
+Uncredited weight: 68. Progress change: **+0.0 percentage points** on the same baseline.
+The original2026-09-12 calculation remains the first baseline (`PREVIOUS_PROGRESS=NOT_AVAILABLE`);
+this2026-09-13 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
@@ -50,3 +52,12 @@ intentionally ignored by Git; another checkout without it must not inherit these
 credits merely from a cached report. Incomplete scope is never rounded to100%.
 
 Required first-line reporting is now saved in effective root `AGENTS.md`.
+
+## 2026-09-13 continuation
+
+Git isolation/migration has no product weight. Manual body SQL and the added historical
+meal/read-back/security regression do not complete the broader overview/training/weekly
+leaf, and do not imply remote Beta, real OAuth, OEM device or clinical validity.
+The same25 leaves and weights remain unchanged. Overall scope is still unconfirmed;
+the known-scope32.0% must not be labeled a full-project percentage. C cleanup is deferred,
+not accepted and not a prerequisite for the independent D checkout's local development.

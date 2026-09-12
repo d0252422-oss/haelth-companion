@@ -2,7 +2,8 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
-  "previous_progress": null,
+  "previous_progress": 32,
+  "previous_baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "scope_description": "Candidate known-scope union of documented Roadmap V1–V5 and current Health Companion F&F Beta/platform acceptance. NOT a confirmed complete delivery version.",
   "weight_basis": "PROVISIONAL: 25 independent acceptance units weighted equally4 each, total100; no effort claim, no retrospective completion-based weighting; tooling has zero product weight.",
   "scope_sources": [
@@ -61,6 +62,10 @@
         {
           "path": ".engine-artifacts/blocker-closure/rls.json",
           "sha256": "64a7ba656f3e78757187191002935fec1c9ca26d60f8ef646b881230c431c3da"
+        },
+        {
+          "path": ".engine-artifacts/manual-sql-closure/manual-sql-final-report.json",
+          "sha256": "746df83c33a4a4e22ac9e5b1346f52e3a901f34033c44a34c7dabb618fa979f8"
         }
       ],
       "evidence_valid": true
@@ -123,6 +128,10 @@
         {
           "path": ".engine-artifacts/blocker-closure/http-ts-pg186.manifest.json",
           "sha256": "9598875a46ef8f22244d5b423b29a30cee4909b330eaea6315e165b4d51de71c"
+        },
+        {
+          "path": ".engine-artifacts/manual-sql-closure/manual-sql-final-report.json",
+          "sha256": "746df83c33a4a4e22ac9e5b1346f52e3a901f34033c44a34c7dabb618fa979f8"
         }
       ],
       "evidence_valid": true
@@ -194,6 +203,14 @@
         {
           "path": ".engine-artifacts/blocker-closure/browser-ts-deno-9c05576c-9599-4512-8280-11ca495aa502/report.json",
           "sha256": "1b9406052c0f3da7ea58af3004577f4c52ad8d701390fa736c94e1445d18567d"
+        },
+        {
+          "path": ".engine-artifacts/manual-sql-closure/manual-sql-final-report.json",
+          "sha256": "746df83c33a4a4e22ac9e5b1346f52e3a901f34033c44a34c7dabb618fa979f8"
+        },
+        {
+          "path": ".engine-artifacts/manual-sql-closure/manual-sql-ui-final.xml",
+          "sha256": "d4b23d20a9e50bf11bc334540bb8a71237dbe07d805e88e828cddc2d11089ff0"
         }
       ],
       "evidence_valid": true
