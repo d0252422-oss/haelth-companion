@@ -10,8 +10,13 @@ export {subjects};
 export async function createLocalPostgres({port=57483}={}){
   const root=path.resolve('.engine-artifacts/runtime-e2e/pg-'+randomUUID());
   await mkdir(root,{recursive:true});
-  const bin=path.resolve('node_modules/@embedded-postgres/windows-x64/native/bin');
+  // Explicit official portable binary only; old npm18.4 is retained but not executed (CVE-2026-16239).
+  if(!process.env.LOCAL_ENGINE_PG_BIN || !path.isAbsolute(process.env.LOCAL_ENGINE_PG_BIN))throw Error('PATCHED_POSTGRES_BIN_REQUIRED');
+  const bin=path.resolve(process.env.LOCAL_ENGINE_PG_BIN);
   const invoke=(exe,args)=>{const r=spawnSync(path.join(bin,exe+'.exe'),args,{windowsHide:true,encoding:'utf8',timeout:60000});if(r.status!==0)throw new Error(exe+' failed: '+r.stderr);return r.stdout;};
+  const binaryVersion=invoke('postgres',['--version']).trim();
+  const version=/PostgreSQL\) (\d+)\.(\d+)/.exec(binaryVersion);
+  if(!version || Number(version[1])!==18 || Number(version[2])<6)throw Error('PATCHED_POSTGRES_18_6_OR_LATER_REQUIRED');
   if(![57483,57484].includes(port))throw Error('INVALID_LOCAL_TEST_PORT');
   invoke('initdb',['-D',path.join(root,'data'),'-U','engine_owner','--auth=trust','--encoding=UTF8','--locale=C']);
   invoke('pg_ctl',['-D',path.join(root,'data'),'-l',path.join(root,'postgres.log'),'-o',`-h 127.0.0.1 -p ${port}`,'-w','start']);
@@ -20,7 +25,7 @@ export async function createLocalPostgres({port=57483}={}){
   const dbName='health_engine_'+randomUUID().replaceAll('-','');
   await admin.unsafe(`create database ${dbName}`);await admin.end();
   config.database=dbName;admin=postgres(config);
-  const evidence={root,port,database:dbName,synthetic_only:true,remote:false,migrations:[],started_at:new Date().toISOString()};
+  const evidence={root,port,database:dbName,synthetic_only:true,remote:false,binary:bin,binary_version:binaryVersion,migrations:[],started_at:new Date().toISOString()};
   try {
     await admin.unsafe(`create role anon nologin;create role authenticated nologin;create role service_role login bypassrls;
       create schema auth;create schema extensions;create extension pgcrypto with schema extensions;

@@ -1,6 +1,6 @@
-// Non-production host adapter. Requires native Python process capability; NOT Edge deployable.
+// Non-production integration adapter. Pure portable engine; Python is reference/test-only.
 import postgres from "npm:postgres@3.4.8";
-import { PersistentPythonRuntimeAdapter } from "../../../scripts/persistent-algorithm-runtime.cjs";
+import { PortableEngineRuntime } from "./engine-portable.ts";
 import { authenticateNativeUser, resolveNativeIdentity } from "./index.ts";
 import { recomputeBetaScore } from "./score-bridge.ts";
 
@@ -164,10 +164,7 @@ export class LocalEngineRuntime {
       connection: { "health.engine.experimental": "on" },
     });
     this.verify = verify;
-    this.worker = new PersistentPythonRuntimeAdapter({
-      executable: Deno.env.get("ALGORITHM_PYTHON"),
-      requestTimeoutMs: 10000,
-    });
+    this.worker = new PortableEngineRuntime();
   }
   async start() {
     await this.worker.start();

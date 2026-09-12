@@ -1,8 +1,8 @@
-param([Parameter(Mandatory)][string]$Name,[Parameter(Mandatory)][string]$Command)
+param([Parameter(Mandatory)][string]$Name,[Parameter(Mandatory)][string]$Command,[ValidateSet('runtime-e2e','blocker-closure')][string]$EvidenceDirectory='runtime-e2e')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $root
-$folder=Join-Path $root '.engine-artifacts/runtime-e2e'
+$folder=Join-Path $root ".engine-artifacts/$EvidenceDirectory"
 New-Item -ItemType Directory -Force -Path $folder | Out-Null
 if($Name -notmatch '^[a-z0-9-]+$'){throw 'Invalid evidence name'}
 $started=[DateTime]::UtcNow.ToString('o')

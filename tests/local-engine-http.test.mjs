@@ -6,7 +6,7 @@ const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric'
 async function login(account){const r=await fetch(base+'/local-login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({account})});assert.equal(r.status,200);return r.headers.get('set-cookie').split(';')[0];}
 async function call(cookie,action,payload={}){const r=await fetch(base+'/v1/engine/web',{method:'POST',headers:{'content-type':'application/json',...(cookie?{cookie}:{})},body:JSON.stringify({action,payload})});return {status:r.status,...await r.json()};}
 
-test('existing Deno route -> verified identity -> Python -> PostgreSQL CRUD/replay/isolation',async()=>{
+test('existing Deno route -> verified identity -> portable TypeScript -> PostgreSQL CRUD/replay/isolation',async()=>{
  const a=await login('B'),b=await login('A');
  const previous=await call(a,'localEngineSnapshot');
  for(const meal of previous.data.meals.filter(m=>m.foodName==='SYNTHETIC label arithmetic fixture')){

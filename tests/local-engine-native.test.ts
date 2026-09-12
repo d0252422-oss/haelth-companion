@@ -114,7 +114,7 @@ Deno.test("real signed identity / expiry / forged identity / low-privilege RLS",
     assert.equal(grants[0].anon_rpc, false);
     assert.equal(grants[0].mapped_read, true);
     await Deno.writeTextFile(
-      ".engine-artifacts/runtime-e2e/rls.json",
+      ".engine-artifacts/blocker-closure/rls.json",
       JSON.stringify({ roles, protectedCount, grants }, null, 2),
     );
     await runtime.mutate(a, {
@@ -381,10 +381,14 @@ Deno.test("native PostgreSQL health ingestion -> existing queue -> all other dom
       shift(day, -27)
     } and ${day}`;
     await Deno.writeTextFile(
-      ".engine-artifacts/runtime-e2e/native-performance.json",
+      ".engine-artifacts/blocker-closure/native-performance.json",
       JSON.stringify(
         {
-          environment: "Deno 2.9.6 + native PostgreSQL 18.4 + Python 3.12",
+          environment: {
+            deno: Deno.version,
+            postgres: (await runtime.sql`select version()`)[0].version,
+            engine: "PORTABLE_TYPESCRIPT_NO_SUBPROCESS",
+          },
           synthetic: true,
           users: 1,
           canonical_records: 40,
@@ -404,7 +408,7 @@ Deno.test("native PostgreSQL health ingestion -> existing queue -> all other dom
   }
 });
 
-Deno.test("Deno frozen JavaScript and persistent Python match all original golden contracts exactly", async () => {
+Deno.test("portable adapter and frozen JavaScript match original golden contracts without subprocess", async () => {
   const { runtime } = await context();
   try {
     const fixtures = JSON.parse(
