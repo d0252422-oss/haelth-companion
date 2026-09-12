@@ -1,0 +1,49 @@
+name: Multi-domain engine gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "health_companion_algorithms/**"
+      - "tests_python/**"
+      - "fixtures/algorithm-golden/**"
+      - "scripts/*engine*"
+      - "scripts/domain-score-response.cjs"
+      - "tests/domain-score-response.test.cjs"
+      - "package*.json"
+      - "supabase/migrations/*multi_domain_engine*"
+      - ".github/workflows/domain-engine-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  local-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r requirements-algorithm-ci.txt hypothesis==6.167.0
+          python -m pip install --no-deps --editable .
+          npm ci --ignore-scripts
+      - name: Domain, property, and frozen formula gates
+        run: >-
+          python -m pytest -q tests_python/test_domain_engines.py
+          tests_python/test_engine_invariants.py tests_python/test_algorithm_golden_parity.py
+      - name: Static gates
+        run: |
+          python -m ruff check health_companion_algorithms tests_python/test_domain_engines.py tests_python/test_engine_invariants.py scripts/benchmark_domain_engines.py
+          python -m mypy health_companion_algorithms scripts/benchmark_domain_engines.py
+      - name: PostgreSQL proposal and frontend contract
+        run: |
+          npm run test:engine-db
+          node --test tests/domain-score-response.test.cjs

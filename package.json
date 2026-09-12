@@ -1,0 +1,10 @@
+{
+  "name": "health-companion-development-gates",
+  "private": true,
+  "scripts": {
+    "test:engine-db": "node scripts/test-engine-postgres.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}
