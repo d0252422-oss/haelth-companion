@@ -1,0 +1,12 @@
+{
+  "fixture_class": "SYNTHETIC_NOT_REAL_WORLD_ACCURACY",
+  "contract_version": "domain-score-contract-v1.0",
+  "cases": [
+    {"id": "activity-zero", "steps": 0, "domain": "activity", "score": 0, "completeness": 0.7},
+    {"id": "activity-target", "steps": 7000, "domain": "activity", "score": 100, "completeness": 0.7},
+    {"id": "activity-half", "steps": 3500, "domain": "activity", "score": 50, "completeness": 0.7},
+    {"id": "activity-missing", "steps": null, "domain": "activity", "score": null, "completeness": 0},
+    {"id": "cardio-missing", "steps": 7000, "domain": "cardio", "score": null, "completeness": 0},
+    {"id": "nutrition-missing", "steps": 7000, "domain": "nutrition", "score": null, "completeness": 0}
+  ]
+}
