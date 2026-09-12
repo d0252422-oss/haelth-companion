@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Any
 
+from health_companion_algorithms.domain_runtime import compute_domain_request
 from health_companion_algorithms.engine import ALGORITHM_VERSION
 from health_companion_algorithms.runtime import ALGORITHM_IDS, compute_request
 
@@ -61,7 +62,11 @@ def main() -> None:
             if isinstance(document, dict) and isinstance(document.get("request_id"), str):
                 request_id = document["request_id"][:128]
             algorithm_started_at = time.perf_counter_ns()
-            result = compute_request(document)
+            result = (
+                compute_domain_request(document)
+                if isinstance(document, dict) and document.get("domain") == "multi_domain"
+                else compute_request(document)
+            )
             algorithm_finished_at = time.perf_counter_ns()
             response = {
                 "type": "response",

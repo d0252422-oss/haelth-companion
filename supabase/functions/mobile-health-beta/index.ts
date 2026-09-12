@@ -19,6 +19,19 @@ const UNITS: Record<string, Set<string>> = {
 };
 type Json = Record<string, unknown>;
 
+// Explicit local host injection only; default Edge and remote routes remain unchanged.
+let localEngineHandler: ((request: Request) => Promise<Response>) | null = null;
+export function registerLocalEngineHandler(handler: (request: Request) => Promise<Response>): void {
+  if (Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1") throw new Error("LOCAL_ENGINE_DISABLED");
+  localEngineHandler = handler;
+}
+export async function dispatchLocalEngine(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!localEngineHandler || !["127.0.0.1", "localhost"].includes(url.hostname)
+      || url.pathname !== "/v1/engine/web") return null;
+  return await localEngineHandler(request);
+}
+
 export default {
   fetch: withSupabase({ auth: "none" }, async (request, ctx) => {
     const origin = request.headers.get("origin") ?? "";
@@ -27,6 +40,8 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
     try {
+      const experimental = await dispatchLocalEngine(request);
+      if (experimental) return experimental;
       assertConfigured();
       if (origin && origin !== allowedOrigin) throw failure("ORIGIN_REJECTED", 403);
       const path = relativePath(new URL(request.url).pathname);
@@ -495,7 +510,7 @@ async function authorizeSession(request: Request, admin: any): Promise<Json> {
   return session;
 }
 
-async function authenticateNativeUser(request: Request, admin: any): Promise<Json> {
+export async function authenticateNativeUser(request: Request, admin: any): Promise<Json> {
   const token = bearer(request);
   const { data, error } = await admin.auth.getUser(token);
   const user = data?.user;
@@ -521,7 +536,7 @@ async function authenticateNativeUser(request: Request, admin: any): Promise<Jso
   return { auth_user_id: user.id, auth_email: authEmail, google_subject: googleSubject, provider: "google", environment: "beta" };
 }
 
-async function resolveNativeIdentity(admin: any, authUserId: string, required = true): Promise<Json | null> {
+export async function resolveNativeIdentity(admin: any, authUserId: string, required = true): Promise<Json | null> {
   const { data, error } = await admin.rpc("beta_resolve_native_auth_identity", {
     p_auth_user_id: authUserId,
   });

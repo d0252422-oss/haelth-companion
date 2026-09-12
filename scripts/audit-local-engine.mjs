@@ -1,0 +1,14 @@
+// Read-only source audit; artifacts contain no environment values, tokens or health records.
+import {execFileSync} from 'node:child_process';
+import {readFile,writeFile,mkdir,readdir} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+const root='.engine-artifacts/runtime-e2e';await mkdir(root,{recursive:true});
+const commits=['a3f02ea','64aeb3a','9cbd260'].map(commit=>({commit:git('rev-parse',commit),summary:git('show','--stat','--oneline',commit),reachable:execFileSync('git',['merge-base','--is-ancestor',commit,'HEAD']).length===0}));
+const preserved=['android-helper/app/build.gradle.kts','android-helper/app/src/main/java/app/healthcompanion/sync/BackgroundHealthSync.kt','android-helper/app/src/main/java/app/healthcompanion/sync/IngestionClient.kt','android-helper/app/src/test/java/app/healthcompanion/sync/SessionAndRetryPolicyTest.kt','android-helper/app/src/test/java/app/healthcompanion/sync/IngestionClientTimeoutTest.kt','tests/android-connector-v2-contract.test.cjs','health_companion_algorithms/engine.py','health_companion_algorithms/models.py','fixtures/algorithm-golden/health-score-v1.0.json','fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js'];
+const hashes=await Promise.all(preserved.map(async file=>({file,sha256:createHash('sha256').update(await readFile(file)).digest('hex')})));
+let android={tests:0,failures:0,errors:0,skipped:0,reports:[]};
+const reports='android-helper/app/build/test-results/testDebugUnitTest';await mkdir(root+'/android-junit',{recursive:true});
+for(const name of (await readdir(reports)).filter(n=>n.endsWith('.xml'))){const content=await readFile(reports+'/'+name,'utf8');const header=content.match(/<testsuite\s[^>]+>/)[0];for(const key of ['tests','failures','errors','skipped'])android[key]+=Number(header.match(new RegExp(`${key}="(\\d+)"`))?.[1]||0);android.reports.push({name,timestamp:header.match(/timestamp="([^"]+)"/)?.[1]});await writeFile(root+'/android-junit/'+name,content);}
+const audit={time:new Date().toISOString(),repository:git('rev-parse','--show-toplevel'),branch:git('branch','--show-current'),source_revision:git('rev-parse','HEAD'),worktrees:git('worktree','list','--porcelain'),working_tree:git('status','--short'),commits,preserved_file_hashes:hashes,android,versions:{node:process.version,deno:execFileSync('deno',['--version'],{encoding:'utf8'}).trim(),python:execFileSync('.venv/Scripts/python.exe',['--version'],{encoding:'utf8'}).trim()},remote_writes:0,note:'Hashes captured at audit time; pre-existing Android files were never edited by this track. Individual run manifests identify mutable source snapshots.'};
+await writeFile(root+'/audit.json',JSON.stringify(audit,null,2));process.stdout.write(JSON.stringify({revision:audit.source_revision,android,versions:audit.versions},null,2));

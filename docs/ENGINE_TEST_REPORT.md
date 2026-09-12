@@ -1,5 +1,124 @@
 # Multi-domain engine test report
 
+## 2026-09-12 — ENGINE_EXISTING_RUNTIME_AND_WEB_LOCAL_E2E_CLOSURE
+
+**Overall: PARTIAL / NOT PASS.** The native local runtime, PostgreSQL and HTTP paths
+are implemented and freshly tested. The complete browser Gate remains BLOCKED by the
+automation resource's native confirmation handling. APK assembly also failed its
+existing required Beta configuration check. These are not hidden by passing suites.
+The host adapter cannot run Python inside constrained Supabase Edge; remote runtime
+compatibility remains a separate unresolved architecture dependency.
+
+Reviewed reachable commits: `a3f02ea`, `64aeb3a`, `9cbd260`. Original engine algorithms,
+golden expectations, CURRENT policy and pre-existing Android source edits were preserved.
+This section supersedes reuse of the prior 368-result report as current evidence.
+
+### Gate disposition
+
+| Gate | Result | Evidence / boundary |
+|---|---|---|
+| 0 baseline audit | PASS | Actual source/diffs and before/after call graph in ENGINE_ARCHITECTURE.md; `audit.json`, per-command manifests and file hashes |
+| 1 provenance | PASS_REVIEW_ONLY | ENGINE_VERSION_MATRIX.md rules/units/source/limitations. All new score adapters EXPERIMENTAL / UNVALIDATED; no scientific accuracy claim |
+| 2 runtime | LOCAL_DENO_HOST_PASS / EDGE_NOT_SUPPORTED | Real existing route dispatch, existing persistent Python worker; no mock engine or rewritten score core. Production Edge middleware/service deployment NOT tested |
+| 3 identity / native PG | LOCAL_PASS | ES256 signature/issuer/audience/expiry checks; existing canonical mapping; actual low-privilege RLS and privileged server tenant checks; native PG 18.4 |
+| 4 existing Web | BLOCKED_NOT_PASS | Browser create, reload, update and A/B switch observed. Delete-confirmation automation blocked; delete/reload, error/retry and repeated-click UI closure NOT RUN |
+| 5 recompute | LOCAL_PASS_WITH_SCOPE | Actual queue/generation/lease, concurrent replay/drains, stale revision, old/new dates, rolling invalidation, failed worker retry, atomic publish and delete reconciliation. Web timezone is Asia/Taipei; general/DST reference tests are separate |
+| 6 fresh regression | PARTIAL | Fresh suites below; APK assembly fails expected-project configuration gate. No cached cases included in fresh counts |
+| 7 enablement preparation | PREPARED_NOT_ENABLED | Architecture options, migration rehearsal omissions, flags, rollback, smoke and exact future approval targets documented; no remote execution |
+
+### Fresh suites (count independently; do not add assertion/vector counts again)
+
+| Suite | Command / report under `.engine-artifacts/runtime-e2e/` | Result |
+|---|---|---|
+| Python | `.venv/Scripts/python.exe -m pytest tests_python -q --junitxml=.../python-final.xml`; `python-final.log` + manifest | FRESH_PASSED 134 |
+| Node | `node --test tests/*.test.cjs`; `node-ui-closure.log` / `node-junit.xml` | FRESH_PASSED 172, including 3 new UI/transport contract tests |
+| Actual Deno + native PostgreSQL | `node scripts/test-local-engine-native.mjs`; `native-closure.log`, later `native-junit.log` / XML | FRESH_PASSED 6 cases; includes 28 original golden vectors, not 28 extra cases |
+| Live local HTTP | `node --test tests/local-engine-http.test.mjs`; `http-closure.log` | FRESH_PASSED 1 integrated case with CRUD, receipt replay, tenant isolation, missing/invalid auth and original dashboard version checks |
+| Legacy PGlite proposal | `node scripts/test-engine-postgres.mjs`; `legacy-pglite-regression.log` | FRESH_PASSED 9 custom checks; **WASM/in-memory, not native PostgreSQL Gate evidence** |
+| Android JVM | repo `./gradlew.bat --no-daemon --rerun-tasks --no-build-cache testDebugUnitTest`; `android-fresh.log`, copied `android-junit/*.xml` | FRESH_PASSED 60, 26 actionable tasks executed; test XML timestamps 2026-09-12T04:28Z |
+| Deno type/lint | `deno-closure.log` | FRESH_PASSED; real Deno check. Local adapter lint explicitly permits dynamic repository `any`, require-await and npm import conventions; not a claim of strict repository interface types |
+| Python lint/types/wheel | `static-final.log` | FRESH_PASSED Ruff, Mypy, wheel build; generated build metadata remains untracked |
+| Android APK + lint combined | `android-build-lint-fresh.log` | FRESH_FAILED: `:app:verifyBetaRuntimeConfiguration`, missing/invalid expected-project Beta API config. No guard bypass, fake config or credential change |
+| Android standalone lint | `android-lint-fresh.log` | FRESH_PASSED: 30 tasks executed, 0 errors / 44 warnings; no Android warning/source edits folded into this track |
+| Browser | `browser-evidence.json` transcription of actual CUA AX/DOM observations | PARTIAL, not an automated PASS suite |
+
+Cached cases counted as fresh: **0**. Previous cached Android reports are superseded
+only by this turn's actual JVM execution. No connected/instrumentation/OEM, iOS,
+remote CI, live OAuth, full Supabase Edge or production tests were run. The native
+PostgreSQL harness uses a minimal synthetic Auth schema, not an actual Supabase Auth server.
+
+Earlier red runs are retained: missing canonical updated_at, manual-confirmation source
+tag, SQL JSON serialization and PostgreSQL driver Date handling were integration defects
+found and fixed before the final HTTP/native reruns. A test idempotency hash fixture was
+also made unique by source ID. Golden expected values and the original formula were not
+changed. The separate APK failure is unresolved, not reclassified as a passing test.
+
+### What was actually observed in the existing Web
+
+The existing meal editor, not a second dashboard, submitted a clearly synthetic label:
+200 kcal / 10 g protein / 20 g carbs / 5 g fat per 100 g. A's 150 g record displayed
+300 kcal / 15 / 30 / 7.5, nutrition 17.6, completeness 67%, version
+`nutrition-score-v1.0`. A page reload retained it. Updating to 200 g displayed
+400 kcal / 20 / 40 / 10 and nutrition 23.5. Switching to B showed no A meal or outputs;
+switching/reloading A again retained the 400 kcal record. Other missing domains showed
+INSUFFICIENT_DATA, not poor-health zero. The original overview did not take the new
+experimental nutrition result as an original frozen-score input.
+
+Deleting through the existing form reached its native confirmation. The browser tool
+then timed out on focus-emulation/dialog handling, including its documented dialog API,
+CDP dialog control and an alternate Chrome tab. No confirmation override was injected.
+Accordingly **MEAL_CREATE_UPDATE_DELETE_BROWSER_E2E is not PASS**. Live HTTP DELETE
+passes separately; it is not substituted for the missing browser deletion evidence.
+Formatter 0/null, 0.85 -> 85%, STALE, error/retry structure and late-account-response guard
+have separate Node unit/contract evidence, not fabricated browser observations.
+
+### PostgreSQL and identity scope
+
+Both native test accounts have distinct auth subjects and canonical UUIDs. Invalid,
+expired and missing-map identities fail closed; client owner fields are rejected.
+Low-privilege `authenticated` is neither superuser nor BYPASSRLS; `anon` protected reads
+fail, A's mapped RLS read cannot see B, authenticated writes are denied. The local
+`service_role` is BYPASSRLS; mutations/receipts/original-score reads are separately scoped
+by server-verified identity. No service credential is exposed in Web code or fixtures.
+`rls.json` records roles/grants; `native-db.manifest.json` records actual server/database
+identity and migration hashes. Actual ingestion uses the existing `beta_ingest_health_mutation`
+and durable recompute functions. Snapshot heads and payload versions are persisted/read,
+not recreated only for the response. Receipt replay after tombstone does not resurrect it.
+
+### Fresh performance — measurements, not SLA
+
+- PYTHON_SQLITE_LOCAL: 1 user / 365 records: ingest 2,868.89 ms, aggregate 1.05 ms,
+  bundle 1.56 ms, late update 155.70 ms. 10 users / 3,650 records: ingest 27,893.53 ms,
+  aggregate 3.20 ms, bundle 5.75 ms, late update 296.08 ms. Both late updates recompute
+  21 dates, 24 SELECTs; 28-day API read 1 SELECT. `sqlite-benchmark-fresh.log`.
+- POSTGRESQL_LOCAL: native EXPLAIN ANALYZE JSON for the bounded history-head read is
+  in `native-performance.json`; database/server/migration identity in native manifest.
+  This is distinct from old PGlite EXPLAIN data.
+- TARGET_RUNTIME_LOCAL: 1 synthetic user, 40 canonical records across 8 days and
+  delete/recompute: approximately 1.7 seconds in the closure run. Individual actual
+  Deno->Python compute durations and row counts are recorded in `native-performance.json`.
+  Later JUnit rerun measurements may differ; the raw file is authoritative for that run.
+- No percentile sampling, defined production SLA, dense population benchmark, remote
+  network cost, multi-host contention or device power measurement. Remote resource/cost
+  expectation is UNKNOWN pending architecture choice. No paid services were added.
+
+### Remaining closure and enablement status
+
+Next action: restore usable browser native-dialog automation (or review an accessible
+confirmation UI as a distinct scoped change), then repeat the complete Web flow against
+a newly created final-schema local database. Obtain appropriate build configuration
+through the approved existing mechanism before APK assembly; do not paste credentials.
+Before Beta enablement, resolve Edge-vs-host runtime architecture and separately authorize
+the exact target environment, migrations and feature flags. All defaults remain OFF.
+
+PHOTO_MODEL_IMPLEMENTATION = MISSING; PHOTO_REFERENCE_DATA_VALIDATION = NOT_VERIFIED;
+DOMAIN_SCORE_VALIDITY = EXPERIMENTAL_UNVALIDATED; REMOTE_BETA_INTEGRATION = NOT_RUN;
+ANDROID_REAL_DEVICE_E2E = NOT_RUN; IOS_BUILD_AND_DEVICE = NOT_RUN;
+PRODUCTION_RELEASE = NOT_AUTHORIZED. These gates remain explicitly open.
+
+REMOTE_PUSH = NO; REMOTE_BETA_WRITES = 0; PRODUCTION_WRITES = 0;
+DEPLOYMENTS = 0; PAID_SERVICES_ADDED = 0. No overall completion percentage is claimed.
+
 Date: 2026-09-12. Branch: `codex/multi-domain-engine`. Scope: development engine and local integration, not production or clinical validation.
 
 ## Results

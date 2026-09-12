@@ -1,5 +1,111 @@
 # Multi-domain engine architecture (non-production)
 
+## 2026-09-12 existing-runtime closure (supersedes activation claims below)
+
+Source baseline: reachable ancestors `a3f02ea`, `64aeb3a`, `9cbd260` on
+`codex/multi-domain-engine`, worktree `D:/Dev/Projects/web-health-companion-phase4a`.
+The audit reads the actual commit diffs, not their reported test totals. The original
+five tracked Android changes and untracked timeout test remain outside this track.
+No checkout, cherry-pick, remote CI, push, deployment, account linking or backfill was performed.
+
+### Before / after call graph
+
+| Node | Baseline reality | Explicit local path now |
+|---|---|---|
+| Existing Web | `index.html:sessionPost`, `apiService`, meal form -> existing Apps Script API; new domains MISSING | same `index.html` form -> `scripts/local-engine-web.js:localEngineRequest`; loopback feature flag only |
+| API | Python `engine_api.py:create_app` WSGI was test-callable, not mounted in existing app | `scripts/local-engine-server.ts` -> `mobile-health-beta/index.ts:dispatchLocalEngine` -> `local-engine-runtime.ts:LocalEngineRuntime.handle` |
+| Verification | Beta `authenticateNativeUser` uses admin auth.getUser; Python callback was injected by tests | same native authentication function, backed locally by `local-engine-auth.ts:createSyntheticAuthority` ES256 signature/issuer/audience/expiry verification |
+| Canonical mapping | `resolveNativeIdentity` -> `beta_resolve_native_auth_identity`; already exists | same function and SQL, seeded synthetic auth subject != canonical ID; absent mapping fails closed |
+| Input / invalidation | engine_store.py SQLite path, no real app call | `LocalEngineRuntime.mutate` -> native PG `engine_meals` + receipt transaction -> `private.engine_enqueue_meal`; native health ingestion -> existing mutation function + opt-in rolling trigger |
+| Worker | existing persistent Python JSONL infrastructure; new domains not connected | actual `beta_claim_score_recompute` -> `LocalEngineRuntime.compute` -> `PersistentPythonRuntimeAdapter.execute` -> `python-algorithm-worker.py` -> `domain_runtime.py:compute_domain_request` -> existing `aggregate_day`, `derived_metrics`, `DomainEngines.calculate` |
+| Storage | proposed engine history/head schema; PGlite test only | native PG output history/head and original `beta_persist_score_bundle` in the same transaction, generation/lease checked before publish |
+| Original scores | `score-bridge.ts:recomputeBetaScore` frozen eight-score bridge | unchanged computation, unchanged missing nutrition/training inputs; separate original `beta_health_scores` |
+| Response / UI | new outputs MISSING from app | real PG snapshot -> existing meal list + experimental panel; `legacyTimeline` reads original persisted scores for existing overview; request receipts reconcile writes |
+| Photo | perception adapter / fixtures only | MISSING model/weights/inference; local photo/handoff controls hidden, no fake success |
+
+The local HTTP host calls the exported shared route dispatch, **not the production
+`withSupabase` HTTP middleware**. It reuses the real native verification/mapping contract
+and frozen queue/score functions. It does not claim a full local Supabase Auth stack.
+The synthetic issuer verifies real signed tokens; it is not Google OAuth. No production
+session, key or account is used. A/B isolation tests include the privileged write path
+and low-privilege `authenticated` RLS reads. `service_role` has BYPASSRLS and is never a
+frontend credential; its server SQL scopes exclusively to the verified canonical ID.
+
+### Runtime choice and hard boundary
+
+Actual local runtime: Deno 2.9.6 host + existing Python 3.12 persistent JSONL adapter +
+native PostgreSQL 18.4. There is no second scoring implementation. Deno also executes
+the unchanged JS score snapshot and compares all 28 original golden vectors against
+the persistent Python worker exactly. Reference orchestration tests compare complete
+domain bundles, including nulls, metrics, versions and timezone cases.
+
+**SUPABASE_EDGE_DEPLOYABILITY = NOT_SUPPORTED_BY_THIS_HOST_ADAPTER.** A constrained
+Edge worker cannot spawn this Python process. The Windows test host is not a formal
+service dependency. Existing CURRENT policy is unchanged. Future options are a
+runtime-compatible core port with exact differential tests, or an independently hosted
+Python worker with explicit operations/security/cost review. Neither service nor public
+tunnel has been enabled. This local proof does not close the remote target-runtime gate.
+
+### Local database and migration rehearsal
+
+`scripts/local-engine-postgres.mjs:createLocalPostgres` creates a unique
+`health_engine_<uuid>` database in a new native cluster bound to 127.0.0.1 on 57483
+(Web) or 57484 (tests). It never reads DATABASE_URL, existing secrets or tunnel config.
+Each database manifest records server version/address/name and SHA256 of every migration.
+Only synthetic accounts/records are seeded. The minimal `auth.users`, `auth.identities`
+and `auth.uid()` compatibility schema is explicitly local; no OAuth server is imitated.
+
+The migration chain is applied in filename order. The durable processor migration's
+outbound pg_net/cron/vault authorizer/scheduler sections are omitted; real queue, lease,
+generation and retry SQL is retained. Therefore this is **native PostgreSQL schema and
+repository rehearsal**, not a complete Supabase deployment rehearsal. PGlite results
+remain a separate legacy regression and are not evidence for native PostgreSQL Gate 3.
+
+New proposal: `20260912041126_engine_local_runtime_integration.sql`, after existing
+`20260912032458_multi_domain_engine_versioned_outputs.sql`. It adds meals, idempotent
+receipts, mapped read policies, and bounded invalidation. No identity table replacement
+or account merge exists. Health rolling invalidation needs the session setting
+`health.engine.experimental=on`; absence leaves existing remote behavior unchanged.
+Meal changes invalidate old/new dates and their necessary forward 27-day windows,
+capped at current Asia/Taipei date. Snapshot/input limits are 28 days and 5,000 rows;
+this is not an unbounded historical reporting service. Generic/DST attribution is tested
+in the Python reference adapter; the local Web meal form is explicitly Asia/Taipei only.
+
+Publish checks generation and lease inside the same transaction as both score stores.
+Replay receipts cannot resurrect tombstones; stale revisions fail. Pending or failed
+recompute surfaces STALE without rewriting historical payloads. Delete-all produces
+INSUFFICIENT_DATA rather than promoting old valid scores. A job failure retains actual
+queue retry state; test-only clock acceleration is disclosed separately from live HTTP.
+
+### Enablement preparation — do not execute remotely
+
+1. Local reproduction: `npm ci --ignore-scripts` (native PG binary optional, Windows x64
+   harness); existing Python environment; `node scripts/start-local-engine-e2e.mjs`.
+   Deno config/lock is isolated in `config/engine-local.deno.*` so the pre-existing
+   untracked Beta `deno.lock` is not included in this delivery. Browser URL is
+   `http://127.0.0.1:57841/`, synthetic A/B only. No external CDN/OAuth requests allowed.
+2. Native tests: `node scripts/test-local-engine-native.mjs`; HTTP tests require that
+   local host: `node --test tests/local-engine-http.test.mjs`. Logs are captured by
+   `scripts/run-engine-evidence.ps1`, including command, source hash, UTC start/end and exit.
+3. Defaults: Web flag absent/OFF; `HEALTH_ENGINE_LOCAL_ONLY` absent/OFF; registration
+   rejects nonlocal settings/hosts. Disable flags and stop the dedicated host to restore
+   the original Web/API route. Do not delete remote tables as a rollback shortcut.
+4. Future Beta requires separately approving the exact target project/environment,
+   runtime architecture, provider/token verification path, staged migration apply,
+   feature flag enablement, smoke accounts and rollback plan. **None approved here.**
+   Production requires another independent authorization and data/backup review.
+5. Native smoke: A create -> receipt replay -> stored nutrition version -> frozen score
+   unchanged -> B denied -> update -> stale revision denied -> delete -> null latest.
+   Browser smoke must also complete the blocked confirmation/reload path before claiming
+   the complete Web Gate. See ENGINE_TEST_REPORT.md.
+6. Paid resources added: 0. Local processes use existing CPU/RAM/disk; no remote service
+   estimate is justified before architecture choice. Expected remote cost = UNKNOWN.
+   No permanent power, sleep, security-policy, permission or secret changes were made.
+
+Independent gates remain: PHOTO_MODEL_IMPLEMENTATION, PHOTO_REFERENCE_DATA_VALIDATION,
+DOMAIN_SCORE_VALIDITY, REMOTE_BETA_INTEGRATION, ANDROID_REAL_DEVICE_E2E,
+IOS_BUILD_AND_DEVICE, PRODUCTION_RELEASE. None is removed or counted as complete.
+
 ## Stage 0 audit
 
 Audit base: `codex/phase-4a-tester-access`, HEAD `64bf2e33e4889d4fedd91de429ddb7da09bac411`.

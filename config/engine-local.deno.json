@@ -1,0 +1,17 @@
+{
+  "imports": {
+    "@supabase/functions-js": "jsr:@supabase/functions-js@2.112.4",
+    "@supabase/server": "npm:@supabase/server@1.4.1"
+  },
+  "lock": "engine-local.deno.lock",
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "require-await",
+        "no-import-prefix",
+        "no-node-globals"
+      ]
+    }
+  }
+}
