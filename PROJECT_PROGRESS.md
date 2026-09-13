@@ -53,6 +53,27 @@ credits merely from a cached report. Incomplete scope is never rounded to100%.
 
 Required first-line reporting is now saved in effective root `AGENTS.md`.
 
+## 2026-09-13 release/exercise continuation — new evidence, unchanged denominator
+
+Run `health-release-exercise-20260913-120836`, starting at `efe83ed`, produced new
+real-handler, PostgreSQL18.6, verified Web-session mapping and exercise Browser
+evidence. Fresh 10 integrated gates PASS; real Edge/OAuth remain unaccepted. The
+per-leaf `continuation_accounting` in `project-progress.json` records every original
+acceptance, original weight, new evidence and reason (25 leaves, no double counting).
+
+- ALREADY_CREDITED: all8 accepted local leaves; new security/CRUD/parity strengthens
+  their evidence but earns no duplicate weight. Fresh files are hash-linked in ledger.
+- ACCEPTANCE_NOT_FULLY_MET:17 remaining leaves, including actual Edge, full confirmed
+  overview/14-day/weekly UI, Beta/OAuth, release, devices and real-world validity.
+- OUTSIDE_CURRENT_BASELINE: the newly requested exercise catalog management and
+  package tooling do not create/expand weighted gates during this run.
+- LEDGER_OMISSION: NONE_CONFIRMED; correction0.0pp, engineering increment0.0pp.
+
+Calculation:100 × (8 ×4) /100 =32.0%; uncredited68. Full delivery scope still lacks
+confirmed version/cutoff and iOS/charging decisions: overall UNKNOWN, not32% overall.
+Photo model, food reference, score validity, Android/iOS and release remain visible.
+This is real new work with +0.0pp under the unchanged baseline, not repeated closure.
+
 ## 2026-09-13 continuation
 
 Git isolation/migration has no product weight. Manual body SQL and the added historical

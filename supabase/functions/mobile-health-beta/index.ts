@@ -1,4 +1,5 @@
 import { withSupabase } from "@supabase/server";
+import { boundedSdkFetch } from "./bounded-auth-fetch.ts";
 import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
@@ -22,19 +23,33 @@ type Json = Record<string, unknown>;
 // Explicit local host injection only; default Edge and remote routes remain unchanged.
 let localEngineHandler: ((request: Request) => Promise<Response>) | null = null;
 export function registerLocalEngineHandler(handler: (request: Request) => Promise<Response>): void {
-  if (Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1") throw new Error("LOCAL_ENGINE_DISABLED");
+  if (Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1" || Deno.env.get("DENO_DEPLOYMENT_ID")) throw new Error("LOCAL_ENGINE_DISABLED");
   localEngineHandler = handler;
 }
 export async function dispatchLocalEngine(request: Request): Promise<Response | null> {
+  if (Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1" || Deno.env.get("DENO_DEPLOYMENT_ID")) return null;
   const url = new URL(request.url);
   if (!localEngineHandler || !["127.0.0.1", "localhost"].includes(url.hostname)
-      || url.pathname !== "/v1/engine/web") return null;
+      || relativePath(url.pathname) !== "/v1/engine/web") return null;
   return await localEngineHandler(request);
 }
 
 export default {
-  fetch: withSupabase({ auth: "none" }, async (request, ctx) => {
+  fetch: withSupabase({ auth: "none", cors: "disabled", supabaseOptions:{global:{fetch:boundedSdkFetch}} }, async (request, ctx) => {
     const origin = request.headers.get("origin") ?? "";
+    const localManual = Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") === "1" && !Deno.env.get("DENO_DEPLOYMENT_ID")
+      && relativePath(new URL(request.url).pathname) === "/v1/engine/web";
+    if (localManual) {
+      const expected = Deno.env.get("HEALTH_MANUAL_LOCAL_ORIGIN") || "http://127.0.0.1:57841";
+      if (!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(expected) || (origin && origin !== expected)) return json(403, {error:"ORIGIN_REJECTED"});
+      const headers = {"access-control-allow-origin":expected,"access-control-allow-methods":"POST, OPTIONS","access-control-allow-headers":"authorization, content-type, apikey, x-client-info, x-health-session-kind","vary":"Origin","cache-control":"no-store"};
+      if (request.method === "OPTIONS") return new Response(null,{status:origin?204:403,headers});
+      try {
+        const response = await dispatchLocalEngine(request) ?? await (await import('./local-manual-bootstrap.ts')).localManualBootstrap(request,ctx.supabaseAdmin);
+        if (response) {const combined=new Headers(response.headers);for(const [k,v] of Object.entries(headers))combined.set(k,v);return new Response(response.body,{status:response.status,headers:combined});}
+        return Response.json({error:"LOCAL_MANUAL_NOT_CONFIGURED"},{status:503,headers});
+      } catch {return Response.json({error:"LOCAL_MANUAL_CONFIGURATION_FAILED"},{status:503,headers});}
+    }
     if (request.method === "OPTIONS") {
       if (!origin || origin !== allowedOrigin) return json(403, { error: "ORIGIN_REJECTED" });
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
@@ -514,6 +529,7 @@ export async function authenticateNativeUser(request: Request, admin: any): Prom
   const token = bearer(request);
   const { data, error } = await admin.auth.getUser(token);
   const user = data?.user;
+  if (error && (error.status === 0 || error.status >= 500 || error.code === "AUTH_SERVICE_UNAVAILABLE")) throw failure("AUTH_SERVICE_UNAVAILABLE", 503);
   if (error || !user?.id) throw failure("INVALID_SUPABASE_SESSION", 401);
   const providers = new Set<string>();
   if (typeof user.app_metadata?.provider === "string") providers.add(user.app_metadata.provider);
@@ -541,6 +557,7 @@ export async function resolveNativeIdentity(admin: any, authUserId: string, requ
     p_auth_user_id: authUserId,
   });
   if (error) throw databaseFailure(error);
+  if (Array.isArray(data) && data.length > 1) throw failure("CANONICAL_IDENTITY_CONFLICT", 409);
   const identity = Array.isArray(data) ? data[0] as Json : null;
   if (!identity || identity.environment !== "beta" || identity.provider !== "google") {
     if (!required) return null;
@@ -580,15 +597,17 @@ async function resolveCanonicalWebIdentity(request: Request, admin: any): Promis
   return { ...identity, web_subject_hash: webSubjectHash };
 }
 
-async function verifyWebIdentity(token: string): Promise<{ subject: string; email: string }> {
+export async function verifyWebIdentity(token: string): Promise<{ subject: string; email: string }> {
   if (!webAuthVerifyUrl.startsWith("https://")) throw failure("WEB_AUTH_NOT_CONFIGURED", 503);
+  const signal = AbortSignal.timeout(10000);
   const upstream = await fetch(webAuthVerifyUrl, {
     method: "POST",
     headers: { "content-type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ action: "getCurrentUser", sessionToken: token, payload: {} }),
-  });
+    signal,
+  }).catch(() => { throw failure("WEB_SESSION_VERIFICATION_UNAVAILABLE", 503); });
   if (!upstream.ok) throw failure("WEB_SESSION_REQUIRED", 401);
-  const raw = await upstream.json().catch(() => null) as Json | null;
+  const raw = await upstream.json().catch(() => { if (signal.aborted) throw failure("WEB_SESSION_VERIFICATION_UNAVAILABLE", 503); return null; }) as Json | null;
   const data = (raw?.data ?? raw?.result ?? raw) as Json | null;
   const profile = (data?.profile ?? data) as Json | null;
   const subject = profile?.UserID ?? profile?.userId ?? profile?.id;

@@ -2,6 +2,237 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "continuation_accounting": {
+    "run_id": "health-release-exercise-20260913-120836",
+    "source_baseline": "efe83ed44034ac19d58e1f96e0c3c7dac6a41eaf",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "ledger_correction_pp": 0,
+    "ledger_omission": "NONE_CONFIRMED",
+    "gates": [
+      {
+        "gate_id": "canonical_ingestion",
+        "original_acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "local_identity",
+        "original_acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "frozen_formula",
+        "original_acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "reference_engineering",
+        "original_acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "nutrition_label_local",
+        "original_acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "portable_core_parity",
+        "original_acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "edge_execution",
+        "original_acceptance": "Supabase CLI Edge handler -> canonical identity -> actual engine -> dedicated PostgreSQL passes security/error/resource tests; no host Python or remote fallback.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "postgres_recompute",
+        "original_acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "existing_browser",
+        "original_acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "overview_training_weekly",
+        "original_acceptance": "Full confirmed-version overview, training/body input,14-day aggregate and rolling7-day reporting UI regression; contracts alone insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "android_nondevice_build",
+        "original_acceptance": "Fresh JVM/lint plus legitimate intended Beta APK variant build with reviewed config; unit-only evidence cannot satisfy build.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "android_oem_device",
+        "original_acceptance": "OEM background bounded HTTP/retry/lock/swipe/process-death/idempotency and ingestion-to-score real-device E2E.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "ios_build",
+        "original_acceptance": "Confirmed iOS delivery route build/static acceptance on supported Apple toolchain; optional native helper scope decision remains visible.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "ios_device",
+        "original_acceptance": "iOS Shortcut/HealthKit permitted data -> canonical ingestion -> displayed output on device; platform scope explicitly confirmed.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "photo_model",
+        "original_acceptance": "Licensed model weights and real inference path, no fixture or external manual handoff substituted.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "photo_reference_accuracy",
+        "original_acceptance": "Licensed representative photo ground truth and predeclared evaluation; actual accuracy and limitations measured.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "food_reference",
+        "original_acceptance": "Food reference source/version/license, preparation/edible/portion conversions and values independently validated.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "new_score_validity",
+        "original_acceptance": "New domain formulas have justified populations/thresholds/weights and independent reference/real-world validation.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "remote_beta_oauth",
+        "original_acceptance": "Authorized remote Beta API/UI integration, real Google OAuth identity and tenant isolation smoke; local synthetic tokens insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "line_v4",
+        "original_acceptance": "Roadmap V4 verified LIFF Google link/unlink, account separation and weekly LINE notification acceptance.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "recovery_v2",
+        "original_acceptance": "Roadmap V2 full-body/local-muscle load, sleep features and user-feedback recovery acceptance; new adapter alone insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "guidance_v3",
+        "original_acceptance": "Roadmap V3 context-based intensity/body-part guidance, RPE/RIR and Deload/imbalance acceptance.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "personalization_v5",
+        "original_acceptance": "Roadmap V5 long-term personalization, explainable weight decisions and cross-domain guidance with validation.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "release_security_privacy",
+        "original_acceptance": "Pre-release privacy/security, data backup/retention/permissions and legal distribution review; high-risk findings closed.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "authorized_release",
+        "original_acceptance": "Explicitly authorized release, distribution smoke, backup and rollback acceptance in named environment.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      }
+    ],
+    "outside_current_baseline": [
+      "Exercise catalog rename/personal alias/archive/restore/owned-unused delete (new explicit Owner requirement)",
+      "Static packaging tool and Git/storage operations do not create product credit"
+    ]
+  },
   "previous_progress": 32,
   "previous_baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "scope_description": "Candidate known-scope union of documented Roadmap V1–V5 and current Health Companion F&F Beta/platform acceptance. NOT a confirmed complete delivery version.",
@@ -25,6 +256,10 @@
       "status": "PASS",
       "acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml",
+          "sha256": "61656cab2176a038be1717c2f7e65880e419cb882b22b59558a89fb2ce4993ac"
+        },
         {
           "path": ".engine-artifacts/blocker-closure/node-final.xml",
           "sha256": "932df441786f27cae852fe6119cf56d36e46e602a68b95068c3e8f31ecf1e02c"
@@ -52,6 +287,10 @@
       "acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
       "evidence": [
         {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+          "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
+        },
+        {
           "path": ".engine-artifacts/blocker-closure/native-junit.xml",
           "sha256": "c0e56a351ce0b2a19601222fba61255dc2d3709dfaa4f2a49170190ee95ce9d0"
         },
@@ -77,6 +316,14 @@
       "status": "PASS",
       "acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+          "sha256": "c0efbbdf1f6ca828db7fe009106d01ae280f556704b733d4a20fcd2c864afc87"
+        },
+        {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
+          "sha256": "0e2d4f4cde6ee41696e0db523c871b010eec43d0cb4d78d8c26aa28b8cd8edbe"
+        },
         {
           "path": ".engine-artifacts/blocker-closure/python.xml",
           "sha256": "c453e492cdec47aa92a93d8378f1cacac82ec61174141ff892ab3982efb4a6e6"
@@ -104,6 +351,10 @@
       "acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
       "evidence": [
         {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+          "sha256": "c0efbbdf1f6ca828db7fe009106d01ae280f556704b733d4a20fcd2c864afc87"
+        },
+        {
           "path": ".engine-artifacts/blocker-closure/python.xml",
           "sha256": "c453e492cdec47aa92a93d8378f1cacac82ec61174141ff892ab3982efb4a6e6"
         },
@@ -121,6 +372,10 @@
       "status": "PASS",
       "acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+          "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
+        },
         {
           "path": ".engine-artifacts/blocker-closure/http.xml",
           "sha256": "3cc4e4abc02ed27814f56be410f8e4bbc2e2c05de20e8acc8391fc2ef721a43a"
@@ -143,6 +398,10 @@
       "status": "PASS",
       "acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
+          "sha256": "0e2d4f4cde6ee41696e0db523c871b010eec43d0cb4d78d8c26aa28b8cd8edbe"
+        },
         {
           "path": ".engine-artifacts/blocker-closure/portable-final.xml",
           "sha256": "ba68744f8e280a91940405d7c6823e2efea6921805249b076a7e46fbb74cd6c0"
@@ -179,6 +438,10 @@
       "acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
       "evidence": [
         {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+          "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
+        },
+        {
           "path": ".engine-artifacts/blocker-closure/native-junit.xml",
           "sha256": "c0e56a351ce0b2a19601222fba61255dc2d3709dfaa4f2a49170190ee95ce9d0"
         },
@@ -200,6 +463,10 @@
       "status": "PASS",
       "acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+          "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
+        },
         {
           "path": ".engine-artifacts/blocker-closure/browser-ts-deno-9c05576c-9599-4512-8280-11ca495aa502/report.json",
           "sha256": "1b9406052c0f3da7ea58af3004577f4c52ad8d701390fa736c94e1445d18567d"

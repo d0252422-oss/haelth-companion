@@ -11,14 +11,65 @@ function harness(fetch) {
   const elements = new Map();
   const ctx = vm.createContext({
     LOCAL_ENGINE_ENABLED: true, currentUser: { userId: 'synthetic-A' },
-    appState: { body: [], mealsToday: [], nutrition: [] },
-    AbortSignal, crypto: { randomUUID }, fetch, Map, Set, Date, Promise,
+    appState: { body: [], mealsToday: [], nutrition: [], workouts: [] }, workoutSession:null, exerciseDatabase:[],
+    AbortSignal, structuredClone, crypto: { randomUUID }, fetch, Map, Set, Date, Promise,
     queueMicrotask() {}, getLocalDateString: () => '2026-09-13',
-    document: { getElementById(id) { if (!elements.has(id)) elements.set(id, { value: '', checked: false, dataset: {}, textContent: '', classList: { add() {}, remove() {} } }); return elements.get(id); } },
+    document: { querySelectorAll(){return [];}, getElementById(id) { if (!elements.has(id)) elements.set(id, { value: '', checked: false, dataset: {}, textContent: '', remove(){}, replaceChildren(){}, style:{}, classList: { add() {}, remove() {} } }); return elements.get(id); } },
   });
   vm.runInContext(source, ctx);
   return ctx;
 }
+
+test('late catalog response cannot downgrade a newer revision or revive archived selection',async()=>{
+  const replies=[];const ctx=harness(()=>new Promise(resolve=>replies.push(resolve)));
+  const old=ctx.localEngineRequest('getExerciseDatabase');const rejected=assert.rejects(()=>old,e=>e.code==='STALE_CATALOG_RESPONSE');
+  const newer=ctx.localEngineRequest('getExerciseDatabase');replies[1]({json:async()=>({ok:true,data:[{exerciseId:'A',revision:2,archived:true}]})});
+  assert.equal((await newer)[0].archived,true);replies[0]({json:async()=>({ok:true,data:[{exerciseId:'A',revision:1,archived:false}]})});await rejected;
+});
+test('training uncertain response retains a deep immutable envelope while draft edits are locked',async()=>{
+  const requests=[];let writes=0;
+  const ctx=harness(async(_url,init)=>{const request=JSON.parse(init.body);requests.push(request);if(request.action==='getTrainingWriteStatus')return{json:async()=>({ok:true,data:{exists:false}})};if(++writes===1)throw Error('transport lost');return{json:async()=>({ok:true,data:{records:[]}})};});
+  const exercises=[{exerciseId:'A',sets:[{weight:0,reps:10}]}];ctx.workoutSession={exercises};
+  const payload={date:'2026-09-13',startTime:'2026-09-13T00:00:00Z',endTime:'2026-09-13T00:20:00Z',exercises};
+  await assert.rejects(()=>ctx.localEngineRequest('addWorkoutRecord',payload));assert.equal(ctx.workoutSession.sqlLocked,true);
+  exercises[0].sets[0].weight=999; // Simulate a stale draft reference, even though real controls are locked.
+  await ctx.localEngineRequest('addWorkoutRecord',{...payload,endTime:'2026-09-13T00:30:00Z'});
+  const submitted=requests.filter(r=>r.action==='addWorkoutRecord');assert.deepEqual(submitted[0],submitted[1]);assert.equal(submitted[1].payload.exercises[0].sets[0].weight,0);assert.equal(ctx.workoutSession.sqlLocked,false);
+});
+test('account reset discards catalog, draft and hidden training-overview state',()=>{
+  const ctx=harness(()=>{}),controls=Array.from({length:6},()=>({disabled:false}));ctx.document.querySelectorAll=()=>controls;
+  ctx.workoutSession={exercises:[{exerciseId:'A'}]};ctx.localTrainingDraftLock(true);assert.ok(controls.every(c=>c.disabled));ctx.exerciseDatabase=[{exerciseId:'A'}];ctx.document.getElementById('training-overview').style.display='none';ctx.clearLocalManualState();
+  assert.equal(ctx.workoutSession,null);assert.equal(ctx.exerciseDatabase.length,0);assert.equal(ctx.document.getElementById('training-overview').style.display,'block');
+  assert.ok(controls.every(c=>c.disabled===false));
+});
+test('actual start/back handlers cannot replace an unresolved SQL workout draft',()=>{
+  const ctx=harness(()=>{}),messages=[];ctx.toast=message=>messages.push(message);ctx.workoutSession={sqlLocked:true,sqlEnvelope:{request:'same-envelope'},exercises:[]};
+  const original=ctx.workoutSession;
+  for(const id of ['start-workout','back-training']){
+    vm.runInContext(html.split(/\r?\n/).find(line=>line.includes(`document.getElementById("${id}").onclick=`)),ctx);
+    ctx.document.getElementById(id).onclick();assert.equal(ctx.workoutSession,original);
+  }
+  assert.equal(messages.length,2);assert.equal(ctx.workoutSession.sqlEnvelope.request,'same-envelope');
+});
+test('actual navigation restores the same unresolved training draft and retry controls',()=>{
+  const ctx=harness(()=>{}),states=new Map();ctx.workoutSession={sqlLocked:true,sqlEnvelope:{request:'retained'}};const original=ctx.workoutSession;
+  for(const id of ['training-screen','workout-session','settings-screen']){const state=new Set();states.set(id,state);ctx.document.getElementById(id).classList={add:x=>state.add(x),remove:x=>state.delete(x)};}
+  ctx.document.querySelectorAll=selector=>selector==='.screen'?[...states.keys()].map(id=>ctx.document.getElementById(id)):[];
+  ctx.updatePageHeader=()=>{};ctx.window={scrollTo(){}};ctx.ensureScreenData=()=>Promise.resolve();ctx.handleScreenError=()=>{};
+  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function navigate(')),ctx);
+  ctx.navigate('settings-screen');assert.equal(states.get('workout-session').has('active'),false);
+  ctx.navigate('training-screen');assert.equal(states.get('workout-session').has('active'),true);assert.equal(ctx.workoutSession,original);
+  assert.equal(ctx.document.getElementById('training-overview').style.display,'none');
+});
+test('split-session local daily totals count duration once, preserve zero and stable ID grouping',()=>{
+  const ctx=harness(()=>{}),rows=ctx.localTrainingDailyRows([{date:'2026-09-13',sessionId:'s',totalSets:1,totalVolume:0,durationMinutes:20},{date:'2026-09-12',sessionId:'s',totalSets:1,totalVolume:10,durationMinutes:20}]);
+  assert.deepEqual(plain(rows),[{date:'2026-09-12',trainingSets:1,trainingVolume:10,trainingDuration:20},{date:'2026-09-13',trainingSets:1,trainingVolume:0,trainingDuration:0}]);
+});
+test('dashboard cache isolates actual provider, canonical user and dedicated database namespace',()=>{
+  const ctx=harness(()=>{});ctx.location={origin:'http://127.0.0.1:57841'};ctx.window={HEALTH_ENGINE_LOCAL_CONFIG:{databaseNamespace:'db-A'}};ctx.DASHBOARD_CACHE_SCHEMA='test';ctx.CONFIG={API_BASE_URL:'https://example.invalid'};
+  for(const name of ['dashboardProviderNamespace','dashboardCacheKey'])vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function '+name+'(')),ctx);
+  const original=ctx.dashboardCacheKey('a','b');ctx.window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='db-B';assert.notEqual(ctx.dashboardCacheKey('a','b'),original);ctx.window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='db-A';ctx.currentUser={userId:'B'};assert.notEqual(ctx.dashboardCacheKey('a','b'),original);ctx.LOCAL_ENGINE_ENABLED=false;assert.notEqual(ctx.dashboardCacheKey('a','b'),original);
+});
 
 test('manual SQL local route remains default-off and does not replace Apps Script authentication', async () => {
   assert.match(html, /HEALTH_ENGINE_LOCAL_CONFIG\?\.enabled===true/);

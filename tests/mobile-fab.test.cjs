@@ -20,7 +20,8 @@ assert.doesNotMatch(html, /await refreshAfterRecordMutation\(/);
 assert.doesNotMatch(html, /await loadRange\(globalDateRange,\{force:true\}\);closeSheet\(\)/);
 assert.match(html, /upsertBodyRecord\(data\);setSubmitting\(btn,false\);closeSheet\(\);toast/);
 assert.match(html, /upsertHealthCheckin\([\s\S]*?\);closeSheet\(\);toast\("身體狀態已更新。"\)/);
-assert.match(html, /start-workout"\)\.onclick=\(\)=>\{workoutSession=/);
+// Local unresolved writes must retain their envelope before normal draft creation.
+assert.match(html, /start-workout"\)\.onclick=\(\)=>\{if\(LOCAL_ENGINE_ENABLED&&workoutSession\?\.sqlLocked\)return toast\([^;]+\);workoutSession=/);
 assert.match(html, /UI_TEST_MODE=/);
 assert.match(html, /document\.elementFromPoint\(event\.clientX,event\.clientY\)/);
 assert.match(html, /function optimisticUpsertMeals\(records\)/);

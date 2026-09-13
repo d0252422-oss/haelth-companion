@@ -1,5 +1,9 @@
 // Local opt-in adapter; not mobile ingestion and not a second identity system.
 type Json = Record<string, any>;
+import {prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
+// Pending integration is not an executing job. Preserve the old status for consumers,
+// but expose its exact cause on reads as well as writes (including older saved rows).
+export const manualBodyAnalysis = { analysisStatus: "ANALYSIS_PENDING", analysisReason: "ALGORITHM_NOT_CONNECTED", analysisJobScheduled: false };
 export const localToday = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
 }).format(new Date());
@@ -29,12 +33,11 @@ export class ManualBodyLocalStore {
     rejectClientIdentity(input);
     const { start, end } = localReadRange(input);
     return await this.sql.begin(async (tx: any) => {
-      await tx.unsafe("set local role authenticated");
-      await tx`select set_config('request.jwt.claim.sub',${identity.auth},true)`;
+      await prepareManualRead(tx,identity);
       const rows = await tx`select body,revision from public.engine_manual_body_records
         where canonical_user_id=${identity.canonical} and not deleted and local_date between ${start}::date and ${end}::date order by local_date,record_id limit 367`;
       if (rows.length > 366) throw Error("READ_BOUND_EXCEEDED");
-      return rows.map((r: Json) => ({ ...r.body, revision: Number(r.revision) }));
+      return rows.map((r: Json) => ({ ...r.body, ...manualBodyAnalysis, revision: Number(r.revision) }));
     });
   }
   async write(identity: Json, input: Json, remove = false) {
@@ -44,11 +47,12 @@ export class ManualBodyLocalStore {
     // Hash the original request, not a server-generated record ID or normalized owner.
     const inputHash = await sha({ input, remove });
     return await this.sql.begin(async (tx: any) => {
+      await prepareManualWrite(tx,identity);
       await tx`select pg_advisory_xact_lock(hashtextextended(${identity.canonical},0))`;
       const receipt = (await tx`select input_hash,response from private.engine_body_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${input.clientRequestId}`)[0];
       if (receipt) {
         if (receipt.input_hash !== inputHash) throw Error("REQUEST_ID_CONFLICT");
-        return { ...receipt.response, replayed: true };
+        return { ...receipt.response, ...manualBodyAnalysis, record: { ...receipt.response.record, ...manualBodyAnalysis }, replayed: true };
       }
       const id = input.recordId || crypto.randomUUID();
       const old = (await tx`select * from public.engine_manual_body_records where canonical_user_id=${identity.canonical} and record_id=${id} for update`)[0];
@@ -68,11 +72,11 @@ export class ManualBodyLocalStore {
         if (collision.length) throw Error("BODY_DATE_CONFLICT");
       }
       const revision = old ? Number(old.revision) + 1 : 1;
-      const body = { recordId: id, date, weight, bodyFat, revision, source: "MANUAL_WEB", analysisStatus: "ANALYSIS_PENDING" };
+      const body = { recordId: id, date, weight, bodyFat, revision, source: "MANUAL_WEB", ...manualBodyAnalysis };
       await tx`insert into public.engine_manual_body_records(canonical_user_id,record_id,revision,local_date,deleted,body)
         values(${identity.canonical},${id},${revision},${date},${remove},${tx.json(body)})
         on conflict(canonical_user_id,record_id) do update set revision=excluded.revision,local_date=excluded.local_date,deleted=excluded.deleted,body=excluded.body,updated_at=now()`;
-      const result = { record: body, recordId: id, deleted: remove, status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
+      const result = { record: body, recordId: id, deleted: remove, status: "SAVED", ...manualBodyAnalysis };
       await tx`insert into private.engine_body_mutation_receipts values(${identity.canonical},${input.clientRequestId},${inputHash},${tx.json(result)})`;
       return result;
     });
@@ -80,7 +84,7 @@ export class ManualBodyLocalStore {
   async status(identity: Json, input: Json) {
     rejectClientIdentity(input);
     if (!uuid(input.clientRequestId)) throw Error("INVALID_MUTATION_ID");
-    const rows = await this.sql`select response from private.engine_body_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${input.clientRequestId}`;
-    return { exists: rows.length === 1, ...rows[0]?.response };
+    const rows = await manualPrivilegedRead(this.sql,identity,tx=>tx`select response from private.engine_body_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${input.clientRequestId}`);
+    return rows.length ? { exists: true, ...rows[0].response, ...manualBodyAnalysis, record: { ...rows[0].response.record, ...manualBodyAnalysis } } : { exists: false };
   }
 }

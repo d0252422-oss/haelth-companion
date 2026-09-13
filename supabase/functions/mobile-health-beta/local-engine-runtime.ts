@@ -3,7 +3,9 @@ import postgres from "npm:postgres@3.4.8";
 import { PortableEngineRuntime } from "./engine-portable.ts";
 import { authenticateNativeUser, resolveNativeIdentity } from "./index.ts";
 import { recomputeBetaScore } from "./score-bridge.ts";
-import { ManualBodyLocalStore, localReadRange, manualDate, rejectClientIdentity } from "./manual-body-local.ts";
+import { ManualBodyLocalStore, localReadRange, manualDate, rejectClientIdentity, manualBodyAnalysis } from "./manual-body-local.ts";
+import { ManualTrainingLocalStore } from "./manual-training-local.ts";
+import {resolveVerifiedManualWebIdentity,prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
 
 type Json = Record<string, any>;
 const pgDay = (value: any) =>
@@ -43,8 +45,8 @@ export function pgAdmin(
       getUser: async (token: string) => {
         try {
           return { data: { user: await verify(token) }, error: null };
-        } catch {
-          return { data: null, error: { code: "INVALID_TOKEN" } };
+        } catch (error) {
+          return { data: null, error: { code: error instanceof Error && error.message === "AUTH_SERVICE_UNAVAILABLE" ? "AUTH_SERVICE_UNAVAILABLE" : "INVALID_TOKEN" } };
         }
       },
     },
@@ -149,10 +151,11 @@ export class LocalEngineRuntime {
   timings: Json[] = [];
   private activeRequests = 0;
   manualBody: ManualBodyLocalStore;
-  constructor(config: Json, verify: (token: string) => Promise<Json>) {
+  manualTraining: ManualTrainingLocalStore;
+  constructor(config: Json, verify: (token: string) => Promise<Json>, private verifyWeb?: (token:string)=>Promise<{subject:string,email:string}>) {
     if (
       Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1" ||
-      config.host !== "127.0.0.1" ||
+      !(config.host === "127.0.0.1" || (config.host === "host.docker.internal" && Deno.env.get("HEALTH_MANUAL_EDGE_REHEARSAL") === "1" && !Deno.env.get("DENO_DEPLOYMENT_ID"))) ||
       !/^health_engine_[a-f0-9]{32}$/.test(config.database)
     ) throw Error("UNSAFE_DATABASE_TARGET");
     this.sql = postgres({
@@ -170,6 +173,7 @@ export class LocalEngineRuntime {
     this.verify = verify;
     this.worker = new PortableEngineRuntime();
     this.manualBody = new ManualBodyLocalStore(this.sql);
+    this.manualTraining = new ManualTrainingLocalStore(this.sql);
   }
   async start() {
     await this.worker.start();
@@ -179,6 +183,15 @@ export class LocalEngineRuntime {
     await this.sql.end();
   }
   async identity(request: Request) {
+    if(request.headers.get('x-health-session-kind')==='web') {
+      if(!this.verifyWeb||Deno.env.get('HEALTH_MANUAL_WEB_SESSION_LOCAL')!=='1')throw Error('WEB_SESSION_ADAPTER_DISABLED');
+      const token=/^Bearer (.+)$/.exec(request.headers.get('authorization')||'')?.[1];
+      if(!token)throw Error('INVALID_WEB_SESSION');
+      let verified;
+      try { verified=await this.verifyWeb(token); }
+      catch(error) { if(error instanceof Error&&['AUTH_SERVICE_UNAVAILABLE','WEB_SESSION_VERIFICATION_UNAVAILABLE'].includes(error.message))throw Error('AUTH_SERVICE_UNAVAILABLE');throw Error('INVALID_WEB_SESSION'); }
+      return await resolveVerifiedManualWebIdentity(this.sql,verified);
+    }
     const admin = pgAdmin(this.sql, this.verify);
     const auth = await authenticateNativeUser(request, admin);
     const mapped = await resolveNativeIdentity(
@@ -188,7 +201,7 @@ export class LocalEngineRuntime {
     );
     if (!mapped) throw Error("IDENTITY_MISSING");
     return {
-      auth: String(auth.auth_user_id),
+      kind: 'native', auth: String(auth.auth_user_id),
       canonical: String(mapped.canonical_user_id),
     };
   }
@@ -198,8 +211,7 @@ export class LocalEngineRuntime {
         .includes(table)
     ) throw Error("INVALID_TABLE");
     return await this.sql.begin(async (tx: any) => {
-      await tx.unsafe("set local role authenticated");
-      await tx`select set_config('request.jwt.claim.sub',${identity.auth},true)`;
+      await prepareManualRead(tx,identity);
       const dateColumn = table === "engine_meals"
         ? "local_date"
         : "calculation_date";
@@ -222,6 +234,7 @@ export class LocalEngineRuntime {
     }
     const hash = await digest({ input, remove });
     return await this.sql.begin(async (tx: any) => {
+      await prepareManualWrite(tx,identity);
       await tx`select pg_advisory_xact_lock(hashtextextended(${identity.canonical},0))`;
       const receipt =
         await tx`select * from private.engine_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${requestId}`;
@@ -432,8 +445,7 @@ export class LocalEngineRuntime {
   }
   async snapshot(identity: Json, input: Json = {}) {
     const range = localReadRange(input);
-    const pending = await this
-      .sql`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${range.start}::date and ${range.end}::date`;
+    const pending = await manualPrivilegedRead(this.sql,identity,tx=>tx`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${range.start}::date and ${range.end}::date`);
     const staleDates = new Set(pending.map((r: Json) => pgDay(r.score_date)));
     const [meals, history, heads] = await Promise.all([
       this.read(identity, "engine_meals", range),
@@ -481,8 +493,7 @@ export class LocalEngineRuntime {
   async legacyTimeline(identity: Json, input: Json = {}) {
     const range = localReadRange(input);
     // Privileged repository access is always scoped by verified canonical identity.
-    const rows = await this
-      .sql`select * from public.beta_health_scores where canonical_user_id=${identity.canonical} and score_date between ${range.start}::date and ${range.end}::date order by score_date`;
+    const rows = await manualPrivilegedRead(this.sql,identity,tx=>tx`select * from public.beta_health_scores where canonical_user_id=${identity.canonical} and score_date between ${range.start}::date and ${range.end}::date order by score_date`);
     const names: Json = {
       sleep: "sleepSystemScore",
       activity: "activityScore",
@@ -527,7 +538,13 @@ export class LocalEngineRuntime {
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw Error("INVALID_PAYLOAD");
       rejectClientIdentity(payload);
       let data: any;
-      if (action === "getBodyRecords") {
+      if (["getExerciseDatabase", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
+        if (Deno.env.get("HEALTH_EXERCISE_MANAGEMENT_LOCAL") !== "1") throw Error("EXERCISE_MANAGEMENT_DISABLED");
+        if (action === "getExerciseDatabase") data = await this.manualTraining.catalog(identity);
+        else if (action === "getWorkoutRecords") data = await this.manualTraining.workouts(identity, payload);
+        else if (action === "getTrainingWriteStatus") data = await this.manualTraining.status(identity, payload);
+        else data = await this.manualTraining.write(identity, action, payload);
+      } else if (action === "getBodyRecords") {
         data = await this.manualBody.read(identity, payload);
       } else if (["addBodyRecord", "upsertBodyRecord", "deleteBodyRecord"].includes(action)) {
         data = await this.manualBody.write(identity, payload, action === "deleteBodyRecord");
@@ -550,7 +567,7 @@ export class LocalEngineRuntime {
         data = {
           user: {
             userId: identity.canonical,
-            name: "Local synthetic " + identity.auth.slice(-1),
+            name: "Local synthetic " + (identity.kind==='web'?'Web session':identity.auth.slice(-1)),
           },
         };
       } else if (action === "localEngineSnapshot") {
@@ -572,27 +589,25 @@ export class LocalEngineRuntime {
       } else if (
         action === "refreshDerivedData" || action === "refreshDailyNutrition"
       ) {
-        if (payload.recordType === "body") {
-          data = { status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
+        if (payload.recordType === "workout") {
+          data = { status: "SAVED", analysisStatus: "ANALYSIS_PENDING", analysisReason: "MANUAL_WORKOUT_ADAPTER_NOT_CONNECTED", analysisJobScheduled: false };
+        } else if (payload.recordType === "body") {
+          data = { status: "SAVED", ...manualBodyAnalysis };
         } else {
           await this.drain(identity.canonical);
           data = await this.snapshot(identity, payload);
         }
       } else if (action === "getMealWriteStatus") {
-        const receipt = await this
-          .sql`select response from private.engine_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${
-          String(payload.clientRequestId)
-        }`;
-        data = { exists: receipt.length === 1, ...receipt[0]?.response };
+        data = await this.mealWriteStatus(identity,payload);
       } else throw Error("LOCAL_ACTION_NOT_IMPLEMENTED");
       return Response.json({ ok: true, data }, {
         headers: { "cache-control": "no-store" },
       });
     } catch (error) {
       const sqlCode = String((error as Json)?.code || "");
-      const retryable = ["55P03", "57014", "25P03", "25P04", "08000", "08003", "08006", "57P01", "57P03", "53300", "CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "ECONNREFUSED", "ECONNRESET"].includes(sqlCode);
       const message = error instanceof Error ? error.message : "";
-      const code = retryable ? "DB_TIMEOUT_RETRYABLE" : /^[A-Z_]+$/.test(message)
+      const retryable = message === "AUTH_SERVICE_UNAVAILABLE" || ["55P03", "57014", "25P03", "25P04", "08000", "08003", "08006", "57P01", "57P03", "53300", "CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "ECONNREFUSED", "ECONNRESET"].includes(sqlCode);
+      const code = message === "AUTH_SERVICE_UNAVAILABLE" ? message : ["23503", "23001"].includes(sqlCode) ? "EXERCISE_REFERENCED" : retryable ? "DB_TIMEOUT_RETRYABLE" : /^[A-Z_]+$/.test(message)
         ? message
         : "ENGINE_REQUEST_FAILED";
       return Response.json({ ok: false, error: code, retryable }, {
@@ -602,5 +617,9 @@ export class LocalEngineRuntime {
         headers: { "cache-control": "no-store" },
       });
     } finally { this.activeRequests--; }
+  }
+  async mealWriteStatus(identity:Json,payload:Json) {
+    const receipt=await manualPrivilegedRead(this.sql,identity,tx=>tx`select response from private.engine_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${String(payload.clientRequestId)}`);
+    return {exists:receipt.length===1,...receipt[0]?.response};
   }
 }

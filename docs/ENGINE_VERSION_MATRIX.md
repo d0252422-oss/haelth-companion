@@ -1,5 +1,22 @@
 # Engine version matrix
 
+## 2026-09-13 manual release/exercise review
+
+Run `health-release-exercise-20260913-120836` reuses the pinned dependencies below;
+package-lock and Deno lock hashes are unchanged. No package/model/data download,
+new paid API or installer was introduced. Native execution uses reviewed18.6 only;
+the retained18.4 package is not executed. This run did not repeat advisory scanners:
+previous scanner results are historical, not current zero-risk certification.
+Native binary SBOM/publisher-signature/redistribution and existing CDN scope remain
+unverified. Code licenses, model licenses and food reference licenses stay separate.
+
+The catalog/manual SQL changes create no algorithm/version/score. Body and manual
+workout analysis are explicitly NOT_CONNECTED with no scheduled job; nutrition
+keeps existing experimental semantics. Frozen health-score-v1.0 is unchanged.
+PHOTO_MODEL_IMPLEMENTATION=MISSING; FOOD_REFERENCE_VALIDATION=NOT_VERIFIED;
+NEW_SCORE_VALIDITY=EXPERIMENTAL_UNVALIDATED. Local auth/SQL/Browser PASS does not
+upgrade those classifications or remote/device/release acceptance.
+
 ## 2026-09-12 runtime / open-source review update
 
 Portable implementation: `engine-portable.ts`, pure TS glue over the existing frozen

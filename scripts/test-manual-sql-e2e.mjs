@@ -15,9 +15,10 @@ assert.ok(process.env.DENO_DIR && path.isAbsolute(process.env.DENO_DIR) && path.
 const base = 'http://127.0.0.1:57841';
 const phase = process.env.MANUAL_SQL_EVIDENCE_DIR || 'D:/MigrationReports/dual-project/20260912-2035/git-manual-sql-20260913-020110';
 const runId = randomUUID(), evidence = path.join(phase, 'manual-sql-e2e-' + runId);
+const releaseExercise = process.argv.includes('--release-exercise');
 const privateTraceRoot = process.env.MANUAL_SQL_PRIVATE_TRACE_DIR;
 assert.ok(privateTraceRoot && path.isAbsolute(privateTraceRoot), 'Explicit private trace retention root required');
-assert.ok(path.isAbsolute(phase) && path.resolve(phase).toLowerCase().startsWith('d:\\migrationreports\\'), 'External D evidence only');
+assert.ok(path.isAbsolute(phase) && ['d:\\migrationreports\\','d:\\dev\\evidence\\'].some(root=>path.resolve(phase).toLowerCase().startsWith(root)), 'External D evidence only');
 const modulePath = process.env.ENGINE_PLAYWRIGHT_MODULE || 'C:/Users/D0252/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs';
 const browserPath = process.env.ENGINE_BROWSER_EXECUTABLE || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const { chromium } = await import(pathToFileURL(modulePath).href);
@@ -34,6 +35,9 @@ const gitRead = args => execFileSync('git', ['--no-optional-locks', '-c', 'core.
 const report = { source_revision: gitRead(['rev-parse', 'HEAD']), working_tree: gitRead(['status', '--short']), command: 'node scripts/test-manual-sql-e2e.mjs --implementation-ready', started_at: now(), runtime_classification: 'LOCAL_DENO_NATIVE_POSTGRES_SYNTHETIC_SIGNED_AUTH_NOT_EDGE_OR_GOOGLE_OAUTH', synthetic_only: true, mocks: { api: false, engine: false, persistence: false, authorization: false }, source_hashes: {}, steps: [], http: [], console: [], page_errors: [], blocked_external_requests: [], dialogs: [], errors: [], tools: { node: process.version, playwright: requireInstalled('playwright/package.json').version, browser_executable: browserPath, deno_cache: process.env.DENO_DIR }, gates: [] };
 for (const file of ['index.html', 'scripts/local-engine-web.js', 'scripts/local-engine-server.ts', 'scripts/local-engine-auth.ts', 'fixtures/engine-local-identities.json', 'supabase/functions/mobile-health-beta/index.ts', 'supabase/functions/mobile-health-beta/local-engine-runtime.ts', 'supabase/functions/mobile-health-beta/manual-body-local.ts', 'supabase/functions/mobile-health-beta/engine-portable.ts', 'scripts/test-manual-sql-e2e.mjs', 'config/engine-local.deno.json', 'config/engine-local.deno.lock', 'package-lock.json']) report.source_hashes[file] = hash(await readFile(file));
 for (const file of (await readdir('supabase/migrations')).filter(name => name.endsWith('.sql')).sort()) report.source_hashes['supabase/migrations/' + file] = hash(await readFile('supabase/migrations/' + file));
+for (const file of ['supabase/functions/mobile-health-beta/manual-training-local.ts','supabase/functions/mobile-health-beta/local-manual-bootstrap.ts','supabase/functions/mobile-health-beta/manual-web-identity.ts','supabase/functions/mobile-health-beta/bounded-auth-fetch.ts','scripts/exercise-release-gates.mjs','scripts/check-manual-web-revocation.ts']) report.source_hashes[file]=hash(await readFile(file));
+report.command += releaseExercise ? ' --release-exercise' : '';
+report.handler_path='existing mobile-health-beta default.fetch -> @supabase/server middleware -> signed local authority -> canonical PostgreSQL mapping -> real SQL/portable engine; NOT actual Edge';
 const record = (step, detail = {}) => { report.steps.push({ step, at: now(), ...detail }); console.log('PASS ' + step); };
 async function gate(name, fn) {
   const started = now();
@@ -99,6 +103,8 @@ try {
   assert.equal(pg.config.host, '127.0.0.1'); assert.match(pg.config.database, /^health_engine_[a-f0-9]{32}$/);
   const config = path.join(evidence, 'runtime-config.json'); await writeFile(config, JSON.stringify(pg.config));
   const childEnv = { ...process.env, HEALTH_ENGINE_LOCAL_ONLY: '1' }; delete childEnv.ALGORITHM_PYTHON;
+  childEnv.HEALTH_EXERCISE_MANAGEMENT_LOCAL=releaseExercise?'1':'0';
+  childEnv.HEALTH_MANUAL_WEB_SESSION_LOCAL=releaseExercise?'1':'0';
   const denoExecutable = process.env.DENO_EXECUTABLE || 'deno';
   const runtimeArgs = ['run', '--cached-only', '--frozen-lockfile', '--node-modules-dir=none', '--config', 'config/engine-local.deno.json', '--allow-env', '--allow-read', '--allow-sys', '--allow-net=127.0.0.1', 'scripts/local-engine-server.ts', config];
   report.tools.deno = execFileSync(denoExecutable, ['--version'], { encoding: 'utf8', timeout: 10000, windowsHide: true, env: childEnv }).trim();
@@ -241,6 +247,7 @@ try {
     ({ context, page } = await browserContext('B')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); assert.equal(await page.locator('[data-meal-record-id]').count(), 0);
     await page.screenshot({ path: path.join(evidence, 'historical-nutrition-deleted-B-isolation.png'), fullPage: true }); record('Historical meal confirmed delete/reload/B isolation; missing data not fabricated');
   });
+  if(releaseExercise)await (await import('./exercise-release-gates.mjs')).runExerciseReleaseGates({pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,customRange,weightEditor,bodyScreen,setPage:value=>{page=value;}});
   assert.deepEqual(report.page_errors, []); assert.deepEqual(report.blocked_external_requests, []);
 } catch (error) { report.errors.push(redact(error.stack || error.message)); }
 finally {

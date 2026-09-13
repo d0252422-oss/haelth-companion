@@ -1,5 +1,139 @@
 # Multi-domain engine architecture (non-production)
 
+## 2026-09-13 — manual release readiness and exercise management (current)
+
+Run `health-release-exercise-20260913-120836`, continuing `efe83ed` in the
+canonical D checkout documented below; no migration/Git isolation was repeated. This section
+supersedes older dispatch-only/manual-auth descriptions below, not their evidence.
+
+### Actual execution and identity boundary
+
+| Node | Actual file / function |
+|---|---|
+| Original body/meal/workout forms and catalog manager | `index.html` existing submit/edit handlers; `scripts/local-engine-web.js:setupLocalExerciseManagement/localEngineRequest` |
+| HTTP, gateway-prefix routing, CORS and SDK middleware | `scripts/local-engine-server.ts` calls `mobile-health-beta/index.ts` **default.fetch**, not dispatch-only |
+| Native local identity | Distinct ES256 authority -> `authenticateNativeUser/resolveNativeIdentity` -> existing canonical mapping |
+| Web session local identity | Separate signed issuer -> verified subject/email -> `manual-web-identity.ts:resolveVerifiedManualWebIdentity`; existing `private.beta_web_identity_aliases` SELECT only |
+| Body / catalog / workout SQL | `ManualBodyLocalStore` / `ManualTrainingLocalStore`, same canonical PG provider for CRUD, receipts and read-back |
+| Meals / analysis | Existing `LocalEngineRuntime.mutate/compute/snapshot`, portable engine, existing durable recompute queue and versioned PostgreSQL outputs |
+| Target CLI-local bootstrap | `local-manual-bootstrap.ts:localManualBootstrap`; actual SDK admin verified auth or existing `verifyWebIdentity`, no local issuer in this module |
+| Return | PG rows/receipts -> same original Web UI; new context re-authentication sees durable results |
+
+Native tests use non-owner `authenticated NOSUPERUSER NOBYPASSRLS` for RLS reads;
+anonymous reads and authenticated direct writes are denied. Backend writes use
+`service_role NOSUPERUSER BYPASSRLS`, with separately tested canonical predicates,
+owner/FK guards and narrow column UPDATE grants. Web sessions **do not impersonate
+native JWTs** and do not set `auth.uid()` to the canonical UUID. Their existing
+alias subject and exact normalized verified email must BOTH match one ACTIVE Beta
+mapping. Missing/conflicting/revoked mapping fails closed. All Web reads, including
+receipts/queue/timeline, recheck mapping within their transaction; writes lock mapping
+rows before mutation. No alias/account creation, timestamp update or merge occurs.
+Web isolation evidence is server tenant authorization, **not Web RLS PASS**.
+
+Native SQL is PostgreSQL18.6, driver postgres3.4.8. Actual local handler runs in
+Deno2.9.6/TS6.0.3 with @supabase/server1.4.1. Existing intended deployment is Supabase
+Edge Runtime; CLI2.115.0 is installed, but its local Docker API pipe is absent.
+Actual Edge version/execution/resource/bundle acceptance remains BLOCKED/UNKNOWN.
+The repo CLI config selects PG17, which was NOT tested by the PG18.6 rehearsal.
+Do not promote ordinary Deno or skills/documentation to Edge evidence.
+
+The new CLI-local bootstrap is opt-in, rejects deployed-worker markers, remote/non-root
+auth URLs, wrong DB/role/port, credentials in local config and changed DB/auth environment
+after bootstrap. It has no required Python subprocess or remote worker. SDK auth fetch
+and existing Web verifier have a 10-second deadline through response body consumption;
+transport failure returns503 retryable, not an invalid-login401. Admission is released.
+Actual runtime code/handler tests pass, but enabling this **local-only** bootstrap on
+a remote deployment remains prohibited. It is not a production auth bypass.
+
+### Raw data and exercise semantics
+
+Body returns `ANALYSIS_PENDING / ALGORITHM_NOT_CONNECTED / analysisJobScheduled=false`.
+The Web explains that only the SQL record was saved and no job exists. Raw workout
+sets similarly use `MANUAL_WORKOUT_ADAPTER_NOT_CONNECTED`, not imaginary queue work.
+Meal analysis continues the existing queue/experimental nutrition path. No body/workout
+manual rows are disguised as mobile ingestion or injected into health-score-v1.0.
+
+New additive proposal `20260913041844_manual_exercise_catalog_sql.sql` extends the
+existing exerciseId/workout contracts: shared definitions, owned custom definitions,
+per-user alias/archive/revision preferences, stable-ID manual sets and write receipts.
+Own names may change; system names only receive personal aliases. Historical set JSON
+keeps its original name/ID/weight/reps; rename never merges same-name movements.
+Archive hides only new selection, restores reversibly, and allows same-ID historical
+set edits. Permanent deletion is own-unused-only, with native confirmation and
+RESTRICT FKs, never CASCADE. Soft-deleted historical sets still block physical deletion.
+There is no existing runtime template store in this repo: template integration is
+NOT_IMPLEMENTED, not a tested promise. Any future template store MUST use a normalized
+RESTRICT FK before referencing IDs; no name/JSON-only pre-check is sufficient.
+
+Canonical advisory locks, preference row locks and FK key locks arbitrate writes.
+API replay/concurrency and an independent SQL reference/delete race passed. Direct
+archived inserts are rejected; archived history stays editable. Both separately
+barrier-controlled archive/reference orderings were not measured, so are not claimed.
+Raw set old/new dates are returned for view invalidation; no unconnected score job is
+fabricated. Existing meal bounded recompute is reused, not replaced with a new queue.
+
+Uncertain workout writes keep a deep immutable envelope/request ID. Back/start and
+draft edits are locked while retry remains accessible. Settings/Training and mobile
+quick-navigation restore the same draft, not a new one. Account reset unlocks and
+clears draft/catalog/state. Provider/database/user namespaces isolate caches; late
+catalog/range reads cannot revive an older revision. Zero remains zero, null remains
+missing. Names render as text/escaped HTML; control/bidi/blank/overlength names reject.
+
+### Conditional body/meal Beta package — NOT enablement
+
+Build locally with `node scripts/prepare-manual-beta-package.mjs <new-absolute-output>`.
+It copies only the original `index.html` and its relative
+`scripts/local-engine-web.js`, checks inline/linked JS syntax and records SHA256/source
+revision. No synthetic issuer, secret, DB, fixture, Android or source-map is shipped.
+This is an **inert static review artifact**, not a working remote manual-SQL release.
+Local/manual/exercise flags are OFF; the existing Apps Script default is unchanged.
+Uploading it alone cannot enable SQL. Existing external fonts/Tailwind/Lucide/LIFF and
+real Google login are not validated by the offline browser harness that strips CDNs.
+
+Documented future Beta target (not fresh remote-state verification):
+project `health-companion-beta` / `uavimjgccigpbwqmfkhh`,
+function `mobile-health-beta`, Supabase Edge.
+Proposed frontend entry:
+`https://d0252422-oss.github.io/health-companion-beta/manual-preview/`.
+The new subpath is a proposal, not an approved deployment target; preserve current
+Beta root, production root, legacy manual data and login. No import, dual-write or
+Sheets fallback is permitted on the SQL path.
+
+Body/meal package dependency proposals: existing canonical/identity/queue baseline
+plus `20260912032458_multi_domain_engine_versioned_outputs.sql`,
+`20260912041126_engine_local_runtime_integration.sql`,
+`20260912182042_manual_body_local_sql.sql`. Exercise migration is optional/separate
+and MUST NOT hold the body/meal package hostage. Web mapping migration in this run:
+NONE; the read-only adapter reuses existing aliases. All20 migration files were rehearsed
+in a new UUID synthetic local PG18.6 cluster; the outbound cron/net/vault scheduler
+portion of `20260903021109_durable_beta_score_processor.sql` is intentionally omitted.
+This is not the complete remote migration or hosted Auth stack rehearsal.
+
+Before enablement: healthy authorized CLI Edge resource; patched target-major PG
+compatibility; actual Edge handler/browser/bundle/CPU/memory acceptance; real existing
+Web-session verification and user-scoped OAuth mapping; reviewed hosted connection,
+non-local provider/route activation design with default-OFF flags; current remote
+schema/config diff and explicit migration hash allowlist. Do NOT change the local
+guard into an unrestricted remote switch. No remote server may depend on this Windows
+host staying awake. Real production/Beta flags/settings are not altered by this run.
+
+Minimum separate authorization request, only after those local prerequisites:
+1. Read-only verify named Beta schema/config and exact frontend source/path.
+2. Apply only reviewed missing additive migration hashes to the named Beta project;
+   no bulk import/delete, account backfill or production schema change.
+3. Deploy the reviewed function revision and isolated candidate path, then enable
+   the approved user-scoped provider flag; no current-root overwrite.
+4. Use designated synthetic Beta A/B identities for body/meal CRUD, canceled/confirmed
+   delete, replay/conflict/timeout/reload, anonymous and real-login isolation smoke.
+   Approve test write/delete scope explicitly; never touch real health records.
+Risks: auth mapping, provider mismatch, unsupported target/runtime, retained-data
+availability. Rollback closes new writes and disables the candidate provider/path,
+restores prior function/UI revision, but keeps all new tables/records/receipts and
+a read-only export path for authorized recovery. Do not DROP tables or redirect an
+unsettled SQL mutation into Sheets. Existing legacy records are preserved throughout.
+Incremental remote cost/resources UNKNOWN pending target measurements; added paid
+services0. The package is ready for **conditional review**, not activation.
+
 ## 2026-09-13 — canonical D workspace and manual SQL continuation
 
 Canonical local development entry:

@@ -1,5 +1,117 @@
 # Multi-domain engine test report
 
+## 2026-09-13 — manual release/exercise readiness (current; new execution)
+
+RUN_ID=`health-release-exercise-20260913-120836`.
+CURRENT_PHASE=`MANUAL_SQL_RELEASE_READINESS_AND_EXERCISE_MANAGEMENT`.
+STATUS=`PARTIAL_BLOCKED_NOT_PASS`: local scope passes; actual Edge/OAuth/remote release
+does not. Overall UNKNOWN; provisional known-scope32.0%, engineering+0.0pp,
+ledger correction0.0pp, unchanged25 ×4 baseline. See per-leaf continuation accounting.
+
+Canonical entry `D:/Dev/Projects/health-companion-canonical-20260913-020110`;
+source baseline `efe83ed44034ac19d58e1f96e0c3c7dac6a41eaf` plus manifest hashes.
+Final scoped source revision is recorded in the new external REPORT/CHECKPOINT;
+it is not a repeat of the previous Git/manual SQL closure. The current task workspace
+UI still points at old C; every shell/edit/test explicitly used canonical D. Initial
+Git/index/environment safety audit passed; original Android and frozen source hashes
+remain unchanged, and no original shared worktree or backup was altered.
+
+Evidence root `D:/Dev/Evidence/health-release-exercise-20260913-120836`.
+
+| Latest fresh suite | Result | New evidence under root |
+|---|---|---|
+| Node |201 named tests +5 whole-file assertion entrypoints;206 JUnit/TAP rows PASS | `regression-295a5857-7530-4b79-9b78-f6e2a895eb39/node-junit.xml` |
+| Original-Web adapter/render units |21 named tests, already INCLUDED in Node201; stub transport/DOM only here | same Node report, `tests/manual-sql-ui.test.cjs` |
+| Python reference |134 named tests PASS | same regression directory `python-junit.xml` |
+| Deno portable/runtime |68 PASS:60 portable +8 auth/runtime;28 original goldens nested, not extra cases | same directory `deno-junit.xml` |
+| Typecheck / scoped lint |2 tasks PASS, not cases | same directory command manifests/logs |
+| Browser + actual handler/HTTP + native PG |10 integrated gates PASS, not ten unit cases | `manual-sql-e2e-3ed72589-4508-450e-8276-9e8b11287f69/report.json` |
+| Revoked verified-Web mapping |9 read-path assertions INCLUDED in that integrated Gate, not extra9 tests | same Browser directory `web-revocation.stdout.log` |
+| Progress integrity |PASS,32/100, overall UNKNOWN | regression progress log; final post-document check in external manifest |
+| Static review build |New allowlisted artifact plus SHA/source manifest; CONDITIONAL/inert, not remotely enabled | external final artifact path recorded in REPORT |
+| Actual CLI Edge / target PG17 / live Apps Script/Google OAuth / remote Beta |NOT_RUN or BLOCKED; no test credit | fresh `edge-preflight-20260913T041211Z/edge-resource-preflight.json` |
+| Android JVM/lint/build/device, iOS, remote CI |NOT_RUN this Web/API-only run; preserved prior evidence is not fresh | no Android edits included |
+
+Latest Browser interval:2026-09-13T05:10:12.665Z–05:12:28.593Z
+(13:10:12–13:12:28 Asia/Taipei). It records source hashes before/after with zero drift.
+The actual route goes through the application default.fetch and @supabase/server
+middleware, then separate local signed authorities, canonical mapping, real PG and
+portable engine. This is NOT a mock API and NOT actual Supabase Edge.
+Python3.12.14, Node24.19.0, Deno2.9.6/TS6.0.3, PostgreSQL18.6,
+postgres driver3.4.8, Playwright1.62.1, Chrome152.0.7977.84. CLI2.115.0,
+Docker CLI29.7.2; actual Docker server/Edge unavailable. No dependency upgrade.
+
+### New acceptance and fixes
+
+1. Body/meal historical CRUD/replay/revision/response-loss/read-back remains passing
+   through actual default handler. CORS origin/methods/preflight/gateway-prefix and
+   no-store/error headers are checked. Raw body is saved without fabricated analysis.
+2. Native RLS reads use non-owner authenticated/NOBYPASSRLS; backend service-role
+   mutations have separate tenant/owner/FK checks. New Web-session key/issuer is
+   distinct from native authority. Existing aliases are SELECT-only; subject+exact
+   verified email+ACTIVE canonical mapping required. No native mapping is required
+   for the Web-only synthetic account. Missing/conflict/revoked, A/B/anonymous,
+   expired/forged token and frontend owner fields fail closed.
+3. Web alias/users/timestamps are unchanged by normal CRUD; nine repository reads
+   reject an identity revoked after initial resolution, including receipts/queue/
+   timeline. This is service-role server authorization, not Web RLS or real OAuth.
+   Real verifier transport error retains503/retryable through ten sequential handler
+   attempts without exhausting admission. A real loopback fetch verifies10-second
+   header/body cancellation; transport is explicitly stubbed only in separate unit tests.
+4. Original training page adds SQL-backed catalog management: own rename, personal
+   system alias, archive/restore, own-unused permanent-delete and separate set CRUD.
+   Stable ID, historical name snapshot and raw facts survive rename/archive. Names
+   are safely displayed,0kg is0, session duration is not multiplied by set/date rows.
+5. Referenced deletion rejects, no CASCADE; low-role write and ownership reassignment
+   reject. Real API concurrency/replay and direct SQL reference/delete race pass.
+   Invalid multi-set request rolls back with no receipt or partial sets. Direct
+   archived INSERT rejects while same-ID historical edits remain allowed.
+6. Browser exercises native delete dismiss/accept, referenced denial, restore, new
+   context persistence, system-alias B isolation and provider/database cache isolation.
+   Real committed write response plus receipt transport can both be lost: immutable
+   envelope persists, navigation/quick-workout restore retry, exact replay stores one
+   zero-volume session. Reset unlocks controls and removes previous-account state.
+7. Body status now explicitly ALGORITHM_NOT_CONNECTED/no job; manual workout score
+   adapter is similarly unconnected. Existing nutrition queue/engine remains real and
+   experimental; deleted inputs do not leave a stale valid latest score.
+   Frozen health-score-v1.0 source/weights/inputs/goldens were NOT changed.
+
+### Failure history, measurement and remaining limits
+
+All earlier red attempts remain under this new evidence root. Initial SQL race
+assertion expected23503, but ON DELETE RESTRICT correctly returns documented23001;
+the exact assertion was corrected, not an engine expected value/tolerance. Initial
+Browser selection assumed a mobile training tab that does not exist; desktop's
+actual sidebar was used. TypeScript unit typing and the old FAB source-shape regex
+were updated for the deliberate draft safety guard. Independent review found genuine
+draft-navigation/reset, late-catalog, narrow-grant, archived-reference, auth transport
+and privileged-read gaps; fixes received fresh regression and counterexample tests.
+Latest fresh failures0, cached counted0; earlier failed/repeated suites are not summed.
+Independent Codex subagents reviewed bounded scopes, not an external AI review claim.
+
+Fresh PG18.6 body lock observation2027.743ms; training2016.373ms, configured2s lock
+timeout, predeclared local HTTP ceiling6s. Previous2029.938ms observation remains
+historical, not reused as new or online SLA. Real10s auth deadline is a transport
+engineering bound; no production percentiles/CPU/memory/SLA is claimed.
+No page JavaScript errors or external requests; expected401/login/fault-injection
+console errors and existing focus/aria warnings remain recorded, not zero warnings.
+Only owned processes stopped; new DBs, all raw evidence and private synthetic traces
+retained. No real health data/credentials are used or exposed in artifacts.
+
+Remaining: actual Edge+target PG17/resource/browser Gate, real verified provider/
+Google login, default-OFF hosted provider activation review, exact remote schema
+diff and authorization. Static build is not an operational remote manual-SQL release.
+Template store integration does not exist; future references must use RESTRICT FK.
+Separate barrier tests for both archive/reference acquisition orders were NOT_RUN
+(the executed delete/reference race is not substituted). Broader training/recompute/
+weekly product acceptance is not inferred from raw manual catalog CRUD.
+
+PHOTO_MODEL_IMPLEMENTATION=MISSING; FOOD_REFERENCE_VALIDATION=NOT_VERIFIED;
+NEW_SCORE_VALIDITY=EXPERIMENTAL_UNVALIDATED; REAL_DEVICE/IOS=NOT_RUN.
+REMOTE_PUSH=NO; REMOTE_BETA_WRITES=0; PRODUCTION_WRITES=0; DEPLOYMENTS=0;
+PAID_SERVICES_ADDED=0; LIVE_USER_PAGE_CHANGED=NO; C_CLEANUP=DEFERRED_NOT_PASSED;
+XIAOFEI=OUT_OF_SCOPE_NOT_MODIFIED.
+
 ## 2026-09-13 — Git ownership and manual SQL local closure (current)
 
 整體專案已驗收完成率：UNKNOWN。相同
