@@ -57,8 +57,27 @@ side effects. The new guard changes shared worker completion, so B button hiding
 cannot establish A's backend safety; both releases require its regression.
 
 Current manual provider covers body, meal, workout and exercise CRUD, receipts and
-bounded reads. Existing Web sleep/activity reads, weekly reports, check-ins, nutrition
-targets/profile and complete dashboard semantics are **not yet equivalent SQL adapters**.
+bounded reads. The existing sleep/activity pages now read published SQL daily metrics
+through `manual-daily-read.ts:readPublishedDaily`, selected by the actual handler and
+explicit hosted A/AB action allowlist. One repeatable-read transaction verifies the
+canonical mapping, queue generation and current versioned head; native reads additionally
+use authenticated RLS. At most366 dates and367 rows (overflow rejected), no raw-history
+scan, recompute-on-read or new aggregation. Valid zero is preserved. STALE/unverified
+publication returns null metrics with an explicit stale notice; old account/range replies
+cannot overwrite current UI. Raw metric connectivity does not prove a calculated score.
+Legacy `sleepScore` stays null rather than substituting experimental `sleepSystemScore`.
+Energy active/total classification and active-minutes ingestion are not currently
+supported by the canonical native domain contract; calories and absent minutes stay null.
+The reference core's ability to calculate generic energy does not make it an ingestion API.
+
+Weekly reports, check-ins and complete dashboard semantics are **not yet equivalent SQL
+adapters**. `getNutritionTargets`/`getUserProfile` are unused wrappers in this Web revision,
+not active render dependencies; they remain unverified, not silently counted complete.
+Full legacy API source `evidence/apps-script-production/head/程式碼.js` is absent here.
+Weekly boundary/reduction/recommendation/native-vs-manual precedence and check-in
+primary/upsert/delete/replay semantics cannot be validated against the current source.
+The only check-in schema draft has different fields/scales from the existing ordinal UI.
+No fabricated weekly score, new check-in scale or personal target was introduced.
 Their unsupported actions fail closed; that is not whole-site SQL-first acceptance.
 Existing Apps Script session verification remains an auth dependency, not a Supabase
 JWT or Sheets data fallback. Real Google/LINE login return-path and canonical mapping
@@ -66,6 +85,8 @@ remain unverified. Documented existing Beta entry is
 `https://d0252422-oss.github.io/health-companion-beta/`; the older proposed manual-preview
 path is not proof of the actual login/publication target. Same GitHub Pages origin does
 not isolate production by URL path: verify exact artifact, route and cache namespace.
+The offline package now names that existing Beta root rather than proposing another
+preview entry. It explicitly marks current remote artifact/config snapshot NOT_CAPTURED.
 
 Once prerequisites pass: preserve rollback snapshots; apply only the verified missing
 Beta subset; verify schema/RLS/grants; deploy only `mobile-health-beta`; smoke its
@@ -74,6 +95,9 @@ Beta frontend/provider. Validate a new browser session's SQL reads, A/B separati
 CRUD/receipt/analysis and no fallback. An Edge smoke failure stops frontend switch.
 Rollback restores last verified Beta frontend/flag/function while retaining new SQL
 rows/receipts/tombstones and compatible read/export; never reverse data into Sheets.
+Pinned CLI2.115.0 `functions deploy --help` also exposes `--use-api` server-side bundling.
+It was not used: a remote deploy is not an alternative proof of the required actual
+local Edge Gate, and the Owner explicitly blocks cutover until that prerequisite passes.
 
 Sheets remains untouched. After successful future cutover it is legacy/read-only,
 export/migration source only, never dual-write canonical storage. Historical migration

@@ -291,6 +291,46 @@ Deno.test("mid-bundle PostgreSQL failure rolls back history and original score t
   }
 });
 
+Deno.test("existing sleep/activity Web reads use published SQL metrics, not invented source fields", async () => {
+  const {runtime,authority,a}=await context(),date=shift(day,-35),empty=shift(day,-36);
+  const owner=postgres({...config,username:'engine_owner',max:1});
+  const call=async(account:string,action:string,payload:Record<string,unknown>={date})=>{
+    const response=await runtime.handle(new Request('http://127.0.0.1/v1/engine/web',{method:'POST',headers:{authorization:'Bearer '+await authority.issue(account)},body:JSON.stringify({action,payload})}));
+    return {status:response.status,...await response.json()};
+  };
+  const ingest=async(domain:string,unit:string,value:number,revision=1,operation='UPSERT')=>{
+    const id='daily-read-'+domain,record={schema_version:'hdl-v2.health-ingestion.v1',canonical_user_id:a.canonical,platform:'android',domain,source_app:'synthetic-non-device',source_record_id:id,recorded_at:date+'T00:01:00+08:00',timezone:'Asia/Taipei',local_date:date,value,unit,
+      ...(domain==='sleep'?{started_at:shift(date,-1)+'T23:00:00+08:00',ended_at:date+'T07:00:00+08:00'}:{})};
+    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({record,revision,operation}))))).map(x=>x.toString(16).padStart(2,'0')).join('');
+    await runtime.sql`select public.beta_ingest_health_mutation(${a.canonical},'android',${domain},'synthetic-non-device',${id},${revision},${new Date().toISOString()},${fingerprint},${operation},${fingerprint},${operation==='DELETE'?null:runtime.sql.json(record)},array[${date}::date])`;
+  };
+  try{
+    await ingest('steps','count',0);await ingest('sleep','minute',480);await ingest('workout','minute',30);
+    await runtime.drain(a.canonical);
+    const sleep=await call('A','getSleepRecords'),activity=await call('A','getActivityRecords');
+    assert.equal(sleep.ok,true);assert.equal(activity.ok,true);
+    assert.equal(sleep.data[0].date,date);assert.equal(sleep.data[0].totalSleepMinutes,480);assert.equal(sleep.data[0].sleepScore,null);
+    assert.equal(activity.data[0].steps,0);assert.equal(activity.data[0].activeMinutes,null,'workout duration is not active minutes');
+    assert.equal(activity.data[0].activeCalories,null);assert.equal(activity.data[0].totalCalories,null,'generic energy is not total calories');
+    assert.equal(activity.data[0].dataStatus,'CURRENT');assert.equal(activity.data[0].engineVersion,'activity-score-v1.0');
+    assert.equal(activity.data[0].source,'SQL_PUBLISHED_DAILY_METRICS');
+    for(const action of ['getSleepRecords','getActivityRecords']){
+      assert.deepEqual((await call('B',action)).data,[]);assert.deepEqual((await call('A',action,{date:empty})).data,[]);
+      assert.equal((await call('A',action,{date,user_id:a.canonical})).error,'CLIENT_IDENTITY_FORBIDDEN');
+      assert.equal((await call('A',action,{startDate:shift(day,-400),endDate:day})).error,'INVALID_DATE_RANGE');
+      const anonymous=await runtime.handle(new Request('http://127.0.0.1/v1/engine/web',{method:'POST',body:JSON.stringify({action,payload:{date}})}));assert.equal(anonymous.status,401);
+    }
+    await ingest('steps','count',321,2);
+    const stale=(await call('A','getActivityRecords')).data[0];assert.equal(stale.dataStatus,'STALE');assert.equal(stale.steps,null);
+    await runtime.drain(a.canonical);assert.equal((await call('A','getActivityRecords')).data[0].steps,321);
+    // A legacy COMPLETE row without publication evidence must not release old values.
+    await owner`update private.beta_score_recompute_queue set engine_published_generation=0 where canonical_user_id=${a.canonical} and score_date=${date}`;
+    assert.equal((await call('A','getSleepRecords')).data[0].totalSleepMinutes,null);
+    await ingest('steps','count',321,3,'DELETE');await runtime.drain(a.canonical);
+    assert.equal((await call('A','getActivityRecords')).data[0].steps,null);
+  }finally{await runtime.close();await owner.end();}
+});
+
 Deno.test("native PostgreSQL health ingestion -> existing queue -> all other domain adapters", async () => {
   const { runtime, b } = await context();
   try {

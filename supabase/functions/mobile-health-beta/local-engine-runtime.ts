@@ -8,6 +8,7 @@ import {manualBodyEngineRecords} from './manual-body-engine.ts';
 import { ManualTrainingLocalStore } from "./manual-training-local.ts";
 import {resolveVerifiedManualWebIdentity,prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
 import {readManualRequest} from './manual-request-body.ts';
+import {readPublishedDaily} from './manual-daily-read.ts';
 
 type Json = Record<string, any>;
 const pgDay = (value: any) =>
@@ -611,6 +612,8 @@ export class LocalEngineRuntime {
         data = await this.snapshot(identity, payload);
       } else if (action === "getNutritionRecords") {
         data = (await this.snapshot(identity, payload)).meals;
+      } else if (action === "getSleepRecords" || action === "getActivityRecords") {
+        data = await readPublishedDaily(this.sql, identity, action === 'getSleepRecords' ? 'sleep' : 'activity', payload);
       } else if (
         action === "getDashboardData" || action === "getTodaySummary"
       ) {

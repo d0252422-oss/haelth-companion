@@ -20,6 +20,17 @@ malformed rows, late cross-action responses and old range evidence cannot turn i
 The timestamp is a client-observed SQL confirmation, not fabricated server updated_at.
 Offline A/AB package config now matches its selected release while remaining OFF.
 
+Next local increment adds existing sleep/activity SQL daily reads with current publication,
+native RLS/verified Web identity, date/account guards and explicit null/zero/STALE states.
+Independent static review caught missing hosted action allowlisting and old snapshot
+analysis surviving stale/empty reads; both fixed with regression. Initial PG/browser
+fixtures incorrectly used unsupported energy ingestion (and the tombstone fixture needed
+SQL NULL); tests were corrected without expanding domains/schema or changing golden values.
+All initial failures remain in the new run. Native7 and BrowserAB13 passed after fixes;
+the final manifest records the A-only/hosted/Node retests and exact selected source hashes.
+These metric projections are not full weekly/check-in/dashboard or legacy sleep-score
+equivalence. No calorie/score/target was invented to complete a screen.
+
 Original frozen formulas/28 goldens are unchanged. No actual CLI Edge, pool/TLS,
 live OAuth or deployed Beta PASS is inferred from native PG/Deno/browser. Conditional
 Beta authority exists, but missing prerequisites prohibit migration/deployment/smoke

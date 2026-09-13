@@ -26,6 +26,46 @@ function harness(fetch) {
   return ctx;
 }
 
+test('daily SQL read validates shape, preserves measured zero and marks unavailable projections',async()=>{
+ const row={date:'2026-09-13',dataStatus:'CURRENT',steps:0,activeMinutes:null,activeCalories:null,totalCalories:null};
+ const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data:[row]})}));
+ assert.equal((await ctx.localEngineRequest('getActivityRecords'))[0].steps,0);
+ assert.equal(ctx.manualSourceStatus().database,'CONNECTED');assert.equal(ctx.manualSourceStatus().dataPresent,'PRESENT');
+ ctx.renderDailySqlReadNotice('activity',[row]);assert.match(ctx.document.getElementById('activity-active-note').textContent,/尚無此熱量/);
+ ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{...row,steps:null,dataStatus:'STALE'}]});assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
+ ctx.renderDailySqlReadNotice('activity',[{...row,dataStatus:'STALE'}]);assert.match(ctx.document.getElementById('activity-steps-note').textContent,/結果待更新/);
+ assert.throws(()=>ctx.assertManualResponseShape('getActivityRecords',[{...row,steps:'0'}]),e=>e.code==='MALFORMED_RESPONSE');
+ const sleep={date:row.date,dataStatus:'CURRENT',totalSleepMinutes:480,sleepScore:null};
+ ctx.renderDailySqlReadNotice('sleep',[sleep]);assert.match(ctx.document.getElementById('sleep-score-note').textContent,/不替換為實驗分數/);
+});
+
+test('daily detail reads reject late account and range responses before touching UI state',async()=>{
+ const pending=[],ctx=harness(()=>{});ctx.sectionWindows={sleep:{start:'a',end:'b'},activity:{start:'a',end:'b'}};
+ ctx.apiService={getSleepRecords:()=>new Promise(r=>pending.push(r)),getActivityRecords:()=>new Promise(r=>pending.push(r))};
+ ctx.renderSleep=()=>{};ctx.renderActivity=()=>{};
+ const refresh=html.match(/    async function refreshSectionRange[^\n]+/)[0];vm.runInContext(refresh,ctx);
+ const old=ctx.refreshSectionRange('sleep','a','b');ctx.currentUser={userId:'synthetic-B'};pending.shift()([{date:'secret-A'}]);await old;assert.equal(ctx.appState.sleep,undefined);
+ const range=ctx.refreshSectionRange('activity','a','b');ctx.sectionWindows.activity={start:'c',end:'d'};pending.shift()([{date:'old-range'}]);await range;assert.equal(ctx.appState.activity,undefined);
+});
+
+test('daily stale or empty reads withdraw earlier snapshot analysis evidence',()=>{
+ const ctx=harness(()=>{}),out={domain:'activity',calculation_date:'2026-09-13',score:80,score_status:'VALID'};
+ ctx.recordManualSourceEvidence('localEngineSnapshot',{ok:true,received:true,data:{meals:[],outputs:[out]}});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'UPDATED');
+ ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{date:'2026-09-13',dataStatus:'STALE',steps:null,activeMinutes:null,activeCalories:null,totalCalories:null}]});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'STALE');
+ ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[],payload:{date:'2026-09-12'}});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'UNKNOWN');assert.equal(ctx.manualSourceStatus().domains.activity.analysisDate,null);
+});
+
+test('hosted A and AB allow daily SQL read requests but never route unknown actions to legacy',async()=>{
+ for(const release of ['A','AB']){
+   const sent=[],ctx=harness(async(url,request)=>{sent.push({url,...request});return {ok:true};});
+   ctx.LOCAL_ENGINE_ENABLED=false;ctx.HOSTED_MANUAL_SQL_ENABLED=true;ctx.sessionToken='synthetic-unit-only';ctx.URL=URL;
+   ctx.window={HEALTH_MANUAL_SQL_CONFIG:{enabled:true,release,schemaVersion:'manual-sql-v1',projectRef:'aaaaaaaaaaaaaaaaaaaa',endpoint:'https://aaaaaaaaaaaaaaaaaaaa.supabase.co/functions/v1/mobile-health-beta/v1/engine/web'}};
+   for(const action of ['getSleepRecords','getActivityRecords'])await ctx.hostedManualFetch(action,{date:'2026-09-13'});
+   assert.equal(sent.length,2);for(const item of sent){assert.equal(item.credentials,'omit');assert.equal(item.headers['x-health-session-kind'],'web');}
+   await assert.rejects(()=>ctx.hostedManualFetch('getWeeklyReport'),e=>e.code==='MANUAL_ACTION_NOT_SUPPORTED');assert.equal(sent.length,2);
+ }
+});
+
 test('SQL source status does not infer DB/data/analysis from a successful identity response',async()=>{
  const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data:{user:{userId:'synthetic-A'}}})}));
  await ctx.localEngineRequest('getCurrentUser');const s=plain(ctx.manualSourceStatus());assert.equal(s.api,'CONNECTED');assert.equal(s.database,'UNKNOWN');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.dataUpdatedAt,null);assert.equal(s.analysisUpdatedAt,null);

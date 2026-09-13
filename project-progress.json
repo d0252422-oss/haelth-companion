@@ -20,6 +20,7 @@
     },
     "other_work": [
       "UI source-state and manual Browser improvements: ALREADY_CREDITED local leaf, not whole-Web/Beta acceptance",
+      "Published sleep/activity SQL metrics: local extension; whole-Web weekly/check-in/dashboard acceptance still not fully met, zero new weight",
       "Offline A/AB package release config: OUTSIDE_CURRENT_BASELINE; no product weight",
       "Actual Edge, hosted OAuth/pool and whole-Web/Beta rollout: ACCEPTANCE_NOT_FULLY_MET",
       "Conditional Beta authority is not acceptance evidence"

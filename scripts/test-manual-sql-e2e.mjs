@@ -38,6 +38,7 @@ const report = { source_revision: gitRead(['rev-parse', 'HEAD']), working_tree: 
 for (const file of ['index.html', 'scripts/local-engine-web.js', 'scripts/local-engine-server.ts', 'scripts/local-engine-auth.ts', 'fixtures/engine-local-identities.json', 'supabase/functions/mobile-health-beta/index.ts', 'supabase/functions/mobile-health-beta/local-engine-runtime.ts', 'supabase/functions/mobile-health-beta/manual-body-local.ts', 'supabase/functions/mobile-health-beta/engine-portable.ts', 'scripts/test-manual-sql-e2e.mjs', 'config/engine-local.deno.json', 'config/engine-local.deno.lock', 'package-lock.json']) report.source_hashes[file] = hash(await readFile(file));
 for (const file of (await readdir('supabase/migrations')).filter(name => name.endsWith('.sql')).sort()) report.source_hashes['supabase/migrations/' + file] = hash(await readFile('supabase/migrations/' + file));
 for (const file of ['supabase/functions/mobile-health-beta/manual-training-local.ts','supabase/functions/mobile-health-beta/local-manual-bootstrap.ts','supabase/functions/mobile-health-beta/manual-web-identity.ts','supabase/functions/mobile-health-beta/bounded-auth-fetch.ts','scripts/exercise-release-gates.mjs','scripts/check-manual-web-revocation.ts']) report.source_hashes[file]=hash(await readFile(file));
+report.source_hashes['supabase/functions/mobile-health-beta/manual-daily-read.ts']=hash(await readFile('supabase/functions/mobile-health-beta/manual-daily-read.ts'));
 report.command += releaseExercise ? ' --release-exercise' : '';
 report.command += releaseA ? ' --release-a' : '';
 report.handler_path='existing mobile-health-beta default.fetch -> @supabase/server middleware -> signed local authority -> canonical PostgreSQL mapping -> real SQL/portable engine; NOT actual Edge';
@@ -282,6 +283,29 @@ try {
     assert.notEqual(await p.locator('#data-analysis-state').getAttribute('data-state'),'UPDATING');
     await p.screenshot({path:path.join(evidence,'runtime-source-status.png')});
     report.source_status={actual_API_and_SQL:true,HTTP200_alone_does_not_prove_database:true,last_update_kind:'client_observed_SQL_read_write_not_server_modified_at',analysis_scope:'returned_domains_only'};
+  });
+  await gate('existing_sleep_activity_SQL_reads_preserve_null_zero_stale_and_account_scope',async()=>{
+    const date=shift(-1),account=releaseA||releaseExercise?'WEB_A':'A',other=releaseA||releaseExercise?'WEB_B':'B';
+    for(const [domain,unit,value] of [['sleep','minute',480],['steps','count',0],['workout','minute',30]]){
+      const id='browser-daily-'+domain,canonical={schema_version:'hdl-v2.health-ingestion.v1',canonical_user_id:subjects.A.canonical,platform:'android',domain,source_app:'synthetic-non-device',source_record_id:id,recorded_at:date+'T01:00:00+08:00',timezone:'Asia/Taipei',local_date:date,value,unit,...(domain==='sleep'?{started_at:shift(-2)+'T23:00:00+08:00',ended_at:date+'T07:00:00+08:00'}:{})},fingerprint=hash(JSON.stringify(canonical));
+      await pg.admin`select public.beta_ingest_health_mutation(${subjects.A.canonical},'android',${domain},'synthetic-non-device',${id},1,${now()},${fingerprint},'UPSERT',${fingerprint},${pg.admin.json(canonical)},array[${date}::date])`;
+    }
+    const cookie=await loginCookie('A',account.startsWith('WEB')?{kind:'web'}:{});assert.equal((await http(cookie,'refreshDerivedData',{recordType:'nutrition',date})).ok,true);
+    const visit=async(who,section)=>{
+      ({context,page}=await browserContext(who));await page.setViewportSize({width:1280,height:900});await customRange(page,date,date);
+      const action=section==='sleep'?'getSleepRecords':'getActivityRecords';
+      const response=page.waitForResponse(r=>r.url().endsWith('/v1/engine/web')&&r.request().postDataJSON()?.action===action);
+      await page.locator(`.side-btn[data-screen="${section}-screen"]`).click();const result=await(await response).json();assert.equal(result.ok,true);return result.data;
+    };
+    const sleep=await visit(account,'sleep');assert.equal(sleep[0].totalSleepMinutes,480);assert.equal(sleep[0].sleepScore,null);
+    await until(async()=>/8/.test(await page.locator('#sleep-last').textContent()),'sleep-value');assert.match(await page.locator('#sleep-score-note').textContent(),/不替換為實驗分數/);
+    const activity=await visit(account,'activity');assert.equal(activity[0].steps,0);assert.equal(activity[0].activeMinutes,null);assert.equal(activity[0].activeCalories,null);assert.equal(activity[0].totalCalories,null);
+    await until(async()=>await page.locator('#activity-steps').textContent()==='0','activity-zero');await page.screenshot({path:path.join(evidence,'sql-daily-activity.png')});
+    assert.ok((await visit(other,'sleep')).every(r=>r.totalSleepMinutes===null));assert.notEqual(await page.locator('#sleep-last').textContent(),'8 hr');
+    await pg.admin`update private.beta_score_recompute_queue set engine_published_generation=0 where canonical_user_id=${subjects.A.canonical} and score_date=${date}`;
+    const stale=await visit(account,'activity');assert.equal(stale[0].dataStatus,'STALE');assert.equal(stale[0].steps,null);
+    await until(async()=>/結果待更新/.test(await page.locator('#activity-steps-note').textContent()),'stale-notice');
+    report.daily_read={seed:'SYNTHETIC_NATIVE_CONTRACT_NOT_DEVICE_DATA',real_SQL_and_published_engine:true,new_browser_contexts:true,legacy_sleep_score_mapping:'NOT_CONNECTED',energy_active_total_mapping:'NOT_CONNECTED',stale_values:'SUPPRESSED'};
   });
   assert.deepEqual(report.page_errors, []); assert.deepEqual(report.blocked_external_requests, []);
 } catch (error) { report.errors.push(redact(error.stack || error.message)); }

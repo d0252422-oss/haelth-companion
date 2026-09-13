@@ -2,7 +2,7 @@
 function hostedManualEnabled(){return typeof HOSTED_MANUAL_SQL_ENABLED!=='undefined'&&HOSTED_MANUAL_SQL_ENABLED;}
 function manualSqlEnabled(){return LOCAL_ENGINE_ENABLED||hostedManualEnabled();}
 let hostedManualBinding=null,hostedManualConfigFingerprint=null,hostedIdentityPending=null;
-const hostedManualActions=new Set(['getManualProviderIdentity','getBodyRecords','addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus','getNutritionRecords','upsertMealRecord','deleteMealRecord','getMealWriteStatus','localEngineSnapshot','getDashboardData','getTodaySummary','getHealthTimeline','refreshDailyNutrition','refreshDerivedData','getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
+const hostedManualActions=new Set(['getManualProviderIdentity','getBodyRecords','addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus','getNutritionRecords','getSleepRecords','getActivityRecords','upsertMealRecord','deleteMealRecord','getMealWriteStatus','localEngineSnapshot','getDashboardData','getTodaySummary','getHealthTimeline','refreshDailyNutrition','refreshDerivedData','getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
 const hostedTrainingActions=new Set(['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
 function hostedManualConfig(){
   const raw=window.HEALTH_MANUAL_SQL_CONFIG||{};
@@ -61,6 +61,13 @@ function localSectionReadGuard(section,start,end){
   localSectionReads.set(section,serial);
   return ()=>currentUser===user&&localSessionEpoch===epoch&&localSectionReads.get(section)===serial&&sectionWindows[section].start===start&&sectionWindows[section].end===end;
 }
+function renderDailySqlReadNotice(section,rows){
+  if(!manualSqlEnabled())return;
+  const latest=rows.at(-1),notice=section==='sleep'?'sleep-last-note':'activity-steps-note';
+  if(latest?.dataStatus==='STALE')document.getElementById(notice).textContent=`${latest.date} 結果待更新；未顯示過期數值`;
+  if(section==='sleep')document.getElementById('sleep-score-note').textContent='SQL 原始睡眠分數尚未接通（不替換為實驗分數）';
+  else for(const id of ['activity-active-note','activity-total-note'])document.getElementById(id).textContent='SQL 尚無此熱量類型的對應來源';
+}
 function clearLocalManualState(){manualProviderObservation=null;manualSourceEvidence=null;renderManualProviderStatus();hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
 let manualProviderObservation=null;
 let manualSourceEvidence=null;
@@ -82,6 +89,10 @@ function assertManualResponseShape(action,data){
   if(action==='getNutritionRecords')valid=rows(data,'mealRecordId');
   if(action==='getWorkoutRecords')valid=object(data)&&rows(data.records,'recordId');
   if(action==='getExerciseDatabase')valid=rows(data,'exerciseId');
+  if(['getSleepRecords','getActivityRecords'].includes(action)){
+    const keys=action==='getSleepRecords'?['totalSleepMinutes','sleepScore']:['steps','activeMinutes','activeCalories','totalCalories'];
+    valid=Array.isArray(data)&&data.every(r=>object(r)&&/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&['CURRENT','STALE'].includes(r.dataStatus)&&keys.every(k=>r[k]===null||r.dataStatus==='CURRENT'&&typeof r[k]==='number'&&Number.isFinite(r[k])));
+  }
   if(action==='getHealthTimeline')valid=object(data)&&Array.isArray(data.timeline)&&data.timeline.every(object);
   if(action==='localEngineSnapshot'||action==='refreshDailyNutrition'||action==='refreshDerivedData'&&data?.outputs!==undefined){
     valid=object(data)&&rows(data.meals,'mealRecordId')&&Array.isArray(data.outputs)&&data.outputs.every(r=>object(r)&&typeof r.domain==='string'&&typeof r.score_status==='string'&&typeof r.calculation_date==='string'&&(r.score===null||typeof r.score==='number'&&Number.isFinite(r.score)));
@@ -100,6 +111,8 @@ function recordManualSourceEvidence(action,{received=false,ok=false,data,error,p
   if(action==='getNutritionRecords'&&Array.isArray(data)){rows=data;domain='nutrition';}
   if(action==='getWorkoutRecords'&&Array.isArray(data?.records)){rows=data.records;domain='training';}
   if(action==='getExerciseDatabase'&&Array.isArray(data)){rows=data;domain='exercise';}
+  if(action==='getSleepRecords'&&Array.isArray(data)){rows=data;domain='sleep';}
+  if(action==='getActivityRecords'&&Array.isArray(data)){rows=data;domain='activity';}
   if(action==='getHealthTimeline'&&Array.isArray(data?.timeline)){rows=data.timeline;domain='timeline';}
   if(['getDashboardData','getTodaySummary'].includes(action)&&data?.user&&Object.hasOwn(data,'today')){rows=data.today?[data.today]:[];domain='dashboard';}
   const snapshot=Array.isArray(data?.meals)&&Array.isArray(data?.outputs)&&['localEngineSnapshot','refreshDailyNutrition','refreshDerivedData'].includes(action);
@@ -108,6 +121,11 @@ function recordManualSourceEvidence(action,{received=false,ok=false,data,error,p
   const receipt=['getBodyWriteStatus','getMealWriteStatus','getTrainingWriteStatus'].includes(action)&&data?.exists===true;
   const committed=(mutation||receipt)&&data?.status==='SAVED'&&(typeof data.recordId==='string'||typeof data.exerciseId==='string'||Array.isArray(data.records));
   if(rows!==null){s.database='CONNECTED';s.dataUpdatedAt=at;updateDomain(domain,{present:rows.length>0});}
+  if(['getSleepRecords','getActivityRecords'].includes(action)&&rows){
+    const metrics=action==='getSleepRecords'?['totalSleepMinutes']:['steps','activeMinutes'];
+    const latest=rows.at(-1);
+    updateDomain(domain,{present:rows.some(r=>metrics.some(k=>typeof r[k]==='number'&&Number.isFinite(r[k]))),analysis:latest?.dataStatus==='STALE'?'STALE':'UNKNOWN',analysisDate:latest?.date||null});
+  }
   if(committed){s.database='CONNECTED';s.dataUpdatedAt=at;/* presence is verified by a subsequent SELECT, not optimistic mutation UI */}
   if(action==='getBodyRecords'&&rows){const latest=[...rows].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];updateDomain('body',{analysis:latest?manualAnalysisState(latest):'INSUFFICIENT_DATA',analysisDate:latest?.date||null});}
   if((['addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus'].includes(action)||action==='refreshDerivedData'&&payload.recordType==='body')&&data?.analysisStatus)updateDomain('body',{analysis:manualAnalysisState(data),analysisDate:data.record?.date||payload.date||null});

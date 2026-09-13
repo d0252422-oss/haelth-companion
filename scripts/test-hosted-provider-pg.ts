@@ -46,6 +46,12 @@ try{
   await admin`update private.beta_web_identity_aliases set verified_email_hash=${await sha('mismatch@example.invalid')} where canonical_user_id=${subjects.A.canonical}`;
   try{assert.equal((await api(a,'getBodyRecords')).error,'WEB_IDENTITY_CONFLICT');}finally{await admin`update private.beta_web_identity_aliases set verified_email_hash=${await sha('a@example.invalid')} where canonical_user_id=${subjects.A.canonical}`;}
   const token=await authority.issue('A');await authority.revoke(token);assert.equal((await api(token,'getBodyRecords')).ok,false);
+  for(const action of ['getSleepRecords','getActivityRecords']){
+    for(const denied of ['', 'invalid', expired, token, await authority.issue('MISSING')])assert.equal((await api(denied,action,{date:day})).ok,false);
+    assert.equal((await api(a,action,{date:day,user_id:subjects.B.canonical})).error,'CLIENT_IDENTITY_FORBIDDEN');
+    await admin`update private.beta_web_identity_aliases set verified_email_hash=${await sha('mismatch@example.invalid')} where canonical_user_id=${subjects.A.canonical}`;
+    try{assert.equal((await api(a,action,{date:day})).error,'WEB_IDENTITY_CONFLICT');}finally{await admin`update private.beta_web_identity_aliases set verified_email_hash=${await sha('a@example.invalid')} where canonical_user_id=${subjects.A.canonical}`;}
+  }
  });
  await gate('NOINHERIT_login_with_inheritable_membership_is_rejected',async()=>{
   await admin.unsafe('grant service_role to health_manual_api with inherit true,set true');
@@ -72,6 +78,11 @@ try{
   await good(a,'deleteBodyRecord',{recordId:body.recordId,revision:updated.record.revision,clientRequestId:crypto.randomUUID()});
   assert.equal((await good(a,'getNutritionRecords',{date:day})).length,0);assert.equal((await good(a,'getBodyRecords',{date:day})).length,0);
   const snapshot=await good(a,'localEngineSnapshot',{date:day});assert.equal(snapshot.meals.length,0);assert.ok(snapshot.outputs.every((r:any)=>r.score===null));
+  for(const action of ['getSleepRecords','getActivityRecords']){
+    const own=await good(a,action,{date:day});assert.equal(own.length,1);assert.equal(own[0].dataStatus,'CURRENT');
+    assert.equal(own[0][action==='getSleepRecords'?'totalSleepMinutes':'steps'],null);
+    assert.deepEqual(await good(b,action,{date:day}),[]);
+  }
   report.deleted_snapshot_status=snapshot.outputs.map((r:any)=>({domain:r.domain,score:r.score,status:r.score_status}));
  });
  await gate('hosted_role_lock_timeout_retry_and_transaction_failure',async()=>{

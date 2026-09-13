@@ -15,7 +15,9 @@ for(const name of await readdir(backend))if(name.endsWith('.ts'))files.push(back
 for(const name of await readdir('supabase/migrations'))if(name.endsWith('.sql')&&(release==='AB'||!/manual_exercise_(catalog_sql|category_update)/.test(name)))files.push('supabase/migrations/'+name);
 const manifest={created_at:new Date().toISOString(),source_revision:execFileSync('git',['--no-optional-locks','rev-parse','HEAD'],{encoding:'utf8'}).trim(),
  status:'SOURCE_PACKAGE_HOSTED_PROVIDER_IMPLEMENTED_NOT_ENABLED',release,files:[],
- candidate_entry:'health-companion-beta/manual-preview/index.html (PROPOSED_NEW_PATH_NOT_DEPLOYED)',
+ candidate_entry:'https://d0252422-oss.github.io/health-companion-beta/',
+ entry_evidence:'Existing Beta entry recorded in repository release docs; current remote frontend revision/artifact and login return-path NOT_VERIFIED. No new preview site is proposed.',
+ pre_cutover_snapshot:'NOT_CAPTURED; package generation is not a rollback point for the current remote deployment',
  backend:{project_name:'health-companion-beta',project_ref:'uavimjgccigpbwqmfkhh',function:'mobile-health-beta',runtime:'Supabase Edge Runtime',route:'/functions/v1/mobile-health-beta/v1/engine/web',actual_edge_execution:'BLOCKED_DOCKER_BACKEND_STARTUP'},
  flags:{manual_sql:'OFF',exercise_management:'OFF',existing_provider:'UNCHANGED_APPS_SCRIPT'},
  source_boundary:'Source deploy tree with derived single-function CLI config and effective pinned Deno config; NOT a verified CLI Edge compiled bundle',
