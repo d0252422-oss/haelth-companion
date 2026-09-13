@@ -1,6 +1,78 @@
 # Multi-domain engine test report
 
-## 2026-09-14 — conditional Beta SQL-first preconditions (current)
+## 2026-09-14 — manual observations / mobile UX closure (current)
+
+RUN_ID=`health-manual-ux-20260914-025012`; START_HEAD=`7779dcdd` in the unique safe D
+checkout. This is new implementation/execution, not reused overnight PASS. Final scoped
+revision, commands, times, exit codes, relevant source hashes, selected result counts and
+retained first failures are in the new external `REPORT.md` / `evidence-manifest.json`.
+
+New original-UI work: training view invariant and explicit draft continue/discard,
+date/user-bound asynchronous weight reads, persistent detail errors/retry, semantic
+metric-aware Dashboard navigation, range/account-scoped records center and grouped
+historical meals. Nutrition decimal macros/name-only meals retain nulls and provenance.
+Quick-add sleep/steps/total expenditure now use the actual authorized handler, canonical
+PostgreSQL storage, existing bounded queue and original detail pages. No Sheets fallback,
+mock persistence, synthetic production auth, new formula or native-data impersonation.
+
+Fresh Python154, Node257 entries (252 named +5 whole-file; UI already included), Deno121
+(original28 goldens included), and Android60 JVM tests are the final suite selections.
+Android lint has0 errors and37 unchanged warnings; no ADB task was run. The final
+manifest records source-consistent Browser AB27/A19 PASS on the existing Web,
+actual Deno handler and PG17. AB includes7 manual SQL checks and4 observation Browser
+scenarios: do not add them again. Four mobile widths320/360/393/430 cover navigation,
+draft/date/error states, light/dark, keyboard focus-visible and44px KPI targets.
+Hosted/lifecycle/native/queue/publication suites remain separate integration results,
+not extra copies of their unit, nested fixture or Browser assertions.
+
+Final nativePG17 suites: base7, shared queue6, observation publication10 PASS;
+hosted provider6 and manual/body/query6 PASS. Lifecycle18 barriers per PG17/PG18 PASS.
+Selected test failures/skips/cache executions0; initial failing attempts are retained,
+not reclassified as successes or counted again. The exact paths/hashes and working-tree
+revision linkage are in `D:/Dev/Evidence/health-manual-ux-20260914-025012/final-selections.json`.
+
+New native PG publication10 tests pass: full-day step result read-back; stale/wrong/expired
+leases; tombstone/no resurrection on old receipt; duration-only versus exact sleep
+interval; native cross-day conflict that preserves the unaffected day; partial coverage
+kept out of full-day dashboard; failure after publication marker rolls back all outputs;
+bounded old/new-date reconciliation; coherent timeline snapshot across an independently
+committed tombstone; cross-wake-date sleep conflict, previous-day invalidation, deletion
+recovery/replay and exact endpoint adjacency. These use real SQL, signed synthetic identity and
+actual runtime. A fault injected at the transaction call site is classified as injected,
+not a real server crash or an Edge execution.
+
+First Browser run had3 obsolete activity selectors; second had1 date barrier which held
+only one of two real date-change requests. The final helper holds all matching reads and
+checks the disabled form before releasing actual responses. No product confirmation was
+removed, no global dialog acceptance, fixture result substitution or weakened assertion.
+Initial Node harness/typecheck failures and review-driven implementation corrections are
+preserved. Final successful evidence does not erase those failures.
+
+Review-driven RED-to-GREEN: blank optional kcal became0; sleep reload did not refresh its
+stable ID/revision; independently queried frozen/raw timeline could mix snapshots;
+confirmed but incomplete meal was advertised as complete. The fixes preserve null/0,
+refresh exact identity/revision, share a repeatable-read transaction and distinguish
+confirmation from nutrition completeness. An incomplete day's UI totals stay incomplete;
+no label value, reference formula or golden expected result was rewritten.
+
+Another real PG RED showed a later wake-day sleep overlap left the prior publication
+COMPLETE. Reads now inspect only bounded adjacent wake-days and emit the requested
+range; insert/update/delete invalidation includes actual overlapping neighbors. The new
+trigger initially omitted the existing engine_required marker; the moved-date regression
+caught it and both insert/update now preserve true. No worker misrouting is claimed.
+Independent review is separate from root's execution. A Browser source-status failure
+was a test race with newer successful SQL bootstrap requests (timestamps retained), fixed
+by observing the failed response and DOM atomically. Keyboard focus tests now enter
+actual keyboard modality, not programmatic focus immediately after a mouse click.
+One Deno attempt lacked explicit Python/parity environment: prerequisite failure retained,
+then rerun with the verified interpreter and exact existing fixtures. It is not parity PASS.
+
+Actual Docker pipe remains absent, so ordinary Deno/native PG cannot unlock conditional
+Beta cutover. Real Edge/pool/TLS, live OAuth, remote Beta, devices, food/model validity
+and full weekly/check-in SQL equivalence remain unverified. Package generation is not a
+rollback snapshot or deployed artifact acceptance. No remote writes/deploy/push occurred.
+
+## 2026-09-14 — conditional Beta SQL-first preconditions (historical)
 
 New RUN_ID=`health-beta-sql-first-20260914`, START_HEAD=`32767b7`. Commands, source
 hashes, fresh result selection, raw failures and final checkpoint are under

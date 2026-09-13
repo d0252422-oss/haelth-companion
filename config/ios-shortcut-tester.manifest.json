@@ -13,7 +13,27 @@
   "connector_type": "ios_shortcut",
   "read_only_domains": ["steps", "heart_rate", "resting_heart_rate", "sleep", "sleep_stage", "weight", "workout", "hrv", "spo2"],
   "max_records_per_batch": 250,
+  "build_spec": {
+    "version": "ios-shortcut-five-window.v1",
+    "status": "OFFLINE_SPEC_ONLY_NOT_IMPORTABLE_SHORTCUT",
+    "clock_policy": "ONE_FROZEN_UTC_END_ELAPSED_SECONDS",
+    "point_boundary": "START_INCLUSIVE_END_EXCLUSIVE",
+    "interval_boundary": "OVERLAP_PRESERVE_ORIGINAL_INTERVAL",
+    "selected_domains": [
+      { "domain": "steps", "lookback_seconds": 86400, "unit": "count", "selection": "POINT_RECORDED_AT" },
+      { "domain": "heart_rate", "lookback_seconds": 86400, "unit": "bpm", "selection": "POINT_RECORDED_AT" },
+      { "domain": "sleep", "lookback_seconds": 604800, "unit": "minute", "selection": "INTERVAL_OVERLAP" },
+      { "domain": "weight", "lookback_seconds": 2592000, "unit": "kg", "selection": "POINT_RECORDED_AT" },
+      { "domain": "workout", "lookback_seconds": 604800, "unit": "minute", "selection": "INTERVAL_OVERLAP" }
+    ],
+    "batch_policy": "DOMAIN_SEPARATE_MAX_250_STABLE_MEMBERSHIP_AND_SERIALIZED_PAYLOAD",
+    "retry_policy": "BOUNDED_REPLAY_ORIGINAL_PAYLOAD_NO_NEW_IDENTITIES_OR_REVISIONS",
+    "credentials": "RUNTIME_VARIABLES_ONLY_NEVER_SHARED_OR_LOGGED",
+    "device_execution": "NOT_RUN",
+    "server_window_enforcement": "NOT_IMPLEMENTED_BY_THIS_SPEC",
+    "healthkit_shortcuts_field_availability": "NOT_DEVICE_VERIFIED"
+  },
   "share_url": "",
-  "runtime_status": "READY_BETA_HTTPS",
-  "share_link_status": "BLOCKED_HUMAN_SHARE_LINK_ONLY"
+  "runtime_status": "BACKEND_CONTRACT_PRESENT_ACTUAL_TARGET_NOT_REVALIDATED",
+  "share_link_status": "BLOCKED_SHORTCUT_BUILD_DEVICE_AND_SHARE_LINK"
 }

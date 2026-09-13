@@ -11,6 +11,17 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Current run `health-manual-ux-20260914-025012` adds SQL sleep/steps/total expenditure,
+training draft/navigation and body-date fixes, records history, decimal/null nutrition,
+and bounded neighbor/snapshot regression repairs. Its25 per-leaf accounting records
+are in `manual_ux_continuation` in the machine ledger; previous accounting is retained.
+Eight local leaves remain ALREADY_CREDITED,17 ACCEPTANCE_NOT_FULLY_MET. New requested
+observation/UX/preparation increments do not create weighted leaves. No ledger omission
+or scope/weight adjustment: net engineering0.0pp, correction0.0pp,32/100 known scope.
+The current-run PostgreSQL RED defects temporarily invalidated its4-weight acceptance;
+credit is restored only after the new native/queue/publication regression passes, not
+because an older report still hashes correctly. Overall scope remains UNKNOWN.
+
 No earlier `PROJECT_PROGRESS.md`, `project-progress.json` or valid weight baseline was
 found. Historical chat estimates are not a baseline. The original workspace
 `docs/ROADMAP.md` defines V1–V5, while `docs/PROJECT_PRD.md` describes an older

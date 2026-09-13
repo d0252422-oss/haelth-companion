@@ -1,6 +1,123 @@
 # Multi-domain engine architecture (non-production)
 
-## 2026-09-14 — conditional Beta SQL-first continuation (current)
+## 2026-09-14 — manual observations / original UI continuation (current)
+
+RUN_ID=`health-manual-ux-20260914-025012`, START_HEAD=`7779dcdd`. Expanded Beta
+authorization is conditional on **all** Owner preconditions, now including sleep,
+steps and total-energy CRUD. Actual Docker named pipe is absent in the fresh check;
+ordinary Deno/PG17 remains distinct. No remote mutation/cutover is permitted yet.
+
+| Domain | Original form / read | Actual handler / SQL | Analysis boundary |
+|---|---|---|---|
+| Body | weight/body-fat form, body detail, Dashboard | `upsert/deleteBodyRecord`, `getBodyRecords`; `engine_manual_body_records` | existing portable Body adapter/queue; insufficient baseline stays null; not a new frozen overall input |
+| Nutrition | meal form, selected-date grouped history | `upsert/deleteMealRecord`, `getNutritionRecords`; `engine_meals` | confirmed label arithmetic; unknown meal saved, no invented kcal |
+| Training | original workout draft/detail | `addWorkoutRecord/updateWorkoutSet/deleteWorkoutSet/getWorkoutRecords`; `manual_workout_sets` | raw sets/volume/sessions; training score adapter NOT_ENABLED |
+| Exercise library | original manager | `manageExercise/getExerciseDatabase`; catalog + user preferences | stable IDs, aliases, archive/restore, referenced-delete restriction |
+| Sleep | quick-add duration/optional interval, sleep detail | observation actions; `engine_manual_observations` | duration-only can feed frozen sleep-minutes input; portable interval engine requires actual exact timing; no stages/efficiency invented |
+| Steps | daily cumulative form, activity detail | same observation actions/table, domain=steps | full day to existing step adapter; partial day remains raw, no full-day score |
+| Total expenditure | daily cumulative form, activity detail | same observation actions/table, domain=total_energy | raw total kcal only, no BMR/workout/intake addition or invented score |
+| Scores | Dashboard / original score detail | `getDashboardData/getHealthTimeline`, published SQL score/head/queue | only current generations; frozen health-score-v1.0 unchanged |
+| Weekly / check-in | retained existing pages/forms | SQL actions currently unsupported, fail closed | no silent Sheets fallback; not full legacy equivalence |
+
+All implemented manual writes and reads share `local-engine-web.js` → existing
+`index.ts` gateway → verified native-local or verified Web session → canonical mapping
+→ `LocalEngineRuntime` stores → SQL. No body-provided user ID, default tenant, new
+auth bypass, dual write or Windows-host production dependency. Hosted construction
+is real but actual Edge/pool/TLS/OAuth still need target verification. SQL mode does
+not send an Apps Script session as a Supabase Auth JWT. Android/iOS native ingress
+retains existing canonical tables; no manual record impersonates those devices.
+
+`20260913190152_manual_observation_canonical_sql.sql` extends canonical storage with
+manual domain records, natural daily uniqueness for steps/total-energy, revision,
+tombstone, private receipt and the **existing** bounded queue. It is consumed by the
+real handler and original Web, not a second isolated store/queue. Raw/receipt/enqueue
+are atomic. Native authenticated reads use non-owner, non-BYPASSRLS; backend writes
+add verified tenant authorization. Native PG17 rehearsal includes the original schema,
+the additive migration, SQL grants/RLS and transactional failure recovery; it does
+not emulate unavailable Supabase platform extensions.
+
+Sleep uses wake-date for explicit cross-midnight sessions, duration-only remains
+self-reported duration. Multiple sessions without enough timing are
+OVERLAP_UNRESOLVED; overlapping intervals are OVERLAP_CONFLICT. Manual/native same-day
+inputs are SOURCE_CONFLICT, never max/latest/sum. A bounded versioned internal
+`manual-source-exclusion-v1` day mask leaves original native interval/value/provenance
+intact and suppresses only conflicted dates. Python reference and portable TS use
+the same rule; proration on other dates and old formulas are unchanged. Frozen
+in-memory projections include the retained-date mask in their hash. SQL originals
+are never rewritten. Total energy does not enter the generic energy adapter.
+
+Timed sleep context includes at most one additional wake-day on either side because
+the accepted interval is <=24h. That context detects actual overlap across midnight;
+single-day APIs still return only the requested date. Mutation invalidation includes
+old/new wake-dates plus exact overlapping neighbors, followed by the same bounded28-day
+queue expansion. Exact endpoint adjacency is not overlap. Tombstones remove conflicts
+and restore valid prior-day publication without changing surviving raw records. The
+observation trigger preserves engine_required=true on insert and update, including
+pre-existing non-manual queue entries. Frozen/raw/daily timeline reads share one
+repeatable-read snapshot; generation fences still protect publication.
+
+The original UI now uses one training view controller, an explicit continue/discard
+draft dialog, date/user-bound form reads and persistent inline retry/error states.
+Records selection is user/provider scoped; Dashboard drill-down carries the metric
+and preserves range. New raw data can display while analysis is missing/disabled;
+actual durable queue/publication evidence controls pending/updated states.
+
+Evidence and first failures are retained under the run's external evidence root.
+Read its final report/manifest for executed acceptance; this architecture description
+is not execution proof. Photo open-data preparation is in
+`PHOTO_NUTRITION_OPEN_DATA_BOOTSTRAP.md`; no model or food snapshot was acquired.
+
+### Expanded Beta enablement delta and exact continuation boundary
+
+The previous conditional target/rollback plan below remains applicable. Add
+`20260913190152_manual_observation_canonical_sql.sql` **after** the already reviewed
+missing additive subset, only if a fresh Beta inventory confirms it is missing and
+all expanded preconditions pass. It contains no data import or destructive rewrite.
+Rehearsal does not authorize replaying the full historical migration directory.
+All new manual observation paths are in Release A and AB; catalog/category tables
+and training actions remain B-specific. Fresh A-only tests prove separation instead
+of merely hiding the B controls. Global SQL-first acceptance still cannot skip the
+unimplemented weekly/check-in contracts or real hosted login/pool verification.
+
+The next target remains exactly project `health-companion-beta`, expected ref
+`uavimjgccigpbwqmfkhh`, function `mobile-health-beta`, existing frontend
+`https://d0252422-oss.github.io/health-companion-beta/`. These are documented prior
+read-only facts, not a new remote inventory. Before any eligible write, re-match
+project ID/name and migration hashes; preserve deployed function source/revision,
+frontend artifact, schema/grants/policies and flag/config before-state without secrets.
+
+Operational order after actual Edge and remaining prerequisites are accepted:
+
+1. Use the pinned CLI's inspected commands against a new isolated local Edge/PG17
+   project and the real handler/provider, including the new observation paths.
+2. Confirm the existing server-side verified Web-session endpoint, distinct canonical
+   mapping, dedicated SQL role and TLS/pool transaction behavior. Missing settings
+   fail closed; no local test issuer may enter the deployment. OAuth login or new
+   credential/role/permission changes require the separately applicable human action.
+3. Recheck and apply only the allowlisted missing additive Beta migration hashes;
+   verify schema, constraints, RLS, grants, functions/triggers and migration versions.
+4. Deploy the reviewed function tree with `supabase functions deploy mobile-health-beta
+   --project-ref uavimjgccigpbwqmfkhh` only after the preceding prerequisites, with existing
+   approved server config. This is a pending command, not executed evidence. Verify
+   dedicated A/B synthetic sessions, SQL CRUD/receipts, bounded publication and errors.
+5. Only after backend smoke passes, publish the reviewed frontend artifact to the
+   existing Beta-only delivery target and switch its manual SQL config to enabled with
+   the verified Beta Web endpoint/release. The actual GitHub Pages deployment mechanism
+   and old artifact must first be inventoried; do not invent a push/workflow command,
+   use the main production entry or claim source packaging is publication.
+6. Run deployed original-form body/nutrition/training/sleep/steps/total-energy/exercise
+   CRUD, new browser session read-back, A/B/cache isolation, replay and analysis checks.
+   Maintain a synthetic record-ID manifest; only its authorized test rows may be deleted.
+
+Any auth/RLS/tenant/read-write mismatch or migration/function regression stops the
+sequence. Restore the last verified Beta frontend/flag/function if compatible; retain
+new SQL records, revisions, receipts and tombstones. Prefer additive forward-fix, not a
+destructive down migration, bulk requeue or Sheets overwrite. Sheets/Apps Script source
+and old real data remain untouched. Current prerequisite failures mean **none of these
+remote operations is enabled by this local package**; Owner's conditional Beta authority
+is already recorded and must not be requested again merely to repeat it.
+
+## 2026-09-14 — conditional Beta SQL-first continuation (historical)
 
 Run `health-beta-sql-first-20260914`, start `32767b7`. Owner now authorizes necessary
 non-destructive **existing Beta-only** migration/function/frontend/flags and dedicated

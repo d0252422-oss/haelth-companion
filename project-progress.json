@@ -2,6 +2,267 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "manual_ux_continuation": {
+    "run_id": "health-manual-ux-20260914-025012",
+    "source_baseline": "7779dcdd50c87b2aaf5f9fcbe6867744dac84ec6",
+    "evidence_root": "D:/Dev/Evidence/health-manual-ux-20260914-025012",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "ledger_correction_pp": 0,
+    "ledger_omission": "NONE_CONFIRMED",
+    "previous_accounting": "continuation_accounting is retained as historical health-overnight-20260914-0037 accounting",
+    "regression_accounting": {
+      "gate_id": "postgres_recompute",
+      "original_weight": 4,
+      "withdrawal_pp": -4,
+      "restoration_pp": 4,
+      "net_pp": 0,
+      "reason": "Current-run RED coherent snapshot/cross-wake-date/engine-required marker fixed and fresh native/queue/publication retested; no stale older evidence promoted"
+    },
+    "gates": [
+      {
+        "gate_id": "canonical_ingestion",
+        "original_acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/node.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "local_identity",
+        "original_acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "frozen_formula",
+        "original_acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "reference_engineering",
+        "original_acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "nutrition_label_local",
+        "original_acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "portable_core_parity",
+        "original_acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "edge_execution",
+        "original_acceptance": "Supabase CLI Edge handler -> canonical identity -> actual engine -> dedicated PostgreSQL passes security/error/resource tests; no host Python or remote fallback.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "postgres_recompute",
+        "original_acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/queue.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/manual.json",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers17.json",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers18.json",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "existing_browser",
+        "original_acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+          ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "overview_training_weekly",
+        "original_acceptance": "Full confirmed-version overview, training/body input,14-day aggregate and rolling7-day reporting UI regression; contracts alone insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "android_nondevice_build",
+        "original_acceptance": "Fresh JVM/lint plus legitimate intended Beta APK variant build with reviewed config; unit-only evidence cannot satisfy build.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "android_oem_device",
+        "original_acceptance": "OEM background bounded HTTP/retry/lock/swipe/process-death/idempotency and ingestion-to-score real-device E2E.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "ios_build",
+        "original_acceptance": "Confirmed iOS delivery route build/static acceptance on supported Apple toolchain; optional native helper scope decision remains visible.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "ios_device",
+        "original_acceptance": "iOS Shortcut/HealthKit permitted data -> canonical ingestion -> displayed output on device; platform scope explicitly confirmed.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "photo_model",
+        "original_acceptance": "Licensed model weights and real inference path, no fixture or external manual handoff substituted.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "photo_reference_accuracy",
+        "original_acceptance": "Licensed representative photo ground truth and predeclared evaluation; actual accuracy and limitations measured.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "food_reference",
+        "original_acceptance": "Food reference source/version/license, preparation/edible/portion conversions and values independently validated.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "new_score_validity",
+        "original_acceptance": "New domain formulas have justified populations/thresholds/weights and independent reference/real-world validation.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "remote_beta_oauth",
+        "original_acceptance": "Authorized remote Beta API/UI integration, real Google OAuth identity and tenant isolation smoke; local synthetic tokens insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "line_v4",
+        "original_acceptance": "Roadmap V4 verified LIFF Google link/unlink, account separation and weekly LINE notification acceptance.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "recovery_v2",
+        "original_acceptance": "Roadmap V2 full-body/local-muscle load, sleep features and user-feedback recovery acceptance; new adapter alone insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "guidance_v3",
+        "original_acceptance": "Roadmap V3 context-based intensity/body-part guidance, RPE/RIR and Deload/imbalance acceptance.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "personalization_v5",
+        "original_acceptance": "Roadmap V5 long-term personalization, explainable weight decisions and cross-domain guidance with validation.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "release_security_privacy",
+        "original_acceptance": "Pre-release privacy/security, data backup/retention/permissions and legal distribution review; high-risk findings closed.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "authorized_release",
+        "original_acceptance": "Explicitly authorized release, distribution smoke, backup and rollback acceptance in named environment.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      }
+    ],
+    "outside_current_baseline": [
+      "New requested sleep/steps/total-expenditure CRUD and detailed UX requirements are tracked increments, not new weighted leaves",
+      "Exercise management, iOS specification/photo source preparation and package tooling do not create weighted product acceptance"
+    ],
+    "blockers": [
+      "Actual CLI Edge/Docker startup and hosted pool/TLS remain unverified",
+      "Live OAuth and deployed Beta prerequisite chain not accepted",
+      "Whole-Web weekly/check-in SQL contract not verified against absent legacy source; no invented rules",
+      "Android intended APK configuration, OEM/iOS, photo/reference validity and complete release scope remain open"
+    ]
+  },
   "beta_sql_first_continuation": {
     "run_id": "health-beta-sql-first-20260914",
     "source_baseline": "32767b7852c3e0c3a3b5eb08656ac8c5ec6d268f",
@@ -303,6 +564,14 @@
       "acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
       "evidence": [
         {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/node.xml",
+          "sha256": "234b95b9b9ea69816ea824d6a387b2568f771c4ef8cad1bfe3f7fd451eb286e3"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          "sha256": "29e82010e31af7c8b872b1181b3863034bfd5413a57d21a2a51db1fde988ba02"
+        },
+        {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/node.xml",
           "sha256": "3e128c8190b03e9b5629b0a47d72b293471a3e533501b3e8c27c573a810ea459"
         },
@@ -348,6 +617,18 @@
       "status": "PASS",
       "acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          "sha256": "29e82010e31af7c8b872b1181b3863034bfd5413a57d21a2a51db1fde988ba02"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+          "sha256": "581dc76a1314d3ca2e2cf78c915bd731bdb8da79e4fd3939833ce0a6291920d7"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json",
+          "sha256": "6639c5335aa48ae264e8916ed09376984cefc73b71f2527c953a28f857bc329a"
+        },
         {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
           "sha256": "febe93d0fd1d6b273cc29982602aebb66c76e65cacdf6b11d96e9031b57176c9"
@@ -411,6 +692,14 @@
       "acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
       "evidence": [
         {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+          "sha256": "6cb1466c04100cfe5200e015ce53a462be3a95fa89d8170879f2ab19531dd518"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+          "sha256": "180990df79d4d3b79bb81e7ac74f8963b8d6fc571945ebf78090755f8cced22a"
+        },
+        {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/python.xml",
           "sha256": "93fee7e602c183df318da9855293111dab46617761ff8480d34d21c2c5488cfe"
         },
@@ -461,6 +750,14 @@
       "acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
       "evidence": [
         {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+          "sha256": "6cb1466c04100cfe5200e015ce53a462be3a95fa89d8170879f2ab19531dd518"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+          "sha256": "180990df79d4d3b79bb81e7ac74f8963b8d6fc571945ebf78090755f8cced22a"
+        },
+        {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/python.xml",
           "sha256": "93fee7e602c183df318da9855293111dab46617761ff8480d34d21c2c5488cfe"
         },
@@ -490,6 +787,14 @@
       "status": "PASS",
       "acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+          "sha256": "581dc76a1314d3ca2e2cf78c915bd731bdb8da79e4fd3939833ce0a6291920d7"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json",
+          "sha256": "684b945a19e10c37f4e5625b92ab2ccad0c052800b3bbbeb33e815f1f8543ae4"
+        },
         {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
           "sha256": "febe93d0fd1d6b273cc29982602aebb66c76e65cacdf6b11d96e9031b57176c9"
@@ -540,6 +845,18 @@
       "status": "PASS",
       "acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+          "sha256": "180990df79d4d3b79bb81e7ac74f8963b8d6fc571945ebf78090755f8cced22a"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          "sha256": "29e82010e31af7c8b872b1181b3863034bfd5413a57d21a2a51db1fde988ba02"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+          "sha256": "7cbf2c2e82363161cfd1b59aea8f9e8835fe5cdf8dcef47ccc5742ff401ee2ca"
+        },
         {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/deno.xml",
           "sha256": "e0f055a8f01075a1de2a64995d1b9b3614968bc1406c96a91f084afdee95806e"
@@ -599,6 +916,34 @@
       "status": "PASS",
       "acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+          "sha256": "7cbf2c2e82363161cfd1b59aea8f9e8835fe5cdf8dcef47ccc5742ff401ee2ca"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/queue.xml",
+          "sha256": "a57761ebf38cc4d95e55ae3b5a7818b8df7380b3f0ff87d06ecf6afab991032b"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+          "sha256": "29e82010e31af7c8b872b1181b3863034bfd5413a57d21a2a51db1fde988ba02"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/manual.json",
+          "sha256": "ba01d521d02f33086083ebbe3712b3733211432e772e3e8aca5b5ec8f85fae96"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers17.json",
+          "sha256": "fc5c2056aea93a030b1dbf8dc8b58f3a91067a6fe9c82a40c98462b26f990e37"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers18.json",
+          "sha256": "41c94da3b7b13befa8baa7cc8487418ec789c8e1d501049c5099f6046cc4bd68"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json",
+          "sha256": "6639c5335aa48ae264e8916ed09376984cefc73b71f2527c953a28f857bc329a"
+        },
         {
           "path": ".engine-artifacts/cutover/health-beta-sql-first-20260914/native17.xml",
           "sha256": "facd09705919e25f68f9415e0dea7587048f718381f3f83afad1d769cf969a7f"
@@ -673,6 +1018,14 @@
       "status": "PASS",
       "acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+          "sha256": "581dc76a1314d3ca2e2cf78c915bd731bdb8da79e4fd3939833ce0a6291920d7"
+        },
+        {
+          "path": ".engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json",
+          "sha256": "684b945a19e10c37f4e5625b92ab2ccad0c052800b3bbbeb33e815f1f8543ae4"
+        },
         {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
           "sha256": "febe93d0fd1d6b273cc29982602aebb66c76e65cacdf6b11d96e9031b57176c9"

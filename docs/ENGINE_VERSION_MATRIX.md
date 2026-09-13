@@ -1,5 +1,28 @@
 # Engine version matrix
 
+## 2026-09-14 manual observation / UI continuation (current)
+
+RUN_ID=`health-manual-ux-20260914-025012`. No dependency or existing score-formula
+version changed. New **input reconciliation**, not a new score, is explicitly versioned
+`manual-source-exclusion-v1`: a bounded internal day mask keeps the original native
+record/interval/hash, excludes only manual/native conflicted dates, and preserves
+unconflicted interval proration. Python reference and portable TS share the contract;
+fresh full-bundle differential fixtures cover its nulls, flags, fingerprint and metrics.
+Invalid/unknown mask versions fail closed. No golden expected values or tolerances changed.
+
+Manual full-day steps enter the existing count input; duration-only sleep can enter the
+existing frozen sleep-minutes input but not the portable interval/bedtime model. Exact
+paired sleep times allow the existing portable adapter. Partial-day observations and
+total expenditure remain raw values, not invented full-day/active energy or scores.
+The existing portable Body adapter remains; this change does not add manual Body to the
+frozen overall formula/input. New domain validity remains EXPERIMENTAL_UNVALIDATED.
+
+Current tools/versions are recorded by the new evidence manifests. CLI2.115.0 is held;
+native PG17.11 and PG18.6 are independent synthetic clusters, not deployed platform
+parity. Actual Edge version/execution remains UNKNOWN/BLOCKED_DOCKER. No model weights
+or food-data snapshot was installed. See PHOTO_NUTRITION_OPEN_DATA_BOOTSTRAP.md for
+separate source/license/version preparation; that document is not reference validation.
+
 ## 2026-09-14 overnight continuation
 
 No runtime/package/formula versions changed. New manual Body input adapter emits
