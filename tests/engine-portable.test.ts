@@ -6,7 +6,7 @@ import {
 } from "../supabase/functions/mobile-health-beta/engine-portable.ts";
 const cases = JSON.parse(
   await Deno.readTextFile(
-    ".engine-artifacts/blocker-closure/portable-fixtures.json",
+    Deno.env.get('ENGINE_PARITY_FIXTURES') ?? ".engine-artifacts/blocker-closure/portable-fixtures.json",
   ),
 );
 function compare(a: any, b: any, path = "root") {

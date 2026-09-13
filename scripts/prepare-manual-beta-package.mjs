@@ -12,7 +12,7 @@ const files=['index.html','scripts/local-engine-web.js','scripts/manual-sql-conf
  'config/engine-local.deno.json','config/engine-local.deno.lock',backend+'/deno.json',
  'fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js'];
 for(const name of await readdir(backend))if(name.endsWith('.ts'))files.push(backend+'/'+name);
-for(const name of await readdir('supabase/migrations'))if(name.endsWith('.sql')&&(release==='AB'||!name.includes('manual_exercise_catalog_sql')))files.push('supabase/migrations/'+name);
+for(const name of await readdir('supabase/migrations'))if(name.endsWith('.sql')&&(release==='AB'||!/manual_exercise_(catalog_sql|category_update)/.test(name)))files.push('supabase/migrations/'+name);
 const manifest={created_at:new Date().toISOString(),source_revision:execFileSync('git',['--no-optional-locks','rev-parse','HEAD'],{encoding:'utf8'}).trim(),
  status:'SOURCE_PACKAGE_HOSTED_PROVIDER_IMPLEMENTED_NOT_ENABLED',release,files:[],
  candidate_entry:'health-companion-beta/manual-preview/index.html (PROPOSED_NEW_PATH_NOT_DEPLOYED)',

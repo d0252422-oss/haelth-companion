@@ -11,6 +11,11 @@ export function exerciseName(v: unknown) {
   if (!name || [...name].length>80 || /[\p{Cc}\p{Cf}]/u.test(name)) throw Error('INVALID_EXERCISE_NAME');
   return name; // Output always rendered with textContent / escapeHtml, never interpreted as HTML.
 }
+export function exerciseCategory(v:unknown){
+  const value=exerciseName(v);
+  if([...value].length>40)throw Error('INVALID_EXERCISE_CATEGORY');
+  return value;
+}
 function setValues(v: Json) {
   const weight=v.weight, reps=v.reps;
   if (typeof weight!=='number'||!Number.isFinite(weight)||weight<0||weight>1000||!Number.isSafeInteger(reps)||reps<1||reps>10000) throw Error('INVALID_WORKOUT_SET');
@@ -71,7 +76,16 @@ export class ManualTrainingLocalStore {
       const receipt=(await tx`select input_hash,response from private.manual_training_receipts where canonical_user_id=${user} and request_id=${input.clientRequestId}`)[0];
       if(receipt){if(receipt.input_hash!==hash)throw Error('REQUEST_ID_CONFLICT');return {...receipt.response,replayed:true};}
       let result:Json;
-      if(action==='manageExercise') {
+      if(action==='manageExercise'&&input.operation==='create') {
+        const name=exerciseName(input.name),category=exerciseCategory(input.muscleGroup);
+        if(input.exerciseId!==undefined||input.revision!==undefined)throw Error('SERVER_EXERCISE_ID_REQUIRED');
+        const count=(await tx`select count(*)::int as n from public.manual_exercise_catalog where owner_user_id is null or owner_user_id=${user}`)[0].n;
+        if(count>=1000)throw Error('EXERCISE_CATALOG_BOUND_EXCEEDED');
+        const id=crypto.randomUUID();
+        await tx`insert into public.manual_exercise_catalog values(${id},${user},${name},${category})`;
+        await tx`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id,revision) values(${user},${id},1)`;
+        result={exerciseId:id,exerciseName:name,muscleGroup:category,revision:1,operation:'create',status:'SAVED'};
+      } else if(action==='manageExercise') {
         const row=await this.selected(tx,user,input.exerciseId,true);
         if(!Number.isSafeInteger(input.revision)||input.revision!==Number(row.revision))throw Error('STALE_REVISION');
         const revision=Number(row.revision)+1,operation=input.operation;
@@ -79,6 +93,9 @@ export class ManualTrainingLocalStore {
           const name=exerciseName(input.name);
           if(row.owner_user_id===user)await tx`update public.manual_exercise_catalog set exercise_name=${name} where exercise_id=${row.exercise_id} and owner_user_id=${user}`;
           else await tx`update public.manual_exercise_preferences set alias=${name} where canonical_user_id=${user} and exercise_id=${row.exercise_id}`;
+        } else if(operation==='classify') {
+          if(row.owner_user_id!==user)throw Error('SYSTEM_EXERCISE_CATEGORY_READ_ONLY');
+          await tx`update public.manual_exercise_catalog set muscle_group=${exerciseCategory(input.muscleGroup)} where exercise_id=${row.exercise_id} and owner_user_id=${user}`;
         } else if(operation==='archive'||operation==='restore') {
           await tx`update public.manual_exercise_preferences set archived=${operation==='archive'} where canonical_user_id=${user} and exercise_id=${row.exercise_id}`;
         } else if(operation==='delete') {

@@ -1,6 +1,143 @@
 # Multi-domain engine architecture (non-production)
 
-## 2026-09-13 — Edge/PG17/concurrency release closure (current)
+## 2026-09-14 — overnight manual input closure (current)
+
+Run `health-overnight-20260914-0037`, starting canonical HEAD `3ef6b61`. This is new
+local work, not a claim that the earlier Docker/Edge/OAuth gates passed. No ADB,
+phone, remote writes, deployment, push, new dependency or frozen formula changes.
+
+### Actual supported contract / call graph
+
+All SQL rows use the verified canonical identity, not a frontend user ID. Local
+signed test sessions and real OAuth acceptance remain distinct. Default flags OFF
+retain the original Apps Script login/data provider; SQL enabled reads and writes
+share `index.html:sessionPost` -> `local-engine-web.js:localEngineRequest` -> actual
+`mobile-health-beta/index.ts:default.fetch` -> `LocalEngineRuntime.handle/identity`
+-> `manual-web-identity.ts` -> PostgreSQL. There is no SQL-error-to-Sheets fallback.
+
+| Domain | Existing form / actions | Real storage/read-back | Update/delete/idempotency | Analysis / UI |
+|---|---|---|---|---|
+| BODY / WEIGHT | `#weight-form`; upsertBodyRecord/getBodyRecords/deleteBodyRecord | ManualBodyLocalStore; engine_manual_body_records | revision, unique live user/date, tombstone; private.engine_body_mutation_receipts | atomic bounded queue trigger -> compute -> original Body engine -> output heads -> body note; raw CRUD independent of score availability |
+| NUTRITION | `#meal-form`; upsertMealRecord/getNutritionRecords/deleteMealRecord | engine_meals; snapshot joins output heads/history | revision/tombstone; private.engine_mutation_receipts | existing portable Nutrition engine; explicit label/grams, incomplete values remain null; original meal UI |
+| TRAINING | original workout session/set editor; addWorkoutRecord/getWorkoutRecords/updateWorkoutSet/deleteWorkoutSet | ManualTrainingLocalStore; manual_workout_sets | stable record/exercise IDs, revisions, tombstones; private.manual_training_receipts | actual SQL daily volume/set/session aggregates; manual training **score adapter NOT_CONNECTED**, no job; records saved, analysis not enabled |
+| EXERCISE_LIBRARY | original training page manager; manageExercise/getExerciseDatabase | manual_exercise_catalog + user preferences | create/rename/classify/archive/restore/delete, stable server UUID, revision/receipt | custom owner names/categories; system personal alias; history snapshots retained, RESTRICT FKs, no score mutation |
+
+Custom creation accepts duplicate names as distinct UUIDs, never merges them. Category
+already existed in the model; only its owner can edit it. Shared system categories are
+read-only. Names/categories normalize NFC, reject controls and have80/40-character
+bounds; the UI uses literal DOM values/text. The catalog is bounded1000 visible entries.
+All lifecycle writes share the canonical advisory lock and preference lock, then check
+revision/active state. Both rename/reference orders now join the previous four barrier
+orders across READ COMMITTED/REPEATABLE READ/SERIALIZABLE; history retains the name and
+category at the time of reference. Soft-deleted history still prohibits permanent delete.
+
+### Body adapter, not a new engine or health-score formula
+
+`manual-body-engine.ts:manualBodyEngineRecords` emits MANUAL_WEB weight(kg), optional
+body_fat(percent), and same-observation fat_mass(kg = weight × percent /100). Null body
+fat is absent, not zero; an explicit zero remains zero. Date-only data uses a deterministic
+Taipei midnight anchor, not a claimed measurement timestamp. No height, personal target,
+calories, sex or accuracy estimate is synthesized. Existing multi-source ambiguity policy
+is preserved: manual and device observations are not silently averaged or merged.
+
+`LocalEngineRuntime.compute` reads meals/mobile/body in a bounded repeatable-read
+snapshot, supplies the unchanged PortableEngineRuntime, then retains existing atomic
+generation-checked output publication. `engine_manual_body_dirty` reuses the existing
+queue invalidation trigger: old/new dates plus at most27 following days, capped at today.
+Receipt replay does not enqueue again. A late40-day-old record does not recompute all
+history; shifting its date by one affects29 distinct dates, not the whole timeline.
+
+Seven prior valid observation days allow the existing Body stability/fat-mass trend
+components; otherwise missing baseline/target is INSUFFICIENT_DATA. No BMI without an
+existing supplied height. `engine_output_history/heads` keep body-score-v1.0 version and
+fingerprints; the body panel explicitly says Experimental/UNVALIDATED. The separate
+legacy/mobile `score-bridge.ts` and original28 vectors remain byte-identical: manual
+body is **not** inserted into beta_health_records, and experimental output is not silently
+substituted for the old dashboard's frozen mobile-score input contract. Experimental
+portable overall continues to use its already-existing frozen orchestration/weights.
+
+Raw stored body JSON/immutable receipts contain their original queued snapshot. Reads
+hydrate current analysis from queue and output heads in one repeatable-read transaction.
+Queue DIRTY/PROCESSING = pending; FAILED = ERROR/no scheduled job; absent history and
+queue = ANALYSIS_NOT_ENABLED (no fabricated backfill); insufficient engine output stays
+INSUFFICIENT_DATA. A post-commit optional analysis failure preserves SAVED/receipt and
+reports ANALYSIS_UNAVAILABLE with jobScheduled=null. Review reproduced the prior503
+misreport using a scoped analysis rejection after real SQL commit, then verified the fix.
+
+Provider UI now distinguishes configured local/hosted PostgreSQL or Apps Script and
+the actual last-request result/action/timestamp. Account reset discards this observation
+along with data caches. A failed SQL request says no provider switch; analysis states
+are separately displayed. It is not a hardcoded claim of a live database connection.
+
+### New migration / release separation
+
+- Release A additionally needs `20260913164024_manual_body_engine_recompute.sql`,
+  after existing body/engine/queue migrations. Additive trigger, no new data imports.
+- Release B additionally needs `20260913164026_manual_exercise_category_update.sql`,
+  after `20260913041844_manual_exercise_catalog_sql.sql`. Only muscle_group UPDATE grant.
+- Both files were created by pinned CLI2.115.0 `migration new` after help inspection;
+  only fresh synthetic local databases rehearse them. No existing database is reset.
+- A-only native/browser/package excludes both B migrations and denies B API actions;
+  hiding buttons alone is not claimed to establish Release A isolation.
+
+### Enablement checklist, still no remote execution
+
+Exact intended target remains `health-companion-beta` / `uavimjgccigpbwqmfkhh`, function
+`mobile-health-beta`, route `/functions/v1/mobile-health-beta/v1/engine/web`; proposed
+isolated Web path `/health-companion-beta/manual-preview/` at the documented GitHub
+Pages origin. It is not deployed or an approved replacement for the current root page.
+
+1. Resolve existing Docker `sailor-ingest.sock` Windows1920 using an operator-reviewed,
+   non-reset fix. Fresh diagnostics show no redirect, no daemon, unchanged reparse
+   error; no additional startup was justified. Do not delete socket/volumes or change
+   ACLs based on an assumed cause. Then execute actual CLI Edge+PG17+Web on unique
+   local project/ports/dataset, including pool/TLS and platform resource boundaries.
+2. Obtain named Beta **read-only inventory** authority for actual migration revisions,
+   PG patch/extensions, custom DB role/pool host, Web verifier and canonical mappings.
+   Diff against the packaged migration hashes; do not blindly apply every historical file.
+3. Authorize only the reviewed missing additive A migrations (including body trigger),
+   role/membership and secret/config operations. B migration/category grant is a separate
+   release decision. Preserve current login and canonical IDs; no alias backfill/merge.
+4. After prerequisite acceptance, authorize deployment of only the named function and
+   isolated frontend artifact at its reported source revision/hash. Proposed CLI operation:
+   `supabase functions deploy mobile-health-beta --project-ref uavimjgccigpbwqmfkhh`
+   from the reviewed source package. Do not use all-functions deploy, push or CI implicitly.
+   Frontend publication must target the approved preview path, not overwrite root Pages.
+5. Review backend `HEALTH_MANUAL_SQL_HOSTED_ENABLED`, `HEALTH_MANUAL_RELEASE=A`,
+   `HEALTH_MANUAL_ALLOWED_ORIGIN`, expected project/pool host, DB connection secret and
+   `BETA_WEB_AUTH_VERIFY_URL`. Match frontend `manual-sql-config.js` project/endpoint/
+   schema/release. Enable both sides only after real Google/LINE verified-session tests;
+   no local test issuer, fixed account, service secret or localhost in the public client.
+6. Separately authorize synthetic user-scoped remote smoke writes: one body row and one
+   labeled meal, update/replay/read in fresh browser context, tombstone delete and A/B
+   denial. Record exactly approved accounts/request IDs/dates; no real health import.
+7. Stop rollout for identity/provider mismatch, unauthorized access, unbounded work,
+   missing receipt, partial SQL result or formula regression. Roll back frontend/function
+   and disable new writes; preserve newly written rows/receipts/tombstones and compatible
+   read/export access. No DROP, destructive down migration or silent Sheets fallback.
+
+The package is a source deploy tree with real hosted SQL wiring, not an Edge-executed
+bundle. Actual pool/TLS, extensions, OAuth, publication and live phone page remain open.
+Current official Edge limits include2s CPU/request,256MB memory and20MB CLI bundle;
+source byte size and native timings are not measured Edge usage. See
+[Edge limits](https://supabase.com/docs/guides/functions/limits) and
+[pooled PostgreSQL](https://supabase.com/docs/guides/functions/connect-to-postgres).
+Changelog was rechecked: extension VERSION clauses are no longer honored on hosted
+platform; actual extversion inventory is required (our new migrations add none).
+[Official change](https://supabase.com/changelog/extension-version-pinning-ignored).
+
+### Deferred device preparation
+
+No ADB executed. The existing collector now requires an explicit account scope hash,
+bounds each owned command and the full observation window, preserves output atomically,
+and never conflates completed-batch progress with HTTP attempt count. Offline tests use
+an intentionally absent binary and a pwsh child for timeout mechanics, not a device.
+It remains METADATA_ONLY: actual WorkInfo, APK/source binding, per-request timing,
+account-owned checkpoint, ingestion/score correlation and OEM scenarios are still needed.
+Global checkpoint presence is not falsely attributed to the requested account. The
+one-click future full gate is therefore not claimed complete; no sync trigger is added.
+
+## 2026-09-13 — Edge/PG17/concurrency release closure (historical)
 
 Run `health-edge-pg17-20260913-2210`, baseline `a8f7a1c`, same canonical D checkout.
 This section supersedes the older inert/local-only provider descriptions, **not**

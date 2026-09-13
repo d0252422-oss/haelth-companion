@@ -3,7 +3,8 @@ import postgres from "npm:postgres@3.4.8";
 import { PortableEngineRuntime } from "./engine-portable.ts";
 import { authenticateNativeUser, resolveNativeIdentity } from "./index.ts";
 import { recomputeBetaScore } from "./score-bridge.ts";
-import { ManualBodyLocalStore, localReadRange, manualDate, rejectClientIdentity, manualBodyAnalysis } from "./manual-body-local.ts";
+import { ManualBodyLocalStore, localReadRange, manualDate, rejectClientIdentity, manualBodyUnavailableAnalysis } from "./manual-body-local.ts";
+import {manualBodyEngineRecords} from './manual-body-engine.ts';
 import { ManualTrainingLocalStore } from "./manual-training-local.ts";
 import {resolveVerifiedManualWebIdentity,prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
 import {readManualRequest} from './manual-request-body.ts';
@@ -363,11 +364,15 @@ export class LocalEngineRuntime {
   }
   async compute(user: string, day: string) {
     const begin = performance.now();
-    const rows = await this
-      .sql`select canonical_record from public.engine_meals where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 5001`;
-    const health = await this
-      .sql`select * from public.beta_health_records where canonical_user_id=${user} and operation='UPSERT' and invalidated_at is null
+    const {rows,health,body}=await this.sql.begin('isolation level repeatable read read only',async(tx:any)=>{
+      const rows=await tx`select canonical_record from public.engine_meals where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 5001`;
+      const health=await tx`select * from public.beta_health_records where canonical_user_id=${user} and operation='UPSERT' and invalidated_at is null
       and affected_local_dates && array(select generate_series(${day}::date-27,${day}::date,'1 day')::date) limit 5001`;
+      const body=await tx`select * from public.engine_manual_body_records where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 29`;
+      if(body.length>28)throw Error('SCORE_INPUT_BOUND_EXCEEDED');
+      return {rows,health,body};
+    });
+    const bodyRecords=manualBodyEngineRecords(body,user);
     const healthRecords = health.map((r: Json) => ({
       subject_ref: user,
       source: r.source_app,
@@ -382,7 +387,7 @@ export class LocalEngineRuntime {
       ended_at: r.canonical_record.ended_at || null,
       source_quality: "UNKNOWN",
     }));
-    if (rows.length + health.length > 5000) {
+    if (rows.length + health.length + bodyRecords.length > 5000) {
       throw Error("SCORE_INPUT_BOUND_EXCEEDED");
     }
     const result = await this.worker.execute({
@@ -398,13 +403,14 @@ export class LocalEngineRuntime {
         records: [
           ...rows.map((r: Json) => r.canonical_record),
           ...healthRecords,
+          ...bodyRecords,
         ],
         calculated_at: new Date().toISOString(),
       },
     });
     this.timings.push({
       date: day,
-      records: rows.length + health.length,
+      records: rows.length + health.length + bodyRecords.length,
       elapsed_ms: performance.now() - begin,
     });
     return result.normalized.bundle;
@@ -560,6 +566,9 @@ export class LocalEngineRuntime {
         data = await this.manualBody.read(identity, payload);
       } else if (["addBodyRecord", "upsertBodyRecord", "deleteBodyRecord"].includes(action)) {
         data = await this.manualBody.write(identity, payload, action === "deleteBodyRecord");
+        try{await this.drain(identity.canonical);}catch{/* Raw row + receipt + durable queue committed; expose actual retry/failure below. */}
+        let state:Json;try{state=await this.manualBody.analysis(identity,data.record.date);}catch{state=manualBodyUnavailableAnalysis;}
+        data={...data,...state,record:{...data.record,...state}};
       } else if (action === "getBodyWriteStatus") {
         data = await this.manualBody.status(identity, payload);
       } else if (action === "upsertMealRecord" || action === "deleteMealRecord") {
@@ -607,7 +616,8 @@ export class LocalEngineRuntime {
           if(!this.exerciseEnabled)throw Error('EXERCISE_MANAGEMENT_DISABLED');
           data = { status: "SAVED", analysisStatus: "ANALYSIS_PENDING", analysisReason: "MANUAL_WORKOUT_ADAPTER_NOT_CONNECTED", analysisJobScheduled: false };
         } else if (payload.recordType === "body") {
-          data = { status: "SAVED", ...manualBodyAnalysis };
+          await this.drain(identity.canonical);
+          data = {status:'SAVED',...await this.manualBody.analysis(identity,manualDate(payload.date??today()))};
         } else {
           if(payload.recordType&&!['nutrition','meal'].includes(payload.recordType))throw Error('MANUAL_ACTION_NOT_SUPPORTED');
           await this.drain(identity.canonical);

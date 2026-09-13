@@ -61,12 +61,22 @@ function localSectionReadGuard(section,start,end){
   localSectionReads.set(section,serial);
   return ()=>currentUser===user&&localSessionEpoch===epoch&&localSectionReads.get(section)===serial&&sectionWindows[section].start===start&&sectionWindows[section].end===end;
 }
-function clearLocalManualState(){hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
+function clearLocalManualState(){manualProviderObservation=null;renderManualProviderStatus();hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
+let manualProviderObservation=null;
+function renderManualProviderStatus(){
+  if(typeof document==='undefined')return; // Transport-only hosts/tests have no UI surface.
+  const node=document.getElementById('technical-provider-updated');if(!node)return;
+  node.textContent=!manualProviderObservation?'尚無本帳號成功 SQL 讀寫證據':`${manualProviderObservation.ok?'最近請求成功':'最近請求失敗（沒有切换資料來源）'} · ${manualProviderObservation.at} · ${manualProviderObservation.action}${manualProviderObservation.analysis?' · '+manualProviderObservation.analysis:''}`;
+}
+function observeManualProvider(action,ok,analysis){manualProviderObservation={action,ok,analysis,at:new Date().toISOString()};renderManualProviderStatus();}
 function localManualBodyNotice(){
   if(!manualSqlEnabled())return;
   const note=document.getElementById('body-current-note');
-  if(note&&(appState.body||[]).some(r=>r.analysisStatus==='ANALYSIS_PENDING')){
-    note.dataset.analysisStatus='ANALYSIS_PENDING';note.textContent+=' · 僅儲存 SQL 紀錄，分析尚未啟用（沒有排程工作）';
+  const row=[...(appState.body||[])].sort((a,b)=>b.date.localeCompare(a.date))[0];
+  if(note&&row){
+    note.dataset.analysisStatus=row.analysisStatus;
+    const label=row.analysisStatus==='COMPUTED'?`Experimental 身體分數 ${row.bodyScore??'—'}（未經真實有效性驗證）`:row.analysisStatus==='INSUFFICIENT_DATA'?'紀錄已保存；身體分析資料不足':row.analysisStatus==='ANALYSIS_UNAVAILABLE'?'紀錄已保存；暫時無法查詢分析狀態':row.analysisStatus==='ERROR'?'紀錄已保存；分析失敗，可重新整理重試':row.analysisJobScheduled?'紀錄已保存；有待處理的重算工作':'紀錄已保存；此項分析尚未啟用';
+    note.textContent+=' · '+label;
   }else if(note)delete note.dataset.analysisStatus;
 }
 async function localEngineRequest(action,payload={}){
@@ -109,18 +119,19 @@ async function localEngineRequest(action,payload={}){
     if((bodyMutation||trainingMutation)&&epoch===localSessionEpoch){
       try{const status=await localEngineRequest(trainingMutation?'getTrainingWriteStatus':'getBodyWriteStatus',{clientRequestId:payload.clientRequestId});if(status.exists)body={ok:true,data:{...status,recovered:true}};}catch{ /* keep the original stable envelope for an explicit retry */ }
     }
-    if(!body)throw error;
+    if(!body){if(epoch===localSessionEpoch)observeManualProvider(action,false);throw error;}
   }
   if(epoch!==localSessionEpoch){const error=Error('IDENTITY_CHANGED');error.code='IDENTITY_CHANGED';throw error;}
   if(catalogSequence&&catalogSequence!==localCatalogReadSequence){const error=Error('STALE_CATALOG_RESPONSE');error.code='STALE_CATALOG_RESPONSE';throw error;}
-  if(!body.ok){if(pendingKey&&!body.retryable)localPendingBodyWrites.delete(pendingKey);if(trainingKey&&!body.retryable){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);}const error=Error(body.error);error.code=body.error;error.retryable=body.retryable===true;throw error;}
+  if(!body.ok){observeManualProvider(action,false);if(pendingKey&&!body.retryable)localPendingBodyWrites.delete(pendingKey);if(trainingKey&&!body.retryable){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);}const error=Error(body.error);error.code=body.error;error.retryable=body.retryable===true;throw error;}
+  observeManualProvider(action,true,body.data?.analysisStatus);
   if(trainingMutation){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);if(body.data.record)cacheLocalRevision(localWorkoutRecords,body.data.recordId,{...body.data.record,deleted:body.data.deleted===true});for(const record of body.data.records||[])cacheLocalRevision(localWorkoutRecords,record.recordId,record);}
   if(action==='getWorkoutRecords')for(const record of body.data.records||[])cacheLocalRevision(localWorkoutRecords,record.recordId,record);
   if(bodyMutation){localPendingBodyWrites.delete(pendingKey);cacheLocalRevision(localBodyRecords,body.data.recordId,{...body.data.record,deleted:body.data.deleted===true});}
   if(['upsertMealRecord','deleteMealRecord'].includes(action)&&body.data.record)cacheLocalRevision(localMealRecords,body.data.recordId||body.data.record.mealRecordId,{...body.data.record,deleted:action==='deleteMealRecord'});
   if(action==='getBodyRecords')for(const record of body.data)cacheLocalRevision(localBodyRecords,record.recordId,record);
   if(action==='getNutritionRecords')for(const record of body.data)cacheLocalRevision(localMealRecords,record.mealRecordId,record);
-  if(['upsertMealRecord','deleteMealRecord','refreshDailyNutrition'].includes(action)||(action==='refreshDerivedData'&&payload.recordType!=='body'))queueMicrotask(refreshLocalEngineOutputs);
+  if(bodyMutation||['upsertMealRecord','deleteMealRecord','refreshDailyNutrition','refreshDerivedData'].includes(action))queueMicrotask(refreshLocalEngineOutputs);
   return body.data;
 }
 function showLocalEngineLogin(){
@@ -185,7 +196,7 @@ function setupLocalExerciseManagement(){
   if(!LOCAL_EXERCISE_ENABLED)return;
   document.getElementById('exercise-management')?.remove();
   const panel=document.createElement('section');panel.id='exercise-management';panel.className='card card-pad';
-  panel.innerHTML='<button id="manage-exercises" type="button" class="secondary-button">管理我的動作</button><div id="exercise-manager" hidden><p>改名／個人別名不改歷史名稱與訓練量。封存可恢復；歷史紀錄仍可編修。SQL 手動訓練尚未接入分數分析。</p><p id="exercise-manager-status" role="status"></p><div id="exercise-manager-list"></div><button id="exercise-manager-retry" type="button">重新載入</button></div>';
+  panel.innerHTML='<button id="manage-exercises" type="button" class="secondary-button">管理我的動作</button><div id="exercise-manager" hidden><p>改名／個人別名不改歷史名稱與訓練量。封存可恢復；歷史紀錄仍可編修。SQL 手動訓練紀錄已保存；此項分數分析尚未啟用。</p><form id="exercise-create-form"><label>新自訂動作名稱<input id="exercise-create-name" class="form-input" maxlength="80" required></label><label>訓練部位／分類<input id="exercise-create-category" class="form-input" maxlength="40" required></label><button id="exercise-create-submit" type="submit">建立自訂動作</button></form><p id="exercise-manager-status" role="status"></p><div id="exercise-manager-list"></div><button id="exercise-manager-retry" type="button">重新載入</button></div>';
   document.getElementById('training-overview').append(panel);
   const load=async()=>{
     const epoch=localSessionEpoch,status=document.getElementById('exercise-manager-status');status.textContent='載入中…';
@@ -194,6 +205,15 @@ function setupLocalExerciseManagement(){
   };
   document.getElementById('manage-exercises').onclick=()=>{document.getElementById('exercise-manager').hidden=false;void load();};
   document.getElementById('exercise-manager-retry').onclick=load;
+  document.getElementById('exercise-create-form').onsubmit=async event=>{
+    event.preventDefault();const button=document.getElementById('exercise-create-submit');if(button.disabled)return;
+    const epoch=localSessionEpoch,status=document.getElementById('exercise-manager-status'),controls=[...document.querySelectorAll('#exercise-create-form input,#exercise-create-form button')];
+    const payload={operation:'create',name:document.getElementById('exercise-create-name').value,muscleGroup:document.getElementById('exercise-create-category').value};
+    controls.forEach(c=>c.disabled=true);status.textContent='儲存中…';
+    try{await localEngineRequest('manageExercise',payload);if(epoch!==localSessionEpoch)return;document.getElementById('exercise-create-form').reset();await load();}
+    catch(error){if(epoch===localSessionEpoch)status.textContent='未完成：'+error.message;}
+    finally{controls.forEach(c=>c.disabled=false);}
+  };
 }
 function renderLocalExerciseManager(entries){
   const list=document.getElementById('exercise-manager-list');list.replaceChildren();
@@ -201,15 +221,16 @@ function renderLocalExerciseManager(entries){
     const row=document.createElement('article');row.dataset.exerciseId=exercise.exerciseId;row.style.marginBottom='16px';
     const label=document.createElement('label');label.textContent=(exercise.custom?'本人自訂動作':'共享動作的個人別名')+(exercise.archived?' · 已封存':'');
     const input=document.createElement('input');input.className='form-input exercise-manage-name';input.value=exercise.exerciseName;input.maxLength=80;input.setAttribute('aria-label','動作名稱');label.append(input);row.append(label);
+    const category=document.createElement('input');category.className='form-input exercise-manage-category';category.value=exercise.muscleGroup;category.maxLength=40;category.setAttribute('aria-label','訓練部位／分類');category.disabled=!exercise.custom;row.append(category);
     const status=document.createElement('p');status.className='exercise-manage-result';status.setAttribute('role','status');
-    for(const [operation,title] of [['rename','儲存名稱'],[exercise.archived?'restore':'archive',exercise.archived?'恢復動作':'封存／從我的清單隱藏'],...(exercise.custom?[['delete','永久刪除（僅無引用）']]:[])]){
+    for(const [operation,title] of [['rename','儲存名稱'],...(exercise.custom?[['classify','儲存分類']]:[]),[exercise.archived?'restore':'archive',exercise.archived?'恢復動作':'封存／從我的清單隱藏'],...(exercise.custom?[['delete','永久刪除（僅無引用）']]:[])]){
       const button=document.createElement('button');button.type='button';button.className='secondary-button';button.dataset.operation=operation;button.textContent=title;
       button.onclick=async()=>{
         const epoch=localSessionEpoch;
         if(button.disabled)return;
         if(operation==='delete'&&!confirm('永久刪除此自訂動作？只有沒有任何歷史引用的項目才能刪除；無法復原。'))return;
         const buttons=[...list.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);status.textContent='儲存中…';
-        try{await localEngineRequest('manageExercise',{exerciseId:exercise.exerciseId,revision:exercise.revision,operation,...(operation==='rename'?{name:input.value}:{})});
+        try{await localEngineRequest('manageExercise',{exerciseId:exercise.exerciseId,revision:exercise.revision,operation,...(operation==='rename'?{name:input.value}:operation==='classify'?{muscleGroup:category.value}:{})});
           const entries=await apiService.getExerciseDatabase();if(epoch!==localSessionEpoch)return;exerciseDatabase=entries;renderLocalExerciseManager(exerciseDatabase);await buildExerciseSelect();if(epoch===localSessionEpoch)document.getElementById('exercise-manager-status').textContent='SQL 已儲存並讀回';}
         catch(error){if(epoch===localSessionEpoch&&error.code!=='STALE_CATALOG_RESPONSE')status.textContent=error.code==='EXERCISE_REFERENCED'?'有歷史引用，不能永久刪除；可以封存。':'未完成：'+error.message;}
         finally{buttons.forEach(b=>b.disabled=false);}

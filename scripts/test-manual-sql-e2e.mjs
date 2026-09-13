@@ -138,8 +138,8 @@ try {
     assert.equal(responseLossInjected, true);
     await until(async () => report.http.some(r => r.transport === 'BROWSER_ACTUAL_HTTP' && r.action === 'getBodyWriteStatus' && r.response.data?.exists === true), 'real-receipt-response-loss-recovery');
     await page.waitForFunction(() => document.getElementById('body-current').textContent.includes('72.4'));
-    await page.waitForFunction(() => document.getElementById('body-current-note').dataset.analysisStatus === 'ANALYSIS_PENDING');
-    await page.screenshot({ path: path.join(evidence, 'body-created.png'), fullPage: true }); record('Body actual UI create persists once with null bodyFat and honest analysis pending; lost real response recovered automatically by stored receipt', { row: created });
+    await page.waitForFunction(() => document.getElementById('body-current-note').dataset.analysisStatus === 'INSUFFICIENT_DATA');
+    await page.screenshot({ path: path.join(evidence, 'body-created.png'), fullPage: true }); record('Body actual UI create persists once with null bodyFat and INSUFFICIENT_DATA; lost real response recovered automatically by stored receipt', { row: created });
     await weightEditor(page); assert.equal(await page.locator('#weight-record-id').inputValue(), id); await page.locator('#weight-input').fill('73.1'); await page.locator('#fat-input').fill('0'); await page.locator('#weight-save').click(); await page.locator('#weight-form').waitFor({ state: 'hidden' });
     await until(async () => { const row = (await bodyRows())[0]; return Number(row.revision) === 2 && row.body.weight === 73.1 && row.body.bodyFat === 0; }, 'body-update'); record('Body UI update preserves record ID and zero bodyFat');
     ({ context, page } = await browserContext('A')); await bodyScreen(page); await page.waitForFunction(() => document.getElementById('body-current').textContent.includes('73.1')); await weightEditor(page); assert.equal(await page.locator('#weight-record-id').inputValue(), id); assert.equal(await page.locator('#fat-input').inputValue(), '0'); record('New browser context/login re-reads body from SQL, not same-context cache');

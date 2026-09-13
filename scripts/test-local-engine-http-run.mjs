@@ -1,12 +1,17 @@
 // Standalone fresh HTTP regression; owns only a new loopback synthetic cluster and child.
 import {createLocalPostgres} from './local-engine-postgres.mjs';
-import {writeFile} from 'node:fs/promises';
+import {writeFile,mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
+import net from 'node:net';
+const output=process.env.LOCAL_ENGINE_HTTP_EVIDENCE_DIR;
+if(!output||!path.isAbsolute(output))throw Error('EXPLICIT_NEW_HTTP_EVIDENCE_REQUIRED');
+await mkdir(output,{recursive:false});
+await new Promise((resolve,reject)=>{const probe=net.createServer();probe.once('error',reject);probe.listen(57841,'127.0.0.1',()=>probe.close(resolve));});
 const pg=await createLocalPostgres();
 const config=path.join(pg.evidence.root,'runtime-config.json');
 await writeFile(config,JSON.stringify(pg.config));
-const child=spawn('deno',['run','--config','config/engine-local.deno.json','--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1','scripts/local-engine-server.ts',config],{windowsHide:true,stdio:['ignore','inherit','inherit'],env:{...process.env,HEALTH_ENGINE_LOCAL_ONLY:'1'}});
+const child=spawn('deno',['run','--cached-only','--frozen-lockfile','--node-modules-dir=none','--config','config/engine-local.deno.json','--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1','scripts/local-engine-server.ts',config],{windowsHide:true,stdio:['ignore','inherit','inherit'],env:{...process.env,HEALTH_ENGINE_LOCAL_ONLY:'1'}});
 const closed=new Promise(resolve=>child.once('exit',resolve));
 try{
  let ready=false;
@@ -17,10 +22,10 @@ try{
  }
  if(!ready)throw Error('HTTP_HOST_HEALTH_TIMEOUT');
  process.exitCode=await new Promise((resolve,reject)=>{
-  const tests=spawn(process.execPath,['--test','--test-reporter=junit','--test-reporter-destination=.engine-artifacts/blocker-closure/http.xml','tests/local-engine-http.test.mjs'],{windowsHide:true,stdio:'inherit'});
+  const tests=spawn(process.execPath,['--test','--test-reporter=junit','--test-reporter-destination='+path.join(output,'http.xml'),'tests/local-engine-http.test.mjs'],{windowsHide:true,stdio:'inherit'});
   tests.on('exit',resolve);tests.on('error',reject);
  });
- await writeFile('.engine-artifacts/blocker-closure/http-db.json',JSON.stringify(pg.evidence,null,2));
+ await writeFile(path.join(output,'http-db.json'),JSON.stringify(pg.evidence,null,2));
 }finally{
  child.kill('SIGINT');
  await Promise.race([closed,new Promise(r=>setTimeout(r,5000))]);

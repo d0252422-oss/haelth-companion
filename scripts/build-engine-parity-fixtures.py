@@ -1,6 +1,7 @@
 """Synthetic differential inputs; derive expectations by executing unchanged reference."""
 
 import json
+import sys
 from copy import deepcopy
 from datetime import date, timedelta
 from pathlib import Path
@@ -226,7 +227,24 @@ def main():
         "2026-09-06",
         "America/Santiago",
     )
-    path = Path(".engine-artifacts/blocker-closure/portable-fixtures.json")
+    # Explicit new output preserves earlier reference/evidence instead of overwriting it.
+    for fat in [None, 0, 20]:
+        manual = []
+        for i in range(8):
+            observed = (date.fromisoformat(DAY) - timedelta(days=i)).isoformat()
+            values = [("weight", "kg", 80)]
+            if fat is not None:
+                values.extend([("body_fat", "percent", fat), ("fat_mass", "kg", 80 * fat / 100)])
+            for domain, unit, value in values:
+                manual.append(record(
+                    domain, value, unit, source="MANUAL_WEB", record_id=observed+":"+domain,
+                    recorded_at=observed+"T00:00:00+08:00",
+                ))
+        add("manual-body-8-days-fat-"+str(fat), manual)
+    path = (
+        Path(sys.argv[1]) if len(sys.argv) > 1
+        else Path(".engine-artifacts/blocker-closure/portable-fixtures.json")
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(fixtures, ensure_ascii=False), encoding="utf-8")
     print(

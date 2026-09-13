@@ -29,7 +29,7 @@ export async function runExerciseReleaseGates(h){
     assert.equal((await http(a,'getWorkoutRecords',{canonical_user_id:B})).ok,false);
     await assert.rejects(()=>pg.admin`insert into private.beta_native_auth_identities(auth_user_id,canonical_user_id,provider) values(${subjects.A.auth},${B},'google')`,e=>e.code==='23505');
     const mapped=await pg.admin`select canonical_user_id from private.beta_native_auth_identities where auth_user_id=${subjects.A.auth}`;assert.equal(mapped[0].canonical_user_id,A);assert.notEqual(subjects.A.auth,A);
-    const saved=await invoke(a,'upsertBodyRecord',{date:shift(-3),weight:80,clientRequestId:randomUUID()});assert.equal(saved.analysisReason,'ALGORITHM_NOT_CONNECTED');assert.equal(saved.analysisJobScheduled,false);
+    const saved=await invoke(a,'upsertBodyRecord',{date:shift(-3),weight:80,clientRequestId:randomUUID()});assert.equal(saved.analysisStatus,'INSUFFICIENT_DATA');assert.equal(saved.analysisReason,'MISSING_BODY_BASELINE_OR_TARGET');assert.equal(saved.analysisJobScheduled,false);
     const read=await invoke(a,'getBodyRecords',{date:shift(-3)});assert.equal(read[0].analysisJobScheduled,false);
     report.new_auth_evidence={mapping_conflict:'DB unique constraint rejected conflicting A -> B mapping, original mapping unchanged',canonical_differs_from_auth:true,live_oauth:'NOT_RUN',middleware:'actual @supabase/server@1.4.1 auth:none + real synthetic signature verification, no mocked SQL'};
     record('Actual default handler preflight/methods/prefixed route and valid/invalid/expired/missing/conflicting identities');
@@ -111,7 +111,7 @@ export async function runExerciseReleaseGates(h){
     assert.equal(await item('custom-B').count(),0);assert.equal(await item('system-squat').locator('img').count(),0);
     let lost=false;
     await context.route(base+'/v1/engine/web',async route=>{const input=route.request().postDataJSON();if(!lost&&input.action==='manageExercise'&&input.payload.exerciseId==='custom-A'&&input.payload.operation==='rename'){lost=true;const response=await route.fetch();assert.equal((await response.json()).ok,true);await route.abort('failed');return;}await route.continue();});
-    await item('custom-A').locator('input').fill('SYNTHETIC Browser 改名');await item('custom-A').locator('[data-operation="rename"]').click({clickCount:2});
+    await item('custom-A').locator('.exercise-manage-name').fill('SYNTHETIC Browser 改名');await item('custom-A').locator('[data-operation="rename"]').click({clickCount:2});
     await until(async()=>(await catalog()).find(e=>e.exerciseId==='custom-A').exerciseName==='SYNTHETIC Browser 改名','browser-rename');
     await until(()=>report.http.some(r=>r.action==='getTrainingWriteStatus'&&r.response.data?.exists),'training-receipt-recovery');assert.equal(lost,true);
     await item('custom-A').locator('[data-operation="archive"]').click();await item('custom-A').locator('[data-operation="restore"]').waitFor();
@@ -127,9 +127,9 @@ export async function runExerciseReleaseGates(h){
     await confirm('unused-A','accept');await until(async()=>!(await catalog()).some(e=>e.exerciseId==='unused-A'),'unused-delete');
     await item('custom-A').locator('[data-operation="restore"]').click();await item('custom-A').locator('[data-operation="archive"]').waitFor();
     await p.screenshot({path:path.join(evidence,'exercise-manager-history-preserved.png'),fullPage:true});
-    ({page:p}=await browserContext('A'));setPage(p);await training();assert.equal(await item('custom-A').locator('input').inputValue(),'SYNTHETIC Browser 改名');assert.equal(await item('unused-A').count(),0);
+    ({page:p}=await browserContext('A'));setPage(p);await training();assert.equal(await item('custom-A').locator('.exercise-manage-name').inputValue(),'SYNTHETIC Browser 改名');assert.equal(await item('unused-A').count(),0);
     const keys=await p.evaluate(()=>{const before=dashboardCacheKey('2026-09-01','2026-09-02');const original=window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace;window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='different-synthetic-db';const after=dashboardCacheKey('2026-09-01','2026-09-02');window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace=original;return {before,after};});assert.notEqual(keys.before,keys.after);
-    ({page:p}=await browserContext('B'));setPage(p);await training();assert.equal(await item('custom-A').count(),0);assert.equal(await item('system-squat').locator('input').inputValue(),'SYNTHETIC 系統深蹲');
+    ({page:p}=await browserContext('B'));setPage(p);await training();assert.equal(await item('custom-A').count(),0);assert.equal(await item('system-squat').locator('.exercise-manage-name').inputValue(),'SYNTHETIC 系統深蹲');
     record('Real browser rename/recovered lost response/archive/archived history edit/delete cancel+accept/restore/new context/B isolation; environment cache namespace differs');
   });
   await gate('browser_workout_create_zero_response_loss_and_delete',async()=>{
@@ -198,5 +198,28 @@ export async function runExerciseReleaseGates(h){
     const updated=(await invoke(webA,'getBodyRecords',{date:shift(-4)}))[0];await invoke(webA,'deleteBodyRecord',{recordId:updated.recordId,revision:updated.revision,clientRequestId:randomUUID()});await invoke(webA,'deleteMealRecord',{mealRecordId:meal.recordId,revision:1,clientRequestId:randomUUID()});
     report.web_session_authorization={status:'PASS_LOCAL_SYNTHETIC_VERIFIER',native_impersonation:false,role:'service_role BYPASSRLS, explicit verified canonical predicates and transaction recheck; NOT WEB_RLS_PASS',existing_aliases_users_timestamps_unchanged:true,missing_conflict_revoked_fail_closed:true,web_only_without_native_mapping:true,live_apps_script_verifier:'NOT_RUN',live_oauth:'NOT_RUN',identity_migration:'NONE'};
     record('Distinct verified Web sessions use read-only existing alias mapping, SQL CRUD/readback/new context/B isolation; no native JWT impersonation or account linking');
+  });
+  await gate('browser_custom_exercise_create_category_duplicate_recovery',async()=>{
+    const {context,page:p}=await browserContext('WEB_A');setPage(p);await p.setViewportSize({width:1280,height:900});await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#manage-exercises').click();
+    await p.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
+    const name='SYNTHETIC <b>duplicate</b>',created=[];let lost=false;
+    await context.route(base+'/v1/engine/web',async route=>{
+      const request=route.request().postDataJSON();if(!lost&&request.action==='manageExercise'&&request.payload.operation==='create'){lost=true;const actual=await route.fetch(),body=await actual.json();assert.equal(body.ok,true);created.push(body.data.exerciseId);await route.abort('failed');return;}await route.continue();
+    });
+    await p.locator('#exercise-create-name').fill(name);await p.locator('#exercise-create-category').fill('腿');await p.locator('#exercise-create-submit').click({clickCount:2});
+    await until(async()=>created.length&&await p.locator(`article[data-exercise-id="${created[0]}"]`).count(),'custom-create-recovered');
+    assert.equal((await catalog()).filter(r=>r.exerciseName===name).length,1);assert.equal(lost,true);
+    await p.locator('#exercise-create-name').fill(name);await p.locator('#exercise-create-category').fill('背');await p.locator('#exercise-create-submit').click();
+    await until(async()=>(await catalog()).filter(r=>r.exerciseName===name).length===2,'duplicate-names-distinct-ids');
+    const entry=p.locator(`article[data-exercise-id="${created[0]}"]`);await entry.locator('.exercise-manage-category').fill('全身');await entry.locator('[data-operation="classify"]').click();
+    await until(async()=>(await catalog()).find(r=>r.exerciseId===created[0]).muscleGroup==='全身','category-sql-readback');
+    assert.equal(await p.locator('#exercise-manager-list b').count(),0,'names are literal text, not HTML');
+    const {page:fresh}=await browserContext('WEB_A');setPage(fresh);await fresh.setViewportSize({width:1280,height:900});await fresh.locator('.side-btn[data-screen="training-screen"]').click();await fresh.locator('#manage-exercises').click();
+    await fresh.locator(`article[data-exercise-id="${created[0]}"] .exercise-manage-category`).filter({visible:true}).waitFor();
+    assert.equal(await fresh.locator(`article[data-exercise-id="${created[0]}"] .exercise-manage-category`).inputValue(),'全身');
+    assert.match(await fresh.locator('#technical-provider-name').innerText(),/PostgreSQL/);assert.match(await fresh.locator('#technical-provider-updated').innerText(),/最近請求成功/);
+    const {page:other}=await browserContext('WEB_B');setPage(other);await other.setViewportSize({width:1280,height:900});await other.locator('.side-btn[data-screen="training-screen"]').click();await other.locator('#manage-exercises').click();await other.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
+    assert.equal(await other.locator(`article[data-exercise-id="${created[0]}"]`).count(),0);
+    record('Original manager custom create lost-response/double-submit recovery, duplicate name stable IDs, category SQL read-back and fresh-context A/B isolation');
   });
 }

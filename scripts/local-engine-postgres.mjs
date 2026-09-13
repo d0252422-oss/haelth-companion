@@ -36,7 +36,7 @@ export async function createLocalPostgres({port=57483,release=process.env.LOCAL_
       grant usage on schema public,auth to anon,authenticated,service_role;
       grant execute on function auth.uid() to authenticated;grant authenticated to service_role;`);
     for(const filename of (await readdir('supabase/migrations')).filter(n=>n.endsWith('.sql')).sort()){
-      if(release==='A'&&filename.includes('manual_exercise_catalog_sql')){evidence.omitted_migrations.push(filename);continue;}
+      if(release==='A'&&/manual_exercise_(catalog_sql|category_update)/.test(filename)){evidence.omitted_migrations.push(filename);continue;}
       let source=await readFile('supabase/migrations/'+filename,'utf8');
       const digest=createHash('sha256').update(source).digest('hex');
       if(filename.includes('durable_beta_score_processor')){

@@ -14,11 +14,11 @@ const authority=await createSyntheticAuthority(),token=await authority.issue('A'
 const A=subjects.A.canonical,B=subjects.B.canonical,day='2026-09-12';
 const report:any={started_at:new Date().toISOString(),database:(await admin`select version(),current_database(),inet_server_addr()::text`)[0],barrier_method:'Promises + independent pg_backend_pid + pg_blocking_pids before first COMMIT, not sleep ordering',gates:[]};
 function deferred(){let resolve!:()=>void;const promise=new Promise<void>(r=>resolve=r);return{promise,resolve};}
-async function bounded<T>(p:Promise<T>,label:string,ms=5000){let timer:number|undefined;try{return await Promise.race([p,new Promise<never>((_,reject)=>timer=setTimeout(()=>reject(Error(label)),ms))]);}finally{clearTimeout(timer);}}
+async function bounded<T>(p:Promise<T>,label:string,ms=5000){let timer:ReturnType<typeof setTimeout>|undefined;try{return await Promise.race([p,new Promise<never>((_,reject)=>timer=setTimeout(()=>reject(Error(label)),ms))]);}finally{clearTimeout(timer);}}
 async function actor(isolation:string,events:any[],label:string,hold=false){
  const connection=postgres({...config,max:1,connection:{lock_timeout:4000,statement_timeout:8000,transaction_timeout:12000}});
  const ready=deferred(),release=deferred();let pid=0,arm=hold;const runtime=new LocalEngineRuntime(config,authority.verify);
- const wrapped={begin:async(callback:any)=>{try{return await connection.begin(async tx=>{
+ const wrapped={begin:async(callback:any)=>{try{return await connection.begin(async (tx:any)=>{
    await tx.unsafe('set transaction isolation level '+isolation);
    pid=Number((await tx`select pg_backend_pid() as pid`)[0].pid);events.push({event:'TX_BEGIN',actor:label,pid,isolation,at:performance.now()});
    const result=await callback(tx);if(arm){arm=false;events.push({event:'MUTATION_READY_BEFORE_COMMIT',actor:label,pid,at:performance.now()});ready.resolve();await bounded(release.promise,'TEST_BARRIER_NOT_RELEASED');}
@@ -32,13 +32,14 @@ async function api(actor:any,action:string,payload:any={},useB=false){
  return{http_status:response.status,...await response.json()};
 }
 const create=(exerciseId:string)=>({date:day,startTime:day+'T01:00:00Z',endTime:day+'T01:20:00Z',clientRequestId:crypto.randomUUID(),exercises:[{exerciseId,sets:[{weight:0,reps:10}]}]});
-for(const isolation of ['read committed','repeatable read','serializable'])for(const order of ['archive_reference','reference_archive','reference_delete','delete_reference']){
+for(const isolation of ['read committed','repeatable read','serializable'])for(const order of ['archive_reference','reference_archive','reference_delete','delete_reference','rename_reference','reference_rename']){
  const events:any[]=[],id='barrier-'+crypto.randomUUID(),name=order+'_'+isolation.replaceAll(' ','_'),started=new Date().toISOString();
  let one:any,two:any,first:Promise<any>|undefined,second:Promise<any>|undefined;
  try{
    const shared=order.includes('archive');await admin`insert into public.manual_exercise_catalog values(${id},${shared?null:A},'SYNTHETIC barrier','腿')`;await admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},${id}),(${shared?B:A},${id}) on conflict do nothing`;
    one=await actor(isolation,events,'first',true);two=await actor(isolation,events,'second');
-   const reference=create(id),management={exerciseId:id,operation:shared?'archive':'delete',revision:0,clientRequestId:crypto.randomUUID()},refFirst=order.startsWith('reference');
+   const renaming=order.includes('rename');
+   const reference=create(id),management={exerciseId:id,operation:renaming?'rename':shared?'archive':'delete',...(renaming?{name:'SYNTHETIC new name'}:{}),revision:0,clientRequestId:crypto.randomUUID()},refFirst=order.startsWith('reference');
    const firstAction=refFirst?'addWorkoutRecord':'manageExercise',secondAction=refFirst?'manageExercise':'addWorkoutRecord';
    const firstPayload=refFirst?reference:management,secondPayload=refFirst?management:reference;
    first=api(one,firstAction,firstPayload).then(r=>{events.push({event:'FIRST_COMMITTED_RESPONSE',ok:r.ok,at:performance.now()});return r;});
@@ -51,11 +52,12 @@ for(const isolation of ['read committed','repeatable read','serializable'])for(c
      assert.equal(secondResult.http_status,503,'serialization/deadlock must be retryable at actual API boundary');assert.equal(secondResult.retryable,true);
      events.push({event:'RETRY_NEW_TRANSACTION_SAME_REQUEST',at:performance.now()});secondResult=await api(two,secondAction,secondPayload);
    }
-   if(order==='reference_archive')assert.equal(secondResult.ok,true,JSON.stringify(secondResult));
+   if(order==='reference_archive'||renaming)assert.equal(secondResult.ok,true,JSON.stringify(secondResult));
    else{assert.equal(secondResult.ok,false);assert.equal(secondResult.error,order==='reference_delete'?'EXERCISE_REFERENCED':order==='delete_reference'?'EXERCISE_NOT_FOUND':'EXERCISE_ARCHIVED');}
    const rows=await admin`select body,deleted from public.manual_workout_sets where canonical_user_id=${A} and exercise_id=${id}`;
-   assert.equal(rows.length,refFirst?1:0);assert.equal((await admin`select s.record_id from public.manual_workout_sets s left join public.manual_exercise_preferences p using(canonical_user_id,exercise_id) where p.exercise_id is null`).length,0);
-   const receipt=await api(two,'getTrainingWriteStatus',{clientRequestId:secondPayload.clientRequestId});assert.equal(receipt.data.exists,order==='reference_archive');
+   assert.equal(rows.length,refFirst||renaming?1:0);assert.equal((await admin`select s.record_id from public.manual_workout_sets s left join public.manual_exercise_preferences p using(canonical_user_id,exercise_id) where p.exercise_id is null`).length,0);
+   if(renaming){assert.equal(rows[0].body.exerciseId,id);assert.equal(rows[0].body.exerciseName,refFirst?'SYNTHETIC barrier':'SYNTHETIC new name');assert.equal(rows[0].body.totalVolume,0);}
+   const receipt=await api(two,'getTrainingWriteStatus',{clientRequestId:secondPayload.clientRequestId});assert.equal(receipt.data.exists,order==='reference_archive'||renaming);
    const replay=await api(two,firstAction,firstPayload);assert.equal(replay.ok,true);assert.equal(replay.data.replayed,true);
    if(shared){
      const anew=await api(two,'addWorkoutRecord',create(id));assert.equal(anew.error,'EXERCISE_ARCHIVED');

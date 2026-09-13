@@ -7,7 +7,7 @@ Status: `PROVISIONAL_KNOWN_SCOPE_ONLY`. Previous comparable progress: `32.0%`.
 暫定已知範圍完成率：**32.0%**（32 / 100）；這不是全專案完成率。
 Uncredited weight: 68. Progress change: **+0.0 percentage points** on the same baseline.
 The original2026-09-12 calculation remains the first baseline (`PREVIOUS_PROGRESS=NOT_AVAILABLE`);
-this2026-09-13 continuation is a comparison, not a scope/weight revision.
+this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
@@ -53,7 +53,30 @@ credits merely from a cached report. Incomplete scope is never rounded to100%.
 
 Required first-line reporting is now saved in effective root `AGENTS.md`.
 
-## 2026-09-13 Edge/PG17 closure — new evidence, unchanged denominator
+## 2026-09-14 overnight continuation — new engineering, unchanged acceptance weight
+
+Run `health-overnight-20260914-0037` starts from `3ef6b61`, not a repeat of the previous
+report. New manual Body-to-existing-engine/queue/SQL analysis, custom exercise creation/
+category editing, actual provider UI state and post-commit recovery fixes have fresh
+PG17/browser/parity evidence. PG17/18 lifecycle barriers now include both rename orders.
+Android60 ran afresh without ADB. No formula, golden, dependency or original Android
+source was changed by this work.
+
+The25 original leaf acceptances/weights and previous accounting remain intact. New
+evidence refreshes8 ALREADY_CREDITED leaves;17 remain ACCEPTANCE_NOT_FULLY_MET. Exercise
+management remains OUTSIDE_CURRENT_BASELINE. No LEDGER_OMISSION was confirmed. The Body
+adapter strengthens accepted local engine/SQL paths but does not itself complete the
+broader overview/training/weekly acceptance. No double credit or denominator change:
+engineering increment0.0pp; ledger correction0.0pp; provisional known scope32.0%.
+
+Overall UNKNOWN still requires a confirmed delivery-version/scope decision; overnight
+execution cannot invent one. Actual Docker/Edge, real OAuth/pool/Beta, intended APK/OEM,
+iOS, photo/food validity and release gates remain in scope. Source packages and deferred
+device-preparation tooling are not product release acceptance. No phone, C cleanup,
+XiaoFei, production or remote Beta activity occurred. See the current test report and
+new external REPORT/CHECKPOINT/manifest for precise selected execution evidence.
+
+## 2026-09-13 Edge/PG17 closure — historical evidence, unchanged denominator
 
 Run `health-edge-pg17-20260913-2210` continues `a8f7a1c`, not `efe83ed` again.
 Native PG17.11 migration/core SQL, strict lifecycle barriers, actual default-handler

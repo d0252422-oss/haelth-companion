@@ -1,9 +1,10 @@
 // Local opt-in adapter; not mobile ingestion and not a second identity system.
 type Json = Record<string, any>;
 import {prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
-// Pending integration is not an executing job. Preserve the old status for consumers,
-// but expose its exact cause on reads as well as writes (including older saved rows).
-export const manualBodyAnalysis = { analysisStatus: "ANALYSIS_PENDING", analysisReason: "ALGORITHM_NOT_CONNECTED", analysisJobScheduled: false };
+// Mutation receipt is immutable. Current analysis is resolved from queue + output
+// heads on read; the JSON saved with an observation is not a live job status.
+export const manualBodyAnalysis = { analysisStatus: "ANALYSIS_PENDING", analysisReason: "RECOMPUTE_QUEUED", analysisJobScheduled: true };
+export const manualBodyUnavailableAnalysis = {analysisStatus:'ANALYSIS_UNAVAILABLE',analysisReason:'ANALYSIS_STATUS_READ_FAILED',analysisJobScheduled:null,bodyScore:null};
 export const localToday = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
 }).format(new Date());
@@ -29,16 +30,31 @@ const sha = async (input: unknown) => Array.from(new Uint8Array(await crypto.sub
 
 export class ManualBodyLocalStore {
   constructor(private sql: any) {}
+  async analysisRows(tx:any,user:string,start:string,end:string) {
+    const queue=await tx`select score_date,status from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date between ${start}::date and ${end}::date`;
+    const outputs=await tx`select h.calculation_date,h.payload from public.engine_output_heads p join public.engine_output_history h using(canonical_user_id,calculation_date,output_kind,engine_version,input_fingerprint)
+      where p.canonical_user_id=${user} and p.calculation_date between ${start}::date and ${end}::date and p.output_kind='body' and p.engine_version='body-score-v1.0'`;
+    const date=(v:any)=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);
+    return (day:string)=>{
+      const q=queue.find((r:Json)=>date(r.score_date)===day),out=outputs.find((r:Json)=>date(r.calculation_date)===day)?.payload;
+      if(q&&q.status!=='COMPLETE')return {analysisStatus:q.status==='FAILED'?'ERROR':'ANALYSIS_PENDING',analysisReason:q.status==='FAILED'?'RECOMPUTE_FAILED':'RECOMPUTE_QUEUED',analysisJobScheduled:q.status!=='FAILED',bodyScore:null};
+      if(!out)return {analysisStatus:'ANALYSIS_NOT_ENABLED',analysisReason:'NO_RECOMPUTE_EVIDENCE',analysisJobScheduled:false,bodyScore:null};
+      return {analysisStatus:out.score_status==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':'COMPUTED',analysisReason:out.score_status==='INSUFFICIENT_DATA'?'MISSING_BODY_BASELINE_OR_TARGET':'EXISTING_BODY_ENGINE',analysisJobScheduled:false,
+        bodyScore:out.score,bodyScoreStatus:out.score_status,bodyEngineVersion:out.engine_version,bodyCompleteness:out.data_completeness,analysisValidation:'EXPERIMENTAL_UNVALIDATED',fatMass:out.metrics.daily.fat_mass,bodyMetrics:out.metrics.derived};
+    };
+  }
+  async analysis(identity:Json,day:string){return await manualPrivilegedRead(this.sql,identity,async(tx:any)=>(await this.analysisRows(tx,identity.canonical,day,day))(day),true);}
   async read(identity: Json, input: Json = {}) {
     rejectClientIdentity(input);
     const { start, end } = localReadRange(input);
-    return await this.sql.begin(async (tx: any) => {
+    return await manualPrivilegedRead(this.sql,identity,async (tx: any) => {
+      const analysis=await this.analysisRows(tx,identity.canonical,start,end);
       await prepareManualRead(tx,identity);
       const rows = await tx`select body,revision from public.engine_manual_body_records
         where canonical_user_id=${identity.canonical} and not deleted and local_date between ${start}::date and ${end}::date order by local_date,record_id limit 367`;
       if (rows.length > 366) throw Error("READ_BOUND_EXCEEDED");
-      return rows.map((r: Json) => ({ ...r.body, ...manualBodyAnalysis, revision: Number(r.revision) }));
-    });
+      return rows.map((r: Json) => ({ ...r.body, ...analysis(r.body.date), revision: Number(r.revision) }));
+    },true);
   }
   async write(identity: Json, input: Json, remove = false) {
     rejectClientIdentity(input);
@@ -52,7 +68,7 @@ export class ManualBodyLocalStore {
       const receipt = (await tx`select input_hash,response from private.engine_body_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${input.clientRequestId}`)[0];
       if (receipt) {
         if (receipt.input_hash !== inputHash) throw Error("REQUEST_ID_CONFLICT");
-        return { ...receipt.response, ...manualBodyAnalysis, record: { ...receipt.response.record, ...manualBodyAnalysis }, replayed: true };
+        return { ...receipt.response, replayed: true };
       }
       const id = input.recordId || crypto.randomUUID();
       const old = (await tx`select * from public.engine_manual_body_records where canonical_user_id=${identity.canonical} and record_id=${id} for update`)[0];
@@ -85,6 +101,10 @@ export class ManualBodyLocalStore {
     rejectClientIdentity(input);
     if (!uuid(input.clientRequestId)) throw Error("INVALID_MUTATION_ID");
     const rows = await manualPrivilegedRead(this.sql,identity,tx=>tx`select response from private.engine_body_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${input.clientRequestId}`);
-    return rows.length ? { exists: true, ...rows[0].response, ...manualBodyAnalysis, record: { ...rows[0].response.record, ...manualBodyAnalysis } } : { exists: false };
+    if(!rows.length)return {exists:false};
+    // The verified receipt was read successfully; optional analysis cannot erase
+    // proof of a committed write. A new raw/analysis read may still fail closed.
+    let state:Json;try{state=await this.analysis(identity,rows[0].response.record.date);}catch{state=manualBodyUnavailableAnalysis;}
+    return {exists:true,...rows[0].response,...state,record:{...rows[0].response.record,...state}};
   }
 }

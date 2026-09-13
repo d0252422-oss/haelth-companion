@@ -7,6 +7,12 @@ const { randomUUID } = require('node:crypto');
 const source = fs.readFileSync('scripts/local-engine-web.js', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
+test('provider observation reports actual last response and clears on account reset',async()=>{
+ const ctx=harness(async()=>({json:async()=>({ok:true,data:[]})}));
+ await ctx.localEngineRequest('getBodyRecords');assert.match(ctx.document.getElementById('technical-provider-updated').textContent,/最近請求成功.*getBodyRecords/);
+ ctx.observeManualProvider('upsertBodyRecord',false);assert.match(ctx.document.getElementById('technical-provider-updated').textContent,/最近請求失敗（沒有切换資料來源）/);
+ ctx.clearLocalManualState();assert.equal(ctx.document.getElementById('technical-provider-updated').textContent,'尚無本帳號成功 SQL 讀寫證據');
+});
 function harness(fetch) {
   const elements = new Map();
   const ctx = vm.createContext({

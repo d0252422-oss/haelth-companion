@@ -1,5 +1,26 @@
 # Engine version matrix
 
+## 2026-09-14 overnight continuation
+
+No runtime/package/formula versions changed. New manual Body input adapter emits
+MANUAL_WEB observations into existing daily-aggregation-v1.0 / derived-metrics-v1.0 /
+body-score-v1.0; the original health-score-v1.0 snapshot/score bridge stay unchanged.
+Fresh Python-derived parity now includes3 additional manual-body null/zero/20% cases;
+the previous57 fixtures and28 frozen vectors remain, without changed expected values.
+
+Reviewed existing tools only: PostgreSQL17.11 and18.6; native17 pgcrypto1.3/plpgsql1.0;
+Node24.19.0/Deno2.9.6/TS6.0.3/Python3.12.14. Actual Edge image version UNKNOWN, Docker
+socket blocker unchanged; CLI2.115.0 retained despite an upgrade notice. Local packages
+pydantic2.13.5 and ruff0.16.5 differ from CI pins2.13.4/0.16.4; local test success is not
+an exact CI-environment reproduction. No environment downgrade/install was performed.
+
+Scoped fresh npm audit reports0 advisories across4 locked public package versions;
+uv offline check confirms48 installed Python distributions compatible. Neither covers
+Deno13 locked versions, Python/native vulnerabilities, Android/CDN or complete license
+redistribution. Optional embedded PG18.4 remains forbidden to execute. Code, model
+weights and food data provenance remain separate: photo MISSING, food NOT_VERIFIED,
+new score real-world validity EXPERIMENTAL_UNVALIDATED.
+
 ## 2026-09-13 PG17 and hosted-provider continuation
 
 Run `health-edge-pg17-20260913-2210` reuses all application lock versions unchanged.

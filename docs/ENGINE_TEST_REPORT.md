@@ -1,6 +1,96 @@
 # Multi-domain engine test report
 
-## 2026-09-13 — actual Edge / PG17 / concurrency closure (current; new execution)
+## 2026-09-14 — overnight non-device closure (current; new execution)
+
+RUN_ID=`health-overnight-20260914-0037`; START_HEAD=`3ef6b61`.
+Canonical D checkout, original Android changes preserved. Raw commands, UTC start/end,
+exit codes, source hashes, initial failures and final selection are saved under
+`D:/Dev/Evidence/health-overnight-20260914-0037`. No ADB or remote mutations occurred.
+Actual Edge remains BLOCKED_DOCKER, so the overall run is PARTIAL_BLOCKED_NOT_PASS.
+
+New work: existing Body engine now accepts manual weight/optional body fat through a
+pure adapter and atomic bounded invalidation; no formula/golden/tolerance changed.
+Current analysis is read from real queue/output state, not a perpetual queued receipt.
+Custom exercise creation/category editing extends the original SQL catalog and Web
+manager. Provider UI displays actual request result/time and resets with the account.
+Post-commit optional analysis failure now preserves the successful raw write/receipt.
+Training raw SQL aggregates are integrated; its domain-score adapter is NOT_CONNECTED,
+and the UI explicitly says analysis not enabled. No invented score or scheduled job.
+
+| Fresh suite / independent gate | Result and counting boundary |
+|---|---|
+| Python reference |134 cases PASS; `python-final.xml`; unchanged reference algorithms |
+| Node |209 named +5 whole-file assertion entrypoints PASS =214 JUnit rows; `node-retest.xml`; UI already included |
+| Deno |79 PASS:63 portable/parity,8 auth/runtime,3 hosted,5 manual-body contracts; `deno-final.xml`; original28 goldens included, not extra |
+| Native PG17 SQL/engine/RLS |6 Deno integration cases; `native-pg17-final/native-junit.xml` |
+| Manual Body/exercise/postcommit/query PG17 |6 independent integrated gates; final report selected in evidence manifest |
+| Hosted provider PG17 |6 integrated gates, actual SQL role/identity/receipts/revisions/lock retry/snapshot barrier |
+| Original Web + actual default handler + PG17 |AB11 and A-only5 integrated gates; separate source-consistent reports, real persistence/authorization/engine, synthetic signed identity |
+| Lifecycle concurrency |18 strict transaction barriers per PG17.11 and PG18.6: six orders across three isolation levels; no duplicate counting of reruns |
+| HTTP + native PG17 |1 separately executed HTTP test entrypoint, not included in Node214 |
+| Android JVM/lint |60 fresh cases; wrapper --rerun-tasks --no-build-cache;36 tasks executed; lint0 errors/37 warnings |
+| Deferred device collector |5 offline checks, NO ADB; output reservation and child/stream timeouts tested; not OEM evidence |
+| Source checks/build |Real handler/test typecheck, scoped7-file Deno lint, Python fixture-builder Ruff, JS/HTML source package validation; not test cases |
+| Actual CLI Edge / Supabase pool / live OAuth / remote Beta |NOT_RUN_BLOCKED, not substituted by ordinary Deno/native PG |
+| APK / OEM / iOS / remote CI |APK configuration BLOCKED; others NOT_RUN, no device task invoked |
+
+Final latest selections and statuses are authoritative in `final-selections.json` and
+`evidence-manifest.json`, not a summed mix of tests, entrypoints, DB gates or build tasks.
+Pinned dependency caches do not imply cached test results: accepted tests ran afresh.
+No cached test case credit. No production SLA, scientific accuracy or overall PASS.
+
+### New evidence and retained initial failures
+
+- A deterministic rejection of the optional analysis lookup after actual SQL commit
+  reproduced a503/false-failure while row and receipt existed. Fix and real SQL retest
+  preserve SAVED and ANALYSIS_UNAVAILABLE; the injected rejection is not called an
+  actual DB timeout. Independent reviewer approved this boundary.
+- Browser first failed because the new category input made an old broad selector
+  ambiguous; it now selects the name input. A second complete flow was correctly
+  rejected by its source-change guard after a concurrent root source edit. Final AB
+  and A runs used stable relevant sources and passed; earlier traces remain retained.
+- Node initial transport-only VM lacked document; a guarded DOM renderer restored the
+  original error/retry behavior. Accidentally selecting the standalone HTTP test with
+  no server also failed; it is now separately executed against its own real PG/API.
+- Fixture-builder Ruff line lengths and transaction harness timer/callback typings
+  were fixed without changing expected values; initial failures are not overwritten.
+- Python pip module was absent; existing uv offline compatibility check passed instead.
+  This does not establish Python vulnerability clearance.
+
+Body fixtures verify null versus explicit0, units/fat mass, seven prior days, missing
+height/target, original ambiguity policy and frozen version/completeness outputs.
+Late40-day input/date move affects only bounded windows; stale-generation publication
+cannot overwrite newer input, and tombstones cannot resurrect valid old scores.
+Lifecycle histories preserve ID, name/category snapshot, weight/reps/volume; personal
+alias/archive does not affect B. Old archived references remain editable.
+
+PG17 uses official reviewed17.11 tools and synthetic new clusters, not a PG18 directory.
+Baseline migrations plus additive body trigger/category grant were rehearsed. A-only
+schema excludes B catalog/category migrations and rejects B actions. Low-role RLS is
+authenticated NOSUPERUSER NOBYPASSRLS; hosted SQL additionally proves explicit canonical
+server authorization around its privileged SET ROLE path. Native pgcrypto/plpgsql are
+real; full hosted extensions, TLS/pool and real OAuth remain unverified.
+
+Performance includes EXPLAIN ANALYZE on bounded body/timeline/nutrition/training/scores/
+catalog queries with tiny synthetic data and actual runtime durations. Existing indexes
+were retained; small-table scans alone did not justify a new index. Raw sizes, plans and
+timings in selected native/manual reports are LOCAL_MEASUREMENT, not production SLA.
+
+Fresh dependency audit: npm4 public packages reported0 known advisories in that specific
+scan. Existing uv checked48 installed Python packages for compatibility. Deno/Python/
+Android/native binaries/CDN dependencies are not all freshly vulnerability-scanned;
+local pydantic/ruff patch versions differ from CI pins (see security report). No install,
+lockfile/application dependency change, paid resource or claim of zero overall risk.
+Photo model MISSING; food reference NOT_VERIFIED; new scores EXPERIMENTAL_UNVALIDATED.
+
+Docker fresh read-only diagnostics confirm correct local endpoint, absent daemon pipe,
+no process/redirect and the retained sailor-ingest.sock reparse Windows1920 error. Its
+underlying ACL cause is unproven. No repeated start, reset, image pull or remote fallback.
+The packaged hosted source graph is real, but not an Edge-compiled/accepted deployment.
+APK preflight still requires the four documented native Beta settings; no fake endpoint,
+key, OAuth ID, bypassed guard, phone upload or installation was used.
+
+## 2026-09-13 — actual Edge / PG17 / concurrency closure (historical execution)
 
 RUN_ID=`health-edge-pg17-20260913-2210`.
 CURRENT_PHASE=`EDGE_PG17_CONCURRENCY_RELEASE_BLOCKER_CLOSURE`.
