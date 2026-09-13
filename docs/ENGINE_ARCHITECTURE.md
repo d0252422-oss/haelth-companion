@@ -1,6 +1,89 @@
 # Multi-domain engine architecture (non-production)
 
-## 2026-09-14 — overnight manual input closure (current)
+## 2026-09-14 — conditional Beta SQL-first continuation (current)
+
+Run `health-beta-sql-first-20260914`, start `32767b7`. Owner now authorizes necessary
+non-destructive **existing Beta-only** migration/function/frontend/flags and dedicated
+synthetic Beta CRUD, conditional on every required local/target Gate passing. The
+older no-remote-write/proposed-preview approval instructions below are historical;
+do not ask for this same conditional authority again. Production, destructive migration,
+real-data import, credential/permission changes, push/merge and paid services remain out
+of scope. Current actual Edge is still BLOCKED, so no conditional write was executed.
+
+### Shared-queue publication correction
+
+Actual PG17 reproduced four cases where the legacy scheduled worker completed body/
+meal work without portable heads (or with older heads); two opposite-order controls
+passed. The original RED evidence is retained, not relabeled as acceptance.
+
+`20260913180000_engine_queue_publication_guard.sql` adds sticky `engine_required` and
+`engine_published_generation` to the existing queue. Manual enqueue keeps old/new28d
+invalidation and marks required work. A BEFORE COMPLETE guard rejects a missing
+current-generation publication, including tombstones and existing input/head-backed
+dates. No second queue, full-history requeue, bulk rewrite or formula change.
+
+The authenticated scheduled/opportunistic `index.ts:processScoreQueue` now dispatches
+the already-claimed canonical/date/generation/token to the configured hosted runtime
+when enabled; invalid config never falls back to the old finalizer. Direct Shortcut
+recompute likewise uses the bounded shared queue when enabled. Authentication remains
+before claim. `LocalEngineRuntime.processClaimedJob` computes outside the transaction,
+then verifies/locks the live exact lease and commits portable heads/history, generation
+marker, unchanged frozen8 scores and COMPLETE together. A REPLAYED frozen fingerprint
+still publishes changed manual outputs. Old workers cannot falsely acknowledge required
+work; normal bounded retry/FAILED visibility is retained.
+
+Body and snapshot reads also verify the publication generation. Old COMPLETE rows with
+marker0 are UNKNOWN/UNAVAILABLE or STALE, not silently current and not a scheduled job.
+The additive migration does **not** repair old COMPLETE data. Before any later scoped
+reconciliation, inventory affected synthetic/authorized user+date+generation+head counts;
+explicitly bound and record those dates, requeue through the reviewed writer, and verify
+new generations without deleting rows or overwriting newer inputs. No remote backfill
+has run. Normal future writes already use the new bounded enqueue.
+
+### Cutover target facts and remaining real wiring
+
+Read-only Management metadata independently matched `health-companion-beta` to
+`uavimjgccigpbwqmfkhh`, Edge `mobile-health-beta` version14, DB17.6.1.166 and16 migrations
+through20260903130618. Native17.11 is not exact hosted patch/extensions/pool proof.
+This inventory is **not** a rollback snapshot: previous frontend/source artifact,
+deployed Edge source, before-schema/grants/config/flags still need verified preservation.
+
+The reviewed missing additive subset, in order, is20260912032458,20260912041126,
+20260912182042,20260913041844 (AB),20260913164024,20260913164026 (AB),20260913180000.
+Recheck exact remote versions and hashes immediately before any eligible apply; review
+every statement and stop for destructive operations. Never `db push` the whole packaged
+history: already-applied durable cron and failed-queue repair migrations have unrelated
+side effects. The new guard changes shared worker completion, so B button hiding alone
+cannot establish A's backend safety; both releases require its regression.
+
+Current manual provider covers body, meal, workout and exercise CRUD, receipts and
+bounded reads. Existing Web sleep/activity reads, weekly reports, check-ins, nutrition
+targets/profile and complete dashboard semantics are **not yet equivalent SQL adapters**.
+Their unsupported actions fail closed; that is not whole-site SQL-first acceptance.
+Existing Apps Script session verification remains an auth dependency, not a Supabase
+JWT or Sheets data fallback. Real Google/LINE login return-path and canonical mapping
+remain unverified. Documented existing Beta entry is
+`https://d0252422-oss.github.io/health-companion-beta/`; the older proposed manual-preview
+path is not proof of the actual login/publication target. Same GitHub Pages origin does
+not isolate production by URL path: verify exact artifact, route and cache namespace.
+
+Once prerequisites pass: preserve rollback snapshots; apply only the verified missing
+Beta subset; verify schema/RLS/grants; deploy only `mobile-health-beta`; smoke its
+worker and manual contracts with dedicated accounts; **only then** update the existing
+Beta frontend/provider. Validate a new browser session's SQL reads, A/B separation,
+CRUD/receipt/analysis and no fallback. An Edge smoke failure stops frontend switch.
+Rollback restores last verified Beta frontend/flag/function while retaining new SQL
+rows/receipts/tombstones and compatible read/export; never reverse data into Sheets.
+
+Sheets remains untouched. After successful future cutover it is legacy/read-only,
+export/migration source only, never dual-write canonical storage. Historical migration
+requires separate authority: verified source-subject mapping (no email/name guessing),
+original row ID + revision/provenance, explicit kg/percent/nutrition units, source timezone
+and date-only distinction, deterministic duplicate keys, conflict quarantine (not mtime),
+bounded dry-run counts/checksums and user-scoped report. Preserve source and destination;
+rollback disables the importer, not bulk deletes or overwrites newer SQL records.
+
+## 2026-09-14 — overnight manual input closure (historical)
 
 Run `health-overnight-20260914-0037`, starting canonical HEAD `3ef6b61`. This is new
 local work, not a claim that the earlier Docker/Edge/OAuth gates passed. No ADB,

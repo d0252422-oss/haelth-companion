@@ -61,12 +61,77 @@ function localSectionReadGuard(section,start,end){
   localSectionReads.set(section,serial);
   return ()=>currentUser===user&&localSessionEpoch===epoch&&localSectionReads.get(section)===serial&&sectionWindows[section].start===start&&sectionWindows[section].end===end;
 }
-function clearLocalManualState(){manualProviderObservation=null;renderManualProviderStatus();hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
+function clearLocalManualState(){manualProviderObservation=null;manualSourceEvidence=null;renderManualProviderStatus();hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
 let manualProviderObservation=null;
+let manualSourceEvidence=null;
+let manualSourceSerial=0;
+const manualSourceSequences=new Map();
+// Observed contract evidence, never a claim inferred from an HTTP200 alone.
+function manualSourceStatus(){return manualSourceEvidence||{api:'UNKNOWN',database:'UNKNOWN',dataPresent:'UNKNOWN',dataUpdatedAt:null,analysisUpdatedAt:null,domains:{}};}
+function manualAnalysisState(row){
+  const s=row?.score_status||row?.analysisStatus;
+  if(s==='ANALYSIS_PENDING')return row.analysisJobScheduled===true?'UPDATING':row.analysisJobScheduled===false?'NOT_ENABLED':'UNKNOWN';
+  if(s==='COMPUTED'&&typeof row.bodyScore==='number'&&Number.isFinite(row.bodyScore))return 'UPDATED';
+  if(['VALID','PARTIAL_DATA'].includes(s)&&typeof row.score==='number'&&Number.isFinite(row.score))return 'UPDATED';
+  return ({INSUFFICIENT_DATA:'INSUFFICIENT_DATA',STALE:'STALE',ERROR:'FAILED',ANALYSIS_UNAVAILABLE:'UNKNOWN',ANALYSIS_NOT_ENABLED:'NOT_ENABLED'})[s]||'UNKNOWN';
+}
+function assertManualResponseShape(action,data){
+  const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v),rows=(v,id)=>Array.isArray(v)&&v.every(r=>object(r)&&typeof r[id]==='string'&&r[id].length>0&&Number.isSafeInteger(Number(r.revision)));
+  let valid=true;
+  if(action==='getBodyRecords')valid=rows(data,'recordId');
+  if(action==='getNutritionRecords')valid=rows(data,'mealRecordId');
+  if(action==='getWorkoutRecords')valid=object(data)&&rows(data.records,'recordId');
+  if(action==='getExerciseDatabase')valid=rows(data,'exerciseId');
+  if(action==='getHealthTimeline')valid=object(data)&&Array.isArray(data.timeline)&&data.timeline.every(object);
+  if(action==='localEngineSnapshot'||action==='refreshDailyNutrition'||action==='refreshDerivedData'&&data?.outputs!==undefined){
+    valid=object(data)&&rows(data.meals,'mealRecordId')&&Array.isArray(data.outputs)&&data.outputs.every(r=>object(r)&&typeof r.domain==='string'&&typeof r.score_status==='string'&&typeof r.calculation_date==='string'&&(r.score===null||typeof r.score==='number'&&Number.isFinite(r.score)));
+  }
+  if(!valid)throw Object.assign(Error('MALFORMED_RESPONSE'),{code:'MALFORMED_RESPONSE'});
+}
+function recordManualSourceEvidence(action,{received=false,ok=false,data,error,payload={},sequence=++manualSourceSerial}={}){
+  if(ok)assertManualResponseShape(action,data);
+  const s=manualSourceEvidence??={api:'UNKNOWN',database:'UNKNOWN',dataPresent:'UNKNOWN',dataUpdatedAt:null,analysisUpdatedAt:null,domains:{}};
+  const at=new Date().toISOString();s.api=received?'CONNECTED':'UNAVAILABLE';
+  if(!ok){s.database=/^DB_|DATABASE|SQL_/.test(error||'')?'UNAVAILABLE':'UNKNOWN';renderManualProviderStatus();return;}
+  const scope={start:payload.startDate||payload.date||null,end:payload.endDate||payload.date||null};
+  const updateDomain=(name,fields)=>{const old=s.domains[name]||{};if((old.sequence||0)>sequence)return;const retained={...old};if(JSON.stringify(old.scope)!==JSON.stringify(scope))delete retained.present;s.domains[name]={...retained,...fields,scope,sequence};if(fields.analysis==='UPDATED')s.analysisUpdatedAt=at;};
+  let rows=null,domain=null;
+  if(action==='getBodyRecords'&&Array.isArray(data)){rows=data;domain='body';}
+  if(action==='getNutritionRecords'&&Array.isArray(data)){rows=data;domain='nutrition';}
+  if(action==='getWorkoutRecords'&&Array.isArray(data?.records)){rows=data.records;domain='training';}
+  if(action==='getExerciseDatabase'&&Array.isArray(data)){rows=data;domain='exercise';}
+  if(action==='getHealthTimeline'&&Array.isArray(data?.timeline)){rows=data.timeline;domain='timeline';}
+  if(['getDashboardData','getTodaySummary'].includes(action)&&data?.user&&Object.hasOwn(data,'today')){rows=data.today?[data.today]:[];domain='dashboard';}
+  const snapshot=Array.isArray(data?.meals)&&Array.isArray(data?.outputs)&&['localEngineSnapshot','refreshDailyNutrition','refreshDerivedData'].includes(action);
+  if(snapshot){rows=data.meals;domain='nutrition';const latest={};for(const out of data.outputs){if(!latest[out.domain]||out.calculation_date>=latest[out.domain].calculation_date)latest[out.domain]=out;}for(const name of new Set([...Object.keys(s.domains).filter(n=>!['training','exercise','timeline','dashboard'].includes(n)),...Object.keys(latest)])){const out=latest[name];updateDomain(name,{analysis:out?manualAnalysisState(out):'UNKNOWN',analysisDate:out?.calculation_date||null});}}
+  const mutation=['addBodyRecord','upsertBodyRecord','deleteBodyRecord','upsertMealRecord','deleteMealRecord','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','manageExercise'].includes(action);
+  const receipt=['getBodyWriteStatus','getMealWriteStatus','getTrainingWriteStatus'].includes(action)&&data?.exists===true;
+  const committed=(mutation||receipt)&&data?.status==='SAVED'&&(typeof data.recordId==='string'||typeof data.exerciseId==='string'||Array.isArray(data.records));
+  if(rows!==null){s.database='CONNECTED';s.dataUpdatedAt=at;updateDomain(domain,{present:rows.length>0});}
+  if(committed){s.database='CONNECTED';s.dataUpdatedAt=at;/* presence is verified by a subsequent SELECT, not optimistic mutation UI */}
+  if(action==='getBodyRecords'&&rows){const latest=[...rows].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];updateDomain('body',{analysis:latest?manualAnalysisState(latest):'INSUFFICIENT_DATA',analysisDate:latest?.date||null});}
+  if((['addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus'].includes(action)||action==='refreshDerivedData'&&payload.recordType==='body')&&data?.analysisStatus)updateDomain('body',{analysis:manualAnalysisState(data),analysisDate:data.record?.date||payload.date||null});
+  if(['getWorkoutRecords','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet'].includes(action)||action==='refreshDerivedData'&&payload.recordType==='workout')updateDomain('training',{analysis:'NOT_ENABLED',analysisDate:null});
+  if(!Object.values(s.domains).some(d=>d.analysis==='UPDATED'))s.analysisUpdatedAt=null;
+  const present=Object.values(s.domains).filter(d=>Object.hasOwn(d,'present')).map(d=>d.present);s.dataPresent=present.some(Boolean)?'PRESENT':present.length?'ABSENT':'UNKNOWN';
+  renderManualProviderStatus();
+}
 function renderManualProviderStatus(){
   if(typeof document==='undefined')return; // Transport-only hosts/tests have no UI surface.
-  const node=document.getElementById('technical-provider-updated');if(!node)return;
-  node.textContent=!manualProviderObservation?'尚無本帳號成功 SQL 讀寫證據':`${manualProviderObservation.ok?'最近請求成功':'最近請求失敗（沒有切换資料來源）'} · ${manualProviderObservation.at} · ${manualProviderObservation.action}${manualProviderObservation.analysis?' · '+manualProviderObservation.analysis:''}`;
+  const node=document.getElementById('technical-provider-updated');
+  if(node)node.textContent=!manualProviderObservation?'尚無本帳號成功 SQL 讀寫證據':`${manualProviderObservation.ok?'最近請求成功':'最近請求失敗（沒有切换資料來源）'} · ${manualProviderObservation.at} · ${manualProviderObservation.action}${manualProviderObservation.analysis?' · '+manualProviderObservation.analysis:''}`;
+  const sql=manualSqlEnabled(),s=manualSourceStatus(),put=(id,text,state)=>{const el=document.getElementById(id);if(el){el.textContent=text;if(el.dataset)el.dataset.state=state||'UNKNOWN';}};
+  put('data-connection-state',!sql?'既有資料服務（未切換）':s.api==='CONNECTED'?(s.database==='CONNECTED'?'已連線（最近 SQL 請求已驗證）':'API 已回應；資料庫尚未確認'):'尚未確認連線',s.api);
+  put('data-storage-provider',sql?(hostedManualEnabled()?'雲端資料庫':'本機測試資料庫'):'既有資料服務',sql?'SQL_CONFIGURED':'LEGACY_CONFIGURED');
+  put('data-last-updated',s.dataUpdatedAt?`最近 SQL 讀寫確認：${s.dataUpdatedAt}`:'尚無 SQL 讀寫確認時間',s.dataUpdatedAt?'OBSERVED':'UNKNOWN');
+  put('data-presence',s.dataPresent==='PRESENT'?'本次查詢有資料':s.dataPresent==='ABSENT'?'本次查詢沒有資料':'尚未查詢資料',s.dataPresent);
+  const names={body:'身體',nutrition:'飲食',training:'訓練',sleep:'睡眠',activity:'活動',cardio:'心肺',recovery:'恢復',overall:'整體'},labels={UPDATED:'已更新（experimental）',UPDATING:'有待處理工作',INSUFFICIENT_DATA:'資料不足',NOT_ENABLED:'分析尚未啟用',FAILED:'失敗',STALE:'結果待更新',UNKNOWN:'尚未確認'};
+  const analyses=Object.entries(s.domains).filter(([,d])=>d.analysis),states=analyses.map(([,d])=>d.analysis);
+  const analysisState=['FAILED','STALE','UPDATING','UNKNOWN','NOT_ENABLED','INSUFFICIENT_DATA','UPDATED'].find(v=>states.includes(v))||'UNKNOWN';
+  put('data-analysis-state',analyses.length?analyses.map(([d,v])=>`${names[d]||d}：${labels[v.analysis]||labels.UNKNOWN}${v.analysisDate?'（'+v.analysisDate+'）':''}`).join('；'):'尚未確認分析狀態',analysisState);
+  put('technical-database-status',`Database = ${s.database}`,s.database);
+  put('technical-source-status',`API_CONNECTED=${s.api}; DATABASE_CONNECTED=${s.database}; DATA_PRESENT=${s.dataPresent}; DATA_UPDATED=${s.dataUpdatedAt?'OBSERVED':'UNKNOWN'}; ANALYSIS_UPDATED=${analysisState}; algorithm=health-score-v1.0`,analysisState);
+  if(sql)for(const id of ['sync-dot','settings-status-dot']){const el=document.getElementById(id);if(el)el.className='status-dot '+(s.database==='CONNECTED'?'connected':s.database==='UNAVAILABLE'||s.api==='UNAVAILABLE'?'error':'notConfigured');}
 }
 function observeManualProvider(action,ok,analysis){manualProviderObservation={action,ok,analysis,at:new Date().toISOString()};renderManualProviderStatus();}
 function localManualBodyNotice(){
@@ -84,6 +149,10 @@ async function localEngineRequest(action,payload={}){
   if(hostedManualEnabled())await ensureHostedManualIdentity();
   if(action==='logout'&&!hostedManualEnabled()){clearLocalManualState();await fetch('/local-logout',{method:'POST'});return {};}
   const epoch=localSessionEpoch;
+  const sourceSequence=++manualSourceSerial;manualSourceSequences.set(action,sourceSequence);
+  const sourceCurrent=()=>epoch===localSessionEpoch&&manualSourceSequences.get(action)===sourceSequence;
+  const invalidateSourceRead=['addBodyRecord','upsertBodyRecord','deleteBodyRecord'].includes(action)?'getBodyRecords':['upsertMealRecord','deleteMealRecord'].includes(action)?'getNutritionRecords':['addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet'].includes(action)?'getWorkoutRecords':null;
+  if(invalidateSourceRead)manualSourceSequences.set(invalidateSourceRead,++manualSourceSerial);
   const catalogSequence=action==='getExerciseDatabase'?++localCatalogReadSequence:0;
   if(action==='manageExercise')localCatalogReadSequence++;
   const bodyMutation=['addBodyRecord','upsertBodyRecord','deleteBodyRecord'].includes(action);
@@ -110,20 +179,25 @@ async function localEngineRequest(action,payload={}){
     payload={...payload,revision:payload.revision??previous?.revision,clientRequestId:payload.clientRequestId||crypto.randomUUID()};
     if(action==='upsertMealRecord')payload={...payload,labelMode:document.getElementById('meal-label-mode').checked,weightGrams:document.getElementById('meal-weight-grams').value,referenceSource:document.getElementById('meal-reference-source').value};
   }
-  let body;
+  let body,received=false;
   try{
     const response=await manualSqlFetch(action,payload);
+    received=true;
     try{body=await response.json();}catch{const error=Error('MALFORMED_RESPONSE');error.code='MALFORMED_RESPONSE';throw error;}
+    if(!body||typeof body!=='object'||Array.isArray(body)||typeof body.ok!=='boolean')throw Object.assign(Error('MALFORMED_RESPONSE'),{code:'MALFORMED_RESPONSE'});
+    if(response.ok===false&&body?.ok===true)body={ok:false,error:'HTTP_RESPONSE_CONTRACT_MISMATCH'};
+    if(body.ok)try{assertManualResponseShape(action,body.data);}catch(error){body=undefined;throw error;}
   }catch(error){
     if(error.name==='TimeoutError'||error.name==='AbortError')error.code='REQUEST_TIMEOUT';
     if((bodyMutation||trainingMutation)&&epoch===localSessionEpoch){
       try{const status=await localEngineRequest(trainingMutation?'getTrainingWriteStatus':'getBodyWriteStatus',{clientRequestId:payload.clientRequestId});if(status.exists)body={ok:true,data:{...status,recovered:true}};}catch{ /* keep the original stable envelope for an explicit retry */ }
     }
-    if(!body){if(epoch===localSessionEpoch)observeManualProvider(action,false);throw error;}
+    if(!body||typeof body.ok!=='boolean'){if(sourceCurrent()){recordManualSourceEvidence(action,{received,error:error.code});observeManualProvider(action,false);}throw error;}
   }
   if(epoch!==localSessionEpoch){const error=Error('IDENTITY_CHANGED');error.code='IDENTITY_CHANGED';throw error;}
   if(catalogSequence&&catalogSequence!==localCatalogReadSequence){const error=Error('STALE_CATALOG_RESPONSE');error.code='STALE_CATALOG_RESPONSE';throw error;}
-  if(!body.ok){observeManualProvider(action,false);if(pendingKey&&!body.retryable)localPendingBodyWrites.delete(pendingKey);if(trainingKey&&!body.retryable){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);}const error=Error(body.error);error.code=body.error;error.retryable=body.retryable===true;throw error;}
+  if(!body.ok){if(sourceCurrent()){recordManualSourceEvidence(action,{received,error:body.error});observeManualProvider(action,false);}if(pendingKey&&!body.retryable)localPendingBodyWrites.delete(pendingKey);if(trainingKey&&!body.retryable){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);}const error=Error(body.error);error.code=body.error;error.retryable=body.retryable===true;throw error;}
+  if(sourceCurrent())recordManualSourceEvidence(action,{received:true,ok:true,data:body.data,payload,sequence:sourceSequence});
   observeManualProvider(action,true,body.data?.analysisStatus);
   if(trainingMutation){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);if(body.data.record)cacheLocalRevision(localWorkoutRecords,body.data.recordId,{...body.data.record,deleted:body.data.deleted===true});for(const record of body.data.records||[])cacheLocalRevision(localWorkoutRecords,record.recordId,record);}
   if(action==='getWorkoutRecords')for(const record of body.data.records||[])cacheLocalRevision(localWorkoutRecords,record.recordId,record);

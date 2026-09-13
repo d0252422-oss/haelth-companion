@@ -31,13 +31,14 @@ const sha = async (input: unknown) => Array.from(new Uint8Array(await crypto.sub
 export class ManualBodyLocalStore {
   constructor(private sql: any) {}
   async analysisRows(tx:any,user:string,start:string,end:string) {
-    const queue=await tx`select score_date,status from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date between ${start}::date and ${end}::date`;
+    const queue=await tx`select score_date,status,generation,engine_published_generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date between ${start}::date and ${end}::date`;
     const outputs=await tx`select h.calculation_date,h.payload from public.engine_output_heads p join public.engine_output_history h using(canonical_user_id,calculation_date,output_kind,engine_version,input_fingerprint)
       where p.canonical_user_id=${user} and p.calculation_date between ${start}::date and ${end}::date and p.output_kind='body' and p.engine_version='body-score-v1.0'`;
     const date=(v:any)=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);
     return (day:string)=>{
       const q=queue.find((r:Json)=>date(r.score_date)===day),out=outputs.find((r:Json)=>date(r.calculation_date)===day)?.payload;
       if(q&&q.status!=='COMPLETE')return {analysisStatus:q.status==='FAILED'?'ERROR':'ANALYSIS_PENDING',analysisReason:q.status==='FAILED'?'RECOMPUTE_FAILED':'RECOMPUTE_QUEUED',analysisJobScheduled:q.status!=='FAILED',bodyScore:null};
+      if(!q||Number(q.engine_published_generation)<=0||String(q.engine_published_generation)!==String(q.generation))return {analysisStatus:'ANALYSIS_UNAVAILABLE',analysisReason:'PUBLICATION_GENERATION_NOT_VERIFIED',analysisJobScheduled:false,bodyScore:null};
       if(!out)return {analysisStatus:'ANALYSIS_NOT_ENABLED',analysisReason:'NO_RECOMPUTE_EVIDENCE',analysisJobScheduled:false,bodyScore:null};
       return {analysisStatus:out.score_status==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':'COMPUTED',analysisReason:out.score_status==='INSUFFICIENT_DATA'?'MISSING_BODY_BASELINE_OR_TARGET':'EXISTING_BODY_ENGINE',analysisJobScheduled:false,
         bodyScore:out.score,bodyScoreStatus:out.score_status,bodyEngineVersion:out.engine_version,bodyCompleteness:out.data_completeness,analysisValidation:'EXPERIMENTAL_UNVALIDATED',fatMass:out.metrics.daily.fat_mass,bodyMetrics:out.metrics.derived};

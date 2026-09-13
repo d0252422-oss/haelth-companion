@@ -264,6 +264,25 @@ try {
     report.release_A_independence={exercise_tables:'ABSENT',exercise_actions:'DENIED_BEFORE_SQL',body_meal_browser:'PASS',verified_web_session_new_context:'PASS_SYNTHETIC_NOT_OAUTH'};
   });
   if(releaseExercise)await (await import('./exercise-release-gates.mjs')).runExerciseReleaseGates({pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,customRange,weightEditor,bodyScreen,setPage:value=>{page=value;}});
+  await gate('runtime_source_UI_separates_API_SQL_data_and_analysis',async()=>{
+    const {page:p}=await browserContext(releaseExercise||releaseA?'WEB_A':'A');page=p;await p.setViewportSize({width:1280,height:900});
+    await p.evaluate(()=>localEngineRequest('getBodyRecords',{}));
+    await p.locator('.side-btn[data-screen="settings-screen"]').click();
+    assert.equal(await p.locator('#data-connection-state').getAttribute('data-state'),'CONNECTED');
+    assert.equal(await p.locator('#technical-database-status').getAttribute('data-state'),'CONNECTED');
+    assert.match(await p.locator('#data-storage-provider').textContent(),/本機測試資料庫/);
+    assert.equal(await p.locator('#data-last-updated').getAttribute('data-state'),'OBSERVED');
+    assert.match(await p.locator('#data-last-updated').textContent(),/最近 SQL 讀寫確認/);
+    const rejected=await p.evaluate(async()=>{try{await localEngineRequest('getBodyRecords',{date:'not-a-date'});return null;}catch(e){return e.code;}});assert.equal(rejected,'INVALID_DATE');
+    assert.equal(await p.locator('#data-connection-state').getAttribute('data-state'),'CONNECTED');
+    assert.equal(await p.locator('#technical-database-status').getAttribute('data-state'),'UNKNOWN');
+    assert.match(await p.locator('#data-connection-state').textContent(),/資料庫尚未確認/);
+    await p.evaluate(()=>localEngineRequest('localEngineSnapshot',{}));
+    assert.equal(await p.locator('#technical-database-status').getAttribute('data-state'),'CONNECTED');
+    assert.notEqual(await p.locator('#data-analysis-state').getAttribute('data-state'),'UPDATING');
+    await p.screenshot({path:path.join(evidence,'runtime-source-status.png')});
+    report.source_status={actual_API_and_SQL:true,HTTP200_alone_does_not_prove_database:true,last_update_kind:'client_observed_SQL_read_write_not_server_modified_at',analysis_scope:'returned_domains_only'};
+  });
   assert.deepEqual(report.page_errors, []); assert.deepEqual(report.blocked_external_requests, []);
 } catch (error) { report.errors.push(redact(error.stack || error.message)); }
 finally {

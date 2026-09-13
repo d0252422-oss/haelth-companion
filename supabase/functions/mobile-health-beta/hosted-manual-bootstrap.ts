@@ -53,6 +53,20 @@ export async function createHostedManualRuntime(raw:any,release:'A'|'AB',verify:
   }catch(error){await raw.end();throw error;}
 }
 let cached:Promise<LocalEngineRuntime>|undefined,fingerprint:string|undefined;
+async function configuredRuntime(config:NonNullable<ReturnType<typeof validateHostedManualConfig>>){
+  const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(config))))).map(v=>v.toString(16).padStart(2,'0')).join('');
+  if(fingerprint&&fingerprint!==hash)throw Error('MANUAL_PROVIDER_ENVIRONMENT_CHANGED');
+  fingerprint=hash;
+  cached??=createHostedManualRuntime(postgres(config.url,{prepare:false,max:2,connect_timeout:5,idle_timeout:20,ssl:{rejectUnauthorized:true}}),config.release,verifyWebIdentity).catch(error=>{cached=undefined;throw error;});
+  return await cached;
+}
+// Internal only: index.ts verifies worker secret/native session before claiming.
+// No test issuer, second queue, re-claim or silent legacy fallback when enabled.
+export async function processHostedClaimedScoreJob(job:Record<string,any>,token:string){
+  const config=validateHostedManualConfig(name=>Deno.env.get(name));
+  if(!config)throw Error('MANUAL_PROVIDER_DISABLED');
+  return await(await configuredRuntime(config)).processClaimedJob(job,token);
+}
 export async function hostedManualBootstrap(request:Request):Promise<Response>{
   let config:ReturnType<typeof validateHostedManualConfig>;
   try{config=validateHostedManualConfig(name=>Deno.env.get(name));}catch{return Response.json({ok:false,error:'MANUAL_PROVIDER_NOT_CONFIGURED'},{status:503,headers:{'cache-control':'no-store'}});}
@@ -64,11 +78,7 @@ export async function hostedManualBootstrap(request:Request):Promise<Response>{
   if(request.method==='OPTIONS')return new Response(null,{status:origin?204:403,headers});
   if(request.method!=='POST')return Response.json({ok:false,error:'METHOD_NOT_ALLOWED'},{status:405,headers});
   try{
-    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(config))))).map(v=>v.toString(16).padStart(2,'0')).join('');
-    if(fingerprint&&fingerprint!==hash)throw Error('MANUAL_PROVIDER_ENVIRONMENT_CHANGED');
-    fingerprint=hash;
-    cached??=createHostedManualRuntime(postgres(config.url,{prepare:false,max:2,connect_timeout:5,idle_timeout:20,ssl:{rejectUnauthorized:true}}),config.release,verifyWebIdentity).catch(error=>{cached=undefined;throw error;});
-    const response=await(await cached).handle(request);
+    const response=await(await configuredRuntime(config)).handle(request);
     return new Response(response.body,{status:response.status,headers:{...Object.fromEntries(response.headers),...headers}});
   }catch{return Response.json({ok:false,error:'MANUAL_PROVIDER_UNAVAILABLE',retryable:true},{status:503,headers});}
 }

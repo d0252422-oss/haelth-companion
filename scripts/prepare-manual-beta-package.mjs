@@ -19,17 +19,20 @@ const manifest={created_at:new Date().toISOString(),source_revision:execFileSync
  backend:{project_name:'health-companion-beta',project_ref:'uavimjgccigpbwqmfkhh',function:'mobile-health-beta',runtime:'Supabase Edge Runtime',route:'/functions/v1/mobile-health-beta/v1/engine/web',actual_edge_execution:'BLOCKED_DOCKER_BACKEND_STARTUP'},
  flags:{manual_sql:'OFF',exercise_management:'OFF',existing_provider:'UNCHANGED_APPS_SCRIPT'},
  source_boundary:'Source deploy tree with derived single-function CLI config and effective pinned Deno config; NOT a verified CLI Edge compiled bundle',
+ migration_execution:'Historical source only. Never apply this whole directory; compare the exact current Beta migration inventory and execute only the reviewed non-destructive missing subset after all preconditions PASS.',
  calculation_dependency:'Exact unchanged frozen health-score-v1.0 executable snapshot; no fixture outputs or synthetic issuer',
  exclusions:['.env','tokens','test issuer','synthetic identity fixtures','databases','source maps','Android','private evidence','untracked deno.lock'],
  required_settings:['HEALTH_MANUAL_SQL_HOSTED_ENABLED','HEALTH_MANUAL_RELEASE','HEALTH_MANUAL_ALLOWED_ORIGIN','HEALTH_MANUAL_EXPECTED_PROJECT_REF','HEALTH_MANUAL_EXPECTED_DB_HOST','HEALTH_MANUAL_DATABASE_URL','BETA_WEB_AUTH_VERIFY_URL','Supabase SDK project configuration'],
  activation_conditions:['actual CLI Edge + PG17 + Web acceptance','actual verified Web session + existing canonical mapping; no automatic account links','actual transaction pool + TLS/custom role validation','authorized Beta migration/config/deployment','real OAuth user-scoped acceptance'],
  remote_operations:0};
 for(const name of files){
- const bytes=await readFile(name),source=bytes.toString('utf8');
+ const original=await readFile(name);
+ const bytes=name==='scripts/manual-sql-config.js'?Buffer.from(original.toString('utf8').replace("release:'A'",`release:'${release}'`)):original,source=bytes.toString('utf8');
+ if(name==='scripts/manual-sql-config.js'&&(!source.includes(`release:'${release}'`)||!source.includes('enabled:false')))throw Error('UNSAFE_PUBLIC_PACKAGE_CONFIG');
  if(name.endsWith('.js')&&!name.includes('fixtures/'))new vm.Script(source,{filename:name});
  if(name==='index.html')for(const [,script]of source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(script,{filename:name});
  if(name.endsWith('.ts')&&/Deno\.Command|local-engine-auth|synthetic-issuer/.test(source))throw Error('FORBIDDEN_DEPLOY_DEPENDENCY:'+name);
- await mkdir(path.dirname(path.join(output,name)),{recursive:true});await copyFile(name,path.join(output,name));
+ await mkdir(path.dirname(path.join(output,name)),{recursive:true});await writeFile(path.join(output,name),bytes);
  manifest.files.push({path:name,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
 }
 // Check every literal relative TS/JS import in the shipped backend against the actual source tree.

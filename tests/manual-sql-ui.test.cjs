@@ -26,6 +26,59 @@ function harness(fetch) {
   return ctx;
 }
 
+test('SQL source status does not infer DB/data/analysis from a successful identity response',async()=>{
+ const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data:{user:{userId:'synthetic-A'}}})}));
+ await ctx.localEngineRequest('getCurrentUser');const s=plain(ctx.manualSourceStatus());assert.equal(s.api,'CONNECTED');assert.equal(s.database,'UNKNOWN');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.dataUpdatedAt,null);assert.equal(s.analysisUpdatedAt,null);
+ assert.equal(ctx.document.getElementById('settings-status-dot').className,'status-dot notConfigured');
+});
+test('empty SQL SELECT proves database connectivity but not data presence or a calculated score',async()=>{
+ const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data:[]})}));await ctx.localEngineRequest('getBodyRecords');const s=ctx.manualSourceStatus();assert.equal(s.database,'CONNECTED');assert.equal(s.dataPresent,'ABSENT');assert.ok(s.dataUpdatedAt);assert.equal(s.domains.body.analysis,'INSUFFICIENT_DATA');assert.equal(s.analysisUpdatedAt,null);
+ assert.match(ctx.document.getElementById('data-last-updated').textContent,/最近 SQL 讀寫確認/);
+});
+test('committed mutation is not optimistic presence; explicit zero score is not missing',()=>{
+ const ctx=harness(()=>{});ctx.recordManualSourceEvidence('upsertBodyRecord',{received:true,ok:true,data:{status:'SAVED',recordId:'id',bodyScore:0,analysisStatus:'COMPUTED'}});const s=ctx.manualSourceStatus();assert.equal(s.database,'CONNECTED');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.domains.body.analysis,'UPDATED');assert.ok(s.analysisUpdatedAt);
+ assert.equal(ctx.manualAnalysisState({score_status:'VALID',score:null}),'UNKNOWN');assert.equal(ctx.manualAnalysisState({score_status:'VALID',score:0}),'UPDATED');
+});
+test('SQL error after HTTP response keeps API/DB distinct and cache is not fresh evidence',async()=>{
+ const ctx=harness(async()=>({ok:false,json:async()=>({ok:false,error:'DB_TIMEOUT_RETRYABLE',retryable:true})}));await assert.rejects(()=>ctx.localEngineRequest('getBodyRecords'),e=>e.code==='DB_TIMEOUT_RETRYABLE');const s=ctx.manualSourceStatus();assert.equal(s.api,'CONNECTED');assert.equal(s.database,'UNAVAILABLE');assert.equal(s.dataUpdatedAt,null);assert.equal(ctx.document.getElementById('settings-status-dot').className,'status-dot error');
+});
+test('no scheduled job does not become permanent analysis-in-progress',()=>{
+ const ctx=harness(()=>{});assert.equal(ctx.manualAnalysisState({analysisStatus:'ANALYSIS_PENDING'}),'UNKNOWN');assert.equal(ctx.manualAnalysisState({analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:false}),'NOT_ENABLED');assert.equal(ctx.manualAnalysisState({analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true}),'UPDATING');
+});
+test('analysis snapshot uses latest domain date and does not flatten insufficient/stale to green',()=>{
+ const ctx=harness(()=>{});ctx.recordManualSourceEvidence('localEngineSnapshot',{received:true,ok:true,data:{meals:[],outputs:[{domain:'body',calculation_date:'2026-09-14',score:null,score_status:'INSUFFICIENT_DATA'},{domain:'body',calculation_date:'2026-09-13',score:90,score_status:'VALID'},{domain:'nutrition',calculation_date:'2026-09-14',score:60,score_status:'STALE'}]}});const s=ctx.manualSourceStatus();assert.equal(s.domains.body.analysis,'INSUFFICIENT_DATA');assert.equal(s.domains.nutrition.analysis,'STALE');assert.equal(ctx.document.getElementById('data-analysis-state').dataset.state,'STALE');assert.equal(s.analysisUpdatedAt,null);
+});
+test('account reset removes all SQL source timestamps and presence',()=>{
+ const ctx=harness(()=>{});ctx.recordManualSourceEvidence('getBodyRecords',{received:true,ok:true,data:[{recordId:'id',revision:1,date:'2026-09-13',weight:70,bodyScore:0,analysisStatus:'COMPUTED'}]});assert.equal(ctx.manualSourceStatus().dataPresent,'PRESENT');ctx.clearLocalManualState();const s=ctx.manualSourceStatus();assert.equal(s.database,'UNKNOWN');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.dataUpdatedAt,null);assert.equal(s.analysisUpdatedAt,null);
+});
+test('HTTP failure cannot claim a successful SQL envelope',async()=>{
+ const ctx=harness(async()=>({ok:false,json:async()=>({ok:true,data:[]})}));await assert.rejects(()=>ctx.localEngineRequest('getBodyRecords'),e=>e.code==='HTTP_RESPONSE_CONTRACT_MISMATCH');assert.notEqual(ctx.manualSourceStatus().database,'CONNECTED');
+});
+test('malformed response and late same-action read cannot invent fresh source evidence',async()=>{
+ const broken=harness(async()=>({ok:true,json:async()=>null}));await assert.rejects(()=>broken.localEngineRequest('getBodyRecords'),e=>e.code==='MALFORMED_RESPONSE');assert.equal(broken.manualSourceStatus().database,'UNKNOWN');
+ const replies=[],ctx=harness(()=>new Promise(r=>replies.push(r)));const old=ctx.localEngineRequest('getBodyRecords'),fresh=ctx.localEngineRequest('getBodyRecords');replies[1]({ok:true,json:async()=>({ok:true,data:[]})});await fresh;replies[0]({ok:true,json:async()=>({ok:true,data:[{recordId:'old',revision:1,weight:80,date:'2026-09-12'}]})});await old;assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
+});
+test('source analysis uses actual PARTIAL_DATA enum and requires a finite numeric score',()=>{
+ const ctx=harness(()=>{});assert.equal(ctx.manualAnalysisState({score_status:'PARTIAL_DATA',score:0}),'UPDATED');
+ for(const value of [undefined,null,'90',NaN,Infinity]){assert.equal(ctx.manualAnalysisState({analysisStatus:'COMPUTED',bodyScore:value}),'UNKNOWN');assert.equal(ctx.manualAnalysisState({score_status:'VALID',score:value}),'UNKNOWN');}
+ assert.equal(ctx.manualAnalysisState({analysisStatus:'COMPUTED'}),'UNKNOWN');
+});
+test('cross-action late snapshot cannot overwrite a newer body observation; empty range clears old analysis',()=>{
+ const ctx=harness(()=>{}),snapshot={meals:[],outputs:[{domain:'body',calculation_date:'2026-09-12',score:90,score_status:'VALID'}]};
+ ctx.recordManualSourceEvidence('localEngineSnapshot',{received:true,ok:true,data:snapshot,sequence:1});
+ ctx.recordManualSourceEvidence('getBodyRecords',{received:true,ok:true,data:[{recordId:'id',revision:2,date:'2026-09-13',analysisStatus:'INSUFFICIENT_DATA'}],sequence:3});
+ ctx.recordManualSourceEvidence('refreshDailyNutrition',{received:true,ok:true,data:snapshot,sequence:2});
+ assert.equal(ctx.manualSourceStatus().domains.body.analysis,'INSUFFICIENT_DATA');assert.equal(ctx.manualSourceStatus().domains.body.analysisDate,'2026-09-13');
+ ctx.recordManualSourceEvidence('localEngineSnapshot',{received:true,ok:true,data:{meals:[],outputs:[]},payload:{startDate:'2026-08-01',endDate:'2026-08-02'},sequence:4});
+ assert.equal(ctx.manualSourceStatus().domains.body.analysis,'UNKNOWN');assert.equal(ctx.manualSourceStatus().domains.body.analysisDate,null);assert.equal(ctx.manualSourceStatus().analysisUpdatedAt,null);
+ assert.equal(ctx.manualSourceStatus().domains.body.present,undefined,'old range presence is not evidence for new range');assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
+});
+test('malformed SQL arrays never earn DB/data/analysis evidence before cache/render',async()=>{
+ for(const [action,data]of [['getBodyRecords',[null]],['getBodyRecords',[{}]],['localEngineSnapshot',{meals:[],outputs:[null]}]]){
+  const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data})}));await assert.rejects(()=>ctx.localEngineRequest(action),e=>e.code==='MALFORMED_RESPONSE');const s=ctx.manualSourceStatus();assert.equal(s.database,'UNKNOWN');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.analysisUpdatedAt,null);
+ }
+});
+
 test('late catalog response cannot downgrade a newer revision or revive archived selection',async()=>{
   const replies=[];const ctx=harness(()=>new Promise(resolve=>replies.push(resolve)));
   const old=ctx.localEngineRequest('getExerciseDatabase');const rejected=assert.rejects(()=>old,e=>e.code==='STALE_CATALOG_RESPONSE');

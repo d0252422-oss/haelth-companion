@@ -208,7 +208,7 @@ Deno.test("old running compute cannot overwrite newer generation; failed worker 
       o.domain === "nutrition" && o.calculation_date === day
     ).input_fingerprint;
     release();
-    await stale;
+    assert.equal(await stale,0,'superseded work must not be counted as this worker completion');
     assert.equal(
       (await runtime.snapshot(a)).outputs.find((o: any) =>
         o.domain === "nutrition" && o.calculation_date === day

@@ -415,20 +415,15 @@ export class LocalEngineRuntime {
     });
     return result.normalized.bundle;
   }
-  async drain(user: string) {
-    const token = crypto.randomUUID();
-    let processed = 0;
-    for (let page = 0; page < 8; page++) {
-      const jobs = await this
-        .sql`select * from public.beta_claim_score_recompute(${token},${user},5)`;
-      if (!jobs.length) break;
-      for (const job of jobs) {
-        const day = pgDay(job.score_date);
-        try {
+  // Shared by the authenticated scheduled worker and manual request drain. The
+  // caller must own this exact lease; compute happens outside the publication lock.
+  async processClaimedJob(job: Json, token: string) {
+          const user = String(job.canonical_user_id), day = pgDay(job.score_date);
+          if (!/^[0-9a-f-]{36}$/i.test(user) || !/^[0-9a-f-]{36}$/i.test(token)) throw Error('INVALID_SCORE_SCOPE');
           const bundle = await this.compute(user, day);
           const admin = pgAdmin(this.sql, this.verify, async (tx, args) => {
             const valid =
-              await tx`select generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date=${day} and generation=${job.generation} and lease_token=${token} for update`;
+              await tx`select generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date=${day} and generation=${job.generation} and lease_token=${token} and status='PROCESSING' and lease_expires_at>now() for update`;
             if (
               !valid.length ||
               Number(args.p_generation) !== Number(job.generation)
@@ -444,10 +439,29 @@ export class LocalEngineRuntime {
               },${output.calculated_at}) on conflict do nothing`;
               await tx`insert into public.engine_output_heads values(${user},${day},${kind},${output.engine_version},${output.input_fingerprint}) on conflict(canonical_user_id,calculation_date,output_kind,engine_version) do update set input_fingerprint=excluded.input_fingerprint`;
             }
+            await tx`update private.beta_score_recompute_queue set engine_published_generation=${job.generation} where canonical_user_id=${user} and score_date=${day}`;
           });
           // Frozen original eight-score computation remains unchanged, including missing training/nutrition.
-          await recomputeBetaScore(admin, user, day);
-          processed++;
+          const result = await recomputeBetaScore(admin, user, day);
+          if(result.status==='NOT_DIRTY'){
+            const [current]=await this.sql`select generation,status,engine_published_generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date=${day}`;
+            if(current?.status==='COMPLETE'&&BigInt(current.generation)>=BigInt(job.generation)&&String(current.engine_published_generation)===String(current.generation))return {status:'SUPERSEDED',local_date:day};
+          }
+          if (!['PERSISTED','REPLAYED'].includes(String(result.status))) throw Error('STALE_SCORE_INPUT');
+          return result;
+  }
+  async drain(user: string) {
+    const token = crypto.randomUUID();
+    let processed = 0;
+    for (let page = 0; page < 8; page++) {
+      const jobs = await this
+        .sql`select * from public.beta_claim_score_recompute(${token},${user},5)`;
+      if (!jobs.length) break;
+      for (const job of jobs) {
+        const day = pgDay(job.score_date);
+        try {
+          const result=await this.processClaimedJob(job, token);
+          if(result.status!=='SUPERSEDED')processed++;
         } catch (error) {
           try {
             await this
@@ -464,14 +478,14 @@ export class LocalEngineRuntime {
     // One bounded REPEATABLE READ snapshot: queue, inputs and output head/history
     // cannot come from different committed revisions. Native reads still switch to RLS.
     const {pending,meals,history,heads}=await manualPrivilegedRead(this.sql,identity,async(tx:any)=>{
-      const pending=await tx`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${range.start}::date and ${range.end}::date`;
+      const pending=await tx`select score_date,status,generation,engine_published_generation from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and score_date between ${range.start}::date and ${range.end}::date`;
       await prepareManualRead(tx,identity);
       const meals=await this.readRows(tx,identity,'engine_meals',range);
       const history=await this.readRows(tx,identity,'engine_output_history',range);
       const heads=await this.readRows(tx,identity,'engine_output_heads',range);
       return {pending,meals,history,heads};
     },true);
-    const staleDates = new Set(pending.map((r: Json) => pgDay(r.score_date)));
+    const publishedDates = new Set(pending.filter((r:Json)=>r.status==='COMPLETE'&&Number(r.engine_published_generation)>0&&String(r.engine_published_generation)===String(r.generation)).map((r: Json) => pgDay(r.score_date)));
     const keys = new Set(
       heads.map((r: Json) =>
         [
@@ -497,12 +511,12 @@ export class LocalEngineRuntime {
           ].join("|"),
         )
       ).map((r: Json) =>
-        staleDates.has(pgDay(r.calculation_date))
+        !publishedDates.has(pgDay(r.calculation_date))
           ? {
             ...r.payload,
             persisted_score_status: r.payload.score_status,
             score_status: "STALE",
-            stale_reason: "INPUT_REVISION_PENDING",
+            stale_reason: "PUBLICATION_GENERATION_NOT_VERIFIED",
           }
           : r.payload
       ),

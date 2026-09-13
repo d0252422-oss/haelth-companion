@@ -475,7 +475,11 @@ async function processScoreQueue(admin: any, userId: string | null, limit: numbe
   let failed = 0;
   for (const row of claimed as Json[]) {
     try {
-      await recomputeBetaScore(admin, String(row.canonical_user_id), String(row.score_date));
+      const result = Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1'
+        ? await(await import('./hosted-manual-bootstrap.ts')).processHostedClaimedScoreJob(row,workerToken)
+        : await recomputeBetaScore(admin, String(row.canonical_user_id), String(row.score_date));
+      if(['SUPERSEDED','NOT_DIRTY'].includes(String(result.status)))continue; // Not our completion credit.
+      if(!['PERSISTED','REPLAYED'].includes(String(result.status)))throw Error('STALE_SCORE_INPUT');
       completed += 1;
     } catch (error) {
       failed += 1;
@@ -491,16 +495,12 @@ async function processScoreQueue(admin: any, userId: string | null, limit: numbe
   return { claimed: claimed.length, completed, failed };
 }
 
-async function listDirtyScoreDates(admin: any, userId: string): Promise<string[]> {
-  const { data, error } = await admin.rpc("beta_list_dirty_score_dates", {
-    p_canonical_user_id: userId, p_limit: 7,
-  });
-  if (error) throw databaseFailure(error);
-  return (Array.isArray(data) ? data : []).map((row: Json) => String(row.score_date));
-}
-
 async function recomputeDates(admin: any, userId: string, dates: Set<string>): Promise<void> {
   if (dates.size > 31) throw failure("SCORE_RECOMPUTE_BOUND_EXCEEDED", 400);
+  if(Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1'){
+    if(dates.size)await processScoreQueue(admin,userId,Math.min(dates.size,5));
+    return; // Remaining durable work is owned by the existing scheduled drain.
+  }
   for (const date of [...dates].sort()) await recomputeBetaScore(admin, userId, date);
 }
 

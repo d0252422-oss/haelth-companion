@@ -95,7 +95,7 @@ try{
    return (...args:any[])=>{const work=args.pop();return target.begin(...args,async(tx:any)=>{
     const observed=new Proxy(tx,{apply(call,_this,queryArgs:any[]){
      const result=call(...queryArgs),text=Array.isArray(queryArgs[0])?queryArgs[0].join(' '):'';
-     if(armed&&text.includes('select score_date from private.beta_score_recompute_queue')){
+     if(armed&&/^\s*select score_date(?:,|\s)/.test(text)&&text.includes('from private.beta_score_recompute_queue')){
       armed=false;return Promise.resolve(result).then(async rows=>{
        const metadata=(await tx`select pg_backend_pid() as pid,current_setting('transaction_isolation') as isolation,pg_current_snapshot()::text as snapshot`)[0];
        events.push({event:'REAL_QUEUE_READ_COMPLETE_BEFORE_CONCURRENT_WRITE',...metadata});ready();await bounded(released);return rows;

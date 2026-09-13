@@ -1,6 +1,32 @@
 # Multi-domain engine test report
 
-## 2026-09-14 — overnight non-device closure (current; new execution)
+## 2026-09-14 — conditional Beta SQL-first preconditions (current)
+
+New RUN_ID=`health-beta-sql-first-20260914`, START_HEAD=`32767b7`. Commands, source
+hashes, fresh result selection, raw failures and final checkpoint are under
+`D:/Dev/Evidence/health-beta-sql-first-20260914`. Prior overnight files remain immutable.
+
+New real defect: separate legacy claim/finalize completed manual body/meal generations
+without current portable outputs (4 RED cases,2 passing controls). The fix makes the
+configured worker publish every required family atomically and adds a DB COMPLETE
+guard and generation-aware reads. Fresh actual-PG regression exercises legacy-first
+initial/revision, opposite order, moved/deleted dates, stale/expired lease and failure
+after publication marker. Static independent review is separate from root-executed
+tests; an independent execution tool interruption is not called independent PASS.
+
+Data-source UI now separates API, database, data presence, observed SQL-read/write time
+and actual domain analysis. HTTP200/identity alone cannot earn DB/data/analysis credit;
+malformed rows, late cross-action responses and old range evidence cannot turn it green.
+The timestamp is a client-observed SQL confirmation, not fabricated server updated_at.
+Offline A/AB package config now matches its selected release while remaining OFF.
+
+Original frozen formulas/28 goldens are unchanged. No actual CLI Edge, pool/TLS,
+live OAuth or deployed Beta PASS is inferred from native PG/Deno/browser. Conditional
+Beta authority exists, but missing prerequisites prohibit migration/deployment/smoke
+writes. See current architecture section for whole-Web coverage and rollback gaps.
+Final exact counts/statuses: this run's `REPORT.md` and `final-selections.json`.
+
+## 2026-09-14 — overnight non-device closure (historical execution)
 
 RUN_ID=`health-overnight-20260914-0037`; START_HEAD=`3ef6b61`.
 Canonical D checkout, original Android changes preserved. Raw commands, UTC start/end,

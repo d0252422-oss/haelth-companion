@@ -40,7 +40,7 @@ confirmation requires a new baseline version, not an engineering-progress increm
 | Android | 0 / 8 | JVM/lint passed, but intended APK build and OEM device gates not accepted |
 | iOS | 0 / 8 | Build/platform scope/device evidence still required |
 | Photo / food | 0 / 12 | Model, benchmark and reference validation remain open |
-| Release / Beta / privacy | 0 / 12 | No remote authorization; security/distribution gates open |
+| Release / Beta / privacy | 0 / 12 | Conditional Beta authority granted; prerequisites/security/distribution gates remain open |
 | Remaining documented roadmap | 0 / 16 | LINE V4, recovery V2, guidance V3, personalization V5 retained |
 
 The exact per-leaf acceptance conditions and hashed evidence are in
@@ -52,6 +52,22 @@ intentionally ignored by Git; another checkout without it must not inherit these
 credits merely from a cached report. Incomplete scope is never rounded to100%.
 
 Required first-line reporting is now saved in effective root `AGENTS.md`.
+
+## Conditional Beta SQL-first continuation — same denominator
+
+Run `health-beta-sql-first-20260914` exposed a real shared-worker counterexample to
+`postgres_recompute` (weight4): while RED its credit was ineligible (28/100), even though
+the older reports remained hash-valid. The additive generation guard, unified publication
+and current-generation reads now pass fresh actual nativePG17 regression and the exact
+legacy-first/revision/rollback/reconciliation tests. Restoring that4 yields32/100 again:
+net engineering change0.0pp, ledger correction0.0pp, no new leaf or larger weight.
+This is regression repair, not silently reusing the contradicted old PASS.
+
+UI/API/DB source-state separation and manual Browser A/AB improvements support already
+credited local acceptances. Package config fixes have no product weight. Conditional
+Beta deployment authority is now granted, but actual Edge, hosted session/pool and
+whole-Web coverage are still unaccepted; remote Beta receives0 credit. Complete product
+scope is still unresolved, so OVERALL_PROJECT_PROGRESS remains UNKNOWN.
 
 ## 2026-09-14 overnight continuation — new engineering, unchanged acceptance weight
 

@@ -2,6 +2,30 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "beta_sql_first_continuation": {
+    "run_id": "health-beta-sql-first-20260914",
+    "source_baseline": "32767b7852c3e0c3a3b5eb08656ac8c5ec6d268f",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "ledger_correction_pp": 0,
+    "regression_accounting": {
+      "gate_id": "postgres_recompute",
+      "original_weight": 4,
+      "detected": "Four real PG17 legacy-first cases contradicted atomic publication; credit ineligible during RED",
+      "restored": "Fresh native17 and queue17 tests pass after generation-aware all-output publication fix",
+      "withdrawal_pp": -4,
+      "restoration_pp": 4,
+      "net_pp": 0,
+      "reason": "REGRESSION_REPAIRED_NOT_NEW_GATE_CREDIT"
+    },
+    "other_work": [
+      "UI source-state and manual Browser improvements: ALREADY_CREDITED local leaf, not whole-Web/Beta acceptance",
+      "Offline A/AB package release config: OUTSIDE_CURRENT_BASELINE; no product weight",
+      "Actual Edge, hosted OAuth/pool and whole-Web/Beta rollout: ACCEPTANCE_NOT_FULLY_MET",
+      "Conditional Beta authority is not acceptance evidence"
+    ],
+    "evidence_root": "D:/Dev/Evidence/health-beta-sql-first-20260914"
+  },
   "continuation_accounting": {
     "run_id": "health-overnight-20260914-0037",
     "source_baseline": "3ef6b61668ac1465418cc489770830a39f715afd",
@@ -574,6 +598,14 @@
       "status": "PASS",
       "acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/cutover/health-beta-sql-first-20260914/native17.xml",
+          "sha256": "facd09705919e25f68f9415e0dea7587048f718381f3f83afad1d769cf969a7f"
+        },
+        {
+          "path": ".engine-artifacts/cutover/health-beta-sql-first-20260914/queue17.xml",
+          "sha256": "609cfbb0b8804c1203b1dfab7143547b46e29010a4b3fb04f15021b8c9d60d61"
+        },
         {
           "path": ".engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
           "sha256": "bd5d34b8a773ab1a63a2bd6745e9163ec09ae3826dff9108d6f9661be88f528b"
