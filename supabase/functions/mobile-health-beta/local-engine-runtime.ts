@@ -1,4 +1,4 @@
-// Non-production integration adapter. Pure portable engine; Python is reference/test-only.
+// Shared SQL semantics. Local and hosted constructors have separate configuration boundaries.
 import postgres from "npm:postgres@3.4.8";
 import { PortableEngineRuntime } from "./engine-portable.ts";
 import { authenticateNativeUser, resolveNativeIdentity } from "./index.ts";
@@ -6,6 +6,7 @@ import { recomputeBetaScore } from "./score-bridge.ts";
 import { ManualBodyLocalStore, localReadRange, manualDate, rejectClientIdentity, manualBodyAnalysis } from "./manual-body-local.ts";
 import { ManualTrainingLocalStore } from "./manual-training-local.ts";
 import {resolveVerifiedManualWebIdentity,prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
+import {readManualRequest} from './manual-request-body.ts';
 
 type Json = Record<string, any>;
 const pgDay = (value: any) =>
@@ -152,13 +153,18 @@ export class LocalEngineRuntime {
   private activeRequests = 0;
   manualBody: ManualBodyLocalStore;
   manualTraining: ManualTrainingLocalStore;
-  constructor(config: Json, verify: (token: string) => Promise<Json>, private verifyWeb?: (token:string)=>Promise<{subject:string,email:string}>) {
-    if (
+  private hosted: boolean;
+  private exerciseEnabled: boolean;
+  constructor(config: Json, verify: (token: string) => Promise<Json>, private verifyWeb?: (token:string)=>Promise<{subject:string,email:string}>, mode?: {kind:'hosted';sql:any;release:'A'|'AB'}) {
+    this.hosted=mode?.kind==='hosted';
+    this.exerciseEnabled=mode ? mode.release==='AB' : Deno.env.get('HEALTH_EXERCISE_MANAGEMENT_LOCAL')==='1';
+    if (!mode && (
       Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1" ||
       !(config.host === "127.0.0.1" || (config.host === "host.docker.internal" && Deno.env.get("HEALTH_MANUAL_EDGE_REHEARSAL") === "1" && !Deno.env.get("DENO_DEPLOYMENT_ID"))) ||
       !/^health_engine_[a-f0-9]{32}$/.test(config.database)
-    ) throw Error("UNSAFE_DATABASE_TARGET");
-    this.sql = postgres({
+    )) throw Error("UNSAFE_DATABASE_TARGET");
+    if(mode&&(!mode.sql||!verifyWeb||!['A','AB'].includes(mode.release)))throw Error('INVALID_HOSTED_RUNTIME');
+    this.sql = mode?.sql ?? postgres({
       ...config,
       max: 8,
       connect_timeout: 5,
@@ -183,8 +189,9 @@ export class LocalEngineRuntime {
     await this.sql.end();
   }
   async identity(request: Request) {
+    if(this.hosted&&request.headers.get('x-health-session-kind')!=='web')throw Error('INVALID_WEB_SESSION');
     if(request.headers.get('x-health-session-kind')==='web') {
-      if(!this.verifyWeb||Deno.env.get('HEALTH_MANUAL_WEB_SESSION_LOCAL')!=='1')throw Error('WEB_SESSION_ADAPTER_DISABLED');
+      if(!this.verifyWeb||(!this.hosted&&Deno.env.get('HEALTH_MANUAL_WEB_SESSION_LOCAL')!=='1'))throw Error('WEB_SESSION_ADAPTER_DISABLED');
       const token=/^Bearer (.+)$/.exec(request.headers.get('authorization')||'')?.[1];
       if(!token)throw Error('INVALID_WEB_SESSION');
       let verified;
@@ -206,12 +213,16 @@ export class LocalEngineRuntime {
     };
   }
   async read(identity: Json, table: string, range = localReadRange()) {
+    return await this.sql.begin(async (tx: any) => {
+      await prepareManualRead(tx,identity);
+      return await this.readRows(tx,identity,table,range);
+    });
+  }
+  private async readRows(tx:any,identity:Json,table:string,range:ReturnType<typeof localReadRange>){
     if (
       !["engine_meals", "engine_output_history", "engine_output_heads"]
         .includes(table)
     ) throw Error("INVALID_TABLE");
-    return await this.sql.begin(async (tx: any) => {
-      await prepareManualRead(tx,identity);
       const dateColumn = table === "engine_meals"
         ? "local_date"
         : "calculation_date";
@@ -221,7 +232,6 @@ export class LocalEngineRuntime {
       );
       if (rows.length > 5000) throw Error("READ_BOUND_EXCEEDED");
       return rows;
-    });
   }
   async mutate(identity: Json, input: Json, remove = false) {
     for (
@@ -445,13 +455,17 @@ export class LocalEngineRuntime {
   }
   async snapshot(identity: Json, input: Json = {}) {
     const range = localReadRange(input);
-    const pending = await manualPrivilegedRead(this.sql,identity,tx=>tx`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${range.start}::date and ${range.end}::date`);
+    // One bounded REPEATABLE READ snapshot: queue, inputs and output head/history
+    // cannot come from different committed revisions. Native reads still switch to RLS.
+    const {pending,meals,history,heads}=await manualPrivilegedRead(this.sql,identity,async(tx:any)=>{
+      const pending=await tx`select score_date from private.beta_score_recompute_queue where canonical_user_id=${identity.canonical} and status<>'COMPLETE' and score_date between ${range.start}::date and ${range.end}::date`;
+      await prepareManualRead(tx,identity);
+      const meals=await this.readRows(tx,identity,'engine_meals',range);
+      const history=await this.readRows(tx,identity,'engine_output_history',range);
+      const heads=await this.readRows(tx,identity,'engine_output_heads',range);
+      return {pending,meals,history,heads};
+    },true);
     const staleDates = new Set(pending.map((r: Json) => pgDay(r.score_date)));
-    const [meals, history, heads] = await Promise.all([
-      this.read(identity, "engine_meals", range),
-      this.read(identity, "engine_output_history", range),
-      this.read(identity, "engine_output_heads", range),
-    ]);
     const keys = new Set(
       heads.map((r: Json) =>
         [
@@ -531,15 +545,13 @@ export class LocalEngineRuntime {
           status: 405,
         });
       }
-      const text = await request.text();
-      if (text.length > 1048576) throw Error("BODY_TOO_LARGE");
-      const { action, payload = {} } = JSON.parse(text),
+      const { action, payload = {} } = await readManualRequest(request),
         identity = await this.identity(request);
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw Error("INVALID_PAYLOAD");
       rejectClientIdentity(payload);
       let data: any;
       if (["getExerciseDatabase", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
-        if (Deno.env.get("HEALTH_EXERCISE_MANAGEMENT_LOCAL") !== "1") throw Error("EXERCISE_MANAGEMENT_DISABLED");
+        if (!this.exerciseEnabled) throw Error("EXERCISE_MANAGEMENT_DISABLED");
         if (action === "getExerciseDatabase") data = await this.manualTraining.catalog(identity);
         else if (action === "getWorkoutRecords") data = await this.manualTraining.workouts(identity, payload);
         else if (action === "getTrainingWriteStatus") data = await this.manualTraining.status(identity, payload);
@@ -563,7 +575,9 @@ export class LocalEngineRuntime {
           // SQL transaction/receipt already committed. Analysis failure must not hide a saved record.
           data = { ...data, status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
         }
-      } else if (action === "getCurrentUser") {
+      } else if (action === "getManualProviderIdentity") {
+        data={canonicalUserId:identity.canonical,provider:'postgresql-manual-v1',release:this.exerciseEnabled?'AB':'A',schemaVersion:'manual-sql-v1'};
+      } else if (action === "getCurrentUser" && !this.hosted) {
         data = {
           user: {
             userId: identity.canonical,
@@ -590,10 +604,12 @@ export class LocalEngineRuntime {
         action === "refreshDerivedData" || action === "refreshDailyNutrition"
       ) {
         if (payload.recordType === "workout") {
+          if(!this.exerciseEnabled)throw Error('EXERCISE_MANAGEMENT_DISABLED');
           data = { status: "SAVED", analysisStatus: "ANALYSIS_PENDING", analysisReason: "MANUAL_WORKOUT_ADAPTER_NOT_CONNECTED", analysisJobScheduled: false };
         } else if (payload.recordType === "body") {
           data = { status: "SAVED", ...manualBodyAnalysis };
         } else {
+          if(payload.recordType&&!['nutrition','meal'].includes(payload.recordType))throw Error('MANUAL_ACTION_NOT_SUPPORTED');
           await this.drain(identity.canonical);
           data = await this.snapshot(identity, payload);
         }
@@ -606,8 +622,9 @@ export class LocalEngineRuntime {
     } catch (error) {
       const sqlCode = String((error as Json)?.code || "");
       const message = error instanceof Error ? error.message : "";
-      const retryable = message === "AUTH_SERVICE_UNAVAILABLE" || ["55P03", "57014", "25P03", "25P04", "08000", "08003", "08006", "57P01", "57P03", "53300", "CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "ECONNREFUSED", "ECONNRESET"].includes(sqlCode);
-      const code = message === "AUTH_SERVICE_UNAVAILABLE" ? message : ["23503", "23001"].includes(sqlCode) ? "EXERCISE_REFERENCED" : retryable ? "DB_TIMEOUT_RETRYABLE" : /^[A-Z_]+$/.test(message)
+      const transactionConflict = ["40001", "40P01"].includes(sqlCode);
+      const retryable = transactionConflict || message === "AUTH_SERVICE_UNAVAILABLE" || ["55P03", "57014", "25P03", "25P04", "08000", "08003", "08006", "57P01", "57P03", "53300", "CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "ECONNREFUSED", "ECONNRESET"].includes(sqlCode);
+      const code = transactionConflict ? "DB_CONFLICT_RETRYABLE" : message === "AUTH_SERVICE_UNAVAILABLE" ? message : ["23503", "23001"].includes(sqlCode) ? "EXERCISE_REFERENCED" : retryable ? "DB_TIMEOUT_RETRYABLE" : /^[A-Z_]+$/.test(message)
         ? message
         : "ENGINE_REQUEST_FAILED";
       return Response.json({ ok: false, error: code, retryable }, {

@@ -1,0 +1,10 @@
+import {createLocalPostgres} from './local-engine-postgres.mjs';
+import {spawnSync} from 'node:child_process';import fs from 'node:fs/promises';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';
+const parent=process.argv[2];if(!parent||!path.isAbsolute(parent)||process.env.LOCAL_ENGINE_PG_MAJOR!=='17')throw Error('EXPLICIT_PG17_EVIDENCE_REQUIRED');
+const output=path.join(parent,'hosted-pg17-'+randomUUID());await fs.mkdir(output,{recursive:true});
+const pg=await createLocalPostgres({port:57485,release:'A'});const config=path.join(output,'runtime-config.json');await fs.writeFile(config,JSON.stringify(pg.config));
+const command=['deno','run','--cached-only','--frozen-lockfile','--node-modules-dir=none','--config','config/engine-local.deno.json','--allow-env','--allow-read','--allow-sys','--allow-write='+output,'--allow-net=127.0.0.1','scripts/test-hosted-provider-pg.ts',config,path.join(output,'report.json')];
+const started=new Date().toISOString();let result;
+try{result=spawnSync(command[0],command.slice(1),{cwd:process.cwd(),env:process.env,windowsHide:true,encoding:'utf8',timeout:180000});await fs.writeFile(path.join(output,'stdout.log'),result.stdout||'');await fs.writeFile(path.join(output,'stderr.log'),result.stderr||'');}
+finally{await pg.close();await fs.writeFile(path.join(output,'command.json'),JSON.stringify({command,cwd:process.cwd(),started_at:started,ended_at:new Date().toISOString(),exit_code:result?.status??-1,database:pg.evidence,cleanup:'OWNED_PG_STOPPED_DB_RETAINED',source_hashes:Object.fromEntries(await Promise.all(['scripts/test-hosted-provider-pg.ts','supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts','supabase/functions/mobile-health-beta/local-engine-runtime.ts'].map(async f=>[f,createHash('sha256').update(await fs.readFile(f)).digest('hex')])) )},null,2));}
+console.log(JSON.stringify({output,exit_code:result?.status,stdout:result?.stdout,stderr:result?.stderr}));process.exitCode=result?.status===0?0:1;

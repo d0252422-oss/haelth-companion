@@ -1,4 +1,47 @@
-/* Existing Web App extension: inert unless explicit loopback-only configuration is supplied. */
+/* Shared manual SQL UI; local synthetic and hosted verified-session transports stay separate. */
+function hostedManualEnabled(){return typeof HOSTED_MANUAL_SQL_ENABLED!=='undefined'&&HOSTED_MANUAL_SQL_ENABLED;}
+function manualSqlEnabled(){return LOCAL_ENGINE_ENABLED||hostedManualEnabled();}
+let hostedManualBinding=null,hostedManualConfigFingerprint=null,hostedIdentityPending=null;
+const hostedManualActions=new Set(['getManualProviderIdentity','getBodyRecords','addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus','getNutritionRecords','upsertMealRecord','deleteMealRecord','getMealWriteStatus','localEngineSnapshot','getDashboardData','getTodaySummary','getHealthTimeline','refreshDailyNutrition','refreshDerivedData','getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
+const hostedTrainingActions=new Set(['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
+function hostedManualConfig(){
+  const raw=window.HEALTH_MANUAL_SQL_CONFIG||{};
+  const fail=()=>{const e=Error('MANUAL_PROVIDER_NOT_CONFIGURED');e.code=e.message;throw e;};
+  if(!hostedManualEnabled()||raw.enabled!==true||!['A','AB'].includes(raw.release)||raw.schemaVersion!=='manual-sql-v1'||!/^[a-z]{20}$/.test(raw.projectRef||''))fail();
+  let endpoint;try{endpoint=new URL(raw.endpoint);}catch{fail();}
+  if(endpoint.protocol!=='https:'||endpoint.hostname!==raw.projectRef+'.supabase.co'||endpoint.pathname!=='/functions/v1/mobile-health-beta/v1/engine/web'||endpoint.port||endpoint.username||endpoint.password||endpoint.search||endpoint.hash)fail();
+  const config={endpoint:endpoint.href,release:raw.release,schemaVersion:raw.schemaVersion},fingerprint=JSON.stringify(config);
+  if(hostedManualConfigFingerprint&&hostedManualConfigFingerprint!==fingerprint){clearLocalManualState();fail();}
+  hostedManualConfigFingerprint=fingerprint;return config;
+}
+function hostedManualNamespace(){const c=hostedManualConfig();return `hosted-sql:${c.endpoint}:${c.release}:${c.schemaVersion}:${hostedManualBinding?.canonical||'unverified'}`;}
+async function hostedManualFetch(action,payload={}){
+  const config=hostedManualConfig();
+  if(!hostedManualActions.has(action))throw Object.assign(Error('MANUAL_ACTION_NOT_SUPPORTED'),{code:'MANUAL_ACTION_NOT_SUPPORTED'});
+  if(config.release==='A'&&(hostedTrainingActions.has(action)||(action==='refreshDerivedData'&&payload.recordType==='workout')))throw Object.assign(Error('EXERCISE_MANAGEMENT_DISABLED'),{code:'EXERCISE_MANAGEMENT_DISABLED'});
+  if(!sessionToken||sessionToken==='LOCAL_HTTP_ONLY_COOKIE')throw Object.assign(Error('INVALID_WEB_SESSION'),{code:'INVALID_WEB_SESSION'});
+  return fetch(config.endpoint,{method:'POST',credentials:'omit',headers:{'content-type':'application/json','authorization':'Bearer '+sessionToken,'x-health-session-kind':'web'},body:JSON.stringify({action,payload}),signal:AbortSignal.timeout(30000)});
+}
+async function ensureHostedManualIdentity(){
+  const config=hostedManualConfig(),token=sessionToken;
+  if(hostedManualBinding?.token===token)return;
+  if(hostedManualBinding)clearLocalManualState();
+  if(hostedIdentityPending?.token===token&&hostedIdentityPending.epoch===localSessionEpoch)return hostedIdentityPending.promise;
+  const epoch=localSessionEpoch;
+  const pending={token,epoch,promise:null};
+  pending.promise=(async()=>{
+  const response=await hostedManualFetch('getManualProviderIdentity'),body=await response.json();
+  if(epoch!==localSessionEpoch||token!==sessionToken)throw Error('IDENTITY_CHANGED');
+  if(!body.ok)throw Object.assign(Error(body.error||'INVALID_WEB_SESSION'),{code:body.error||'INVALID_WEB_SESSION'});
+  if(!/^[a-f0-9-]{36}$/.test(body.data?.canonicalUserId||'')||body.data.provider!=='postgresql-manual-v1'||body.data.release!==config.release||body.data.schemaVersion!==config.schemaVersion)throw Error('MANUAL_PROVIDER_CONTRACT_MISMATCH');
+  hostedManualBinding={token,canonical:body.data.canonicalUserId};
+  document.getElementById('health-connector-panel')?.style?.setProperty('display','none');
+  document.getElementById('chatgpt-meal-box')?.style?.setProperty('display','none');
+  if(config.release==='AB')setupLocalExerciseManagement();
+  })().finally(()=>{if(hostedIdentityPending===pending)hostedIdentityPending=null;});
+  hostedIdentityPending=pending;return pending.promise;
+}
+function manualSqlFetch(action,payload){return hostedManualEnabled()?hostedManualFetch(action,payload):fetch('/v1/engine/web',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,payload}),signal:AbortSignal.timeout(30000)});}
 const localBodyRecords=new Map(),localMealRecords=new Map(),localPendingBodyWrites=new Map();
 const localWorkoutRecords=new Map(),localPendingTrainingWrites=new Map();
 let localSessionEpoch=0,localOutputRequest=0;
@@ -18,17 +61,18 @@ function localSectionReadGuard(section,start,end){
   localSectionReads.set(section,serial);
   return ()=>currentUser===user&&localSessionEpoch===epoch&&localSectionReads.get(section)===serial&&sectionWindows[section].start===start&&sectionWindows[section].end===end;
 }
-function clearLocalManualState(){localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
+function clearLocalManualState(){hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();}
 function localManualBodyNotice(){
-  if(!LOCAL_ENGINE_ENABLED)return;
+  if(!manualSqlEnabled())return;
   const note=document.getElementById('body-current-note');
   if(note&&(appState.body||[]).some(r=>r.analysisStatus==='ANALYSIS_PENDING')){
     note.dataset.analysisStatus='ANALYSIS_PENDING';note.textContent+=' · 僅儲存 SQL 紀錄，分析尚未啟用（沒有排程工作）';
   }else if(note)delete note.dataset.analysisStatus;
 }
 async function localEngineRequest(action,payload={}){
-  if(!LOCAL_ENGINE_ENABLED)throw Error('LOCAL_ENGINE_DISABLED');
-  if(action==='logout'){clearLocalManualState();await fetch('/local-logout',{method:'POST'});return {};}
+  if(!manualSqlEnabled())throw Error('LOCAL_ENGINE_DISABLED');
+  if(hostedManualEnabled())await ensureHostedManualIdentity();
+  if(action==='logout'&&!hostedManualEnabled()){clearLocalManualState();await fetch('/local-logout',{method:'POST'});return {};}
   const epoch=localSessionEpoch;
   const catalogSequence=action==='getExerciseDatabase'?++localCatalogReadSequence:0;
   if(action==='manageExercise')localCatalogReadSequence++;
@@ -58,7 +102,7 @@ async function localEngineRequest(action,payload={}){
   }
   let body;
   try{
-    const response=await fetch('/v1/engine/web',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,payload}),signal:AbortSignal.timeout(30000)});
+    const response=await manualSqlFetch(action,payload);
     try{body=await response.json();}catch{const error=Error('MALFORMED_RESPONSE');error.code='MALFORMED_RESPONSE';throw error;}
   }catch(error){
     if(error.name==='TimeoutError'||error.name==='AbortError')error.code='REQUEST_TIMEOUT';
@@ -96,7 +140,7 @@ async function initializeLocalEngineSession(){
   catch{showLocalEngineLogin();return false;}
 }
 function setupLocalMealFields(record){
-  if(!LOCAL_ENGINE_ENABLED)return;
+  if(!manualSqlEnabled())return;
   document.getElementById('chatgpt-meal-box').style.display='none';
   if(!document.getElementById('meal-label-mode')){
     const field=document.createElement('fieldset');field.innerHTML='<legend>本機 experimental：確認標示與份量</legend><label><input id="meal-label-mode" type="checkbox"> 下方營養值為每 100 g 標示（不是此餐總量）</label><label for="meal-weight-grams">實際可食重量 g</label><input id="meal-weight-grams" type="number" min="0" class="form-input"><label for="meal-reference-source">標示來源／版本</label><input id="meal-reference-source" class="form-input"><p>請使用已含烹調油的最終食品標示；系統不會額外加油。照片辨識未實作。</p>';
@@ -108,7 +152,7 @@ function setupLocalMealFields(record){
   if(record?.labelValues)for(const key of ['calories','protein','carbs','fat'])document.getElementById('meal-'+key).value=record.labelValues[key]??'';
 }
 async function refreshLocalEngineOutputs(){
-  if(!LOCAL_ENGINE_ENABLED||!currentUser)return;
+  if(!manualSqlEnabled()||!currentUser)return;
   const requestedUser=currentUser;
   const requestNumber=++localOutputRequest;
   const windowRange=typeof sectionWindows!=='undefined'?sectionWindows.nutrition:null;

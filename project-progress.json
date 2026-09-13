@@ -3,8 +3,8 @@
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
   "continuation_accounting": {
-    "run_id": "health-release-exercise-20260913-120836",
-    "source_baseline": "efe83ed44034ac19d58e1f96e0c3c7dac6a41eaf",
+    "run_id": "health-edge-pg17-20260913-2210",
+    "source_baseline": "a8f7a1cb2ce9fa7fe963c3e193231a4743243126",
     "scope_or_weight_changed": false,
     "engineering_increment_pp": 0,
     "ledger_correction_pp": 0,
@@ -16,7 +16,8 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/node.xml",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml"
         ],
         "credit_change": 0
       },
@@ -26,7 +27,10 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json"
         ],
         "credit_change": 0
       },
@@ -36,8 +40,8 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml"
         ],
         "credit_change": 0
       },
@@ -47,7 +51,7 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml"
         ],
         "credit_change": 0
       },
@@ -57,7 +61,9 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json"
         ],
         "credit_change": 0
       },
@@ -67,7 +73,8 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml"
         ],
         "credit_change": 0
       },
@@ -85,7 +92,10 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/barriers17.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json"
         ],
         "credit_change": 0
       },
@@ -95,7 +105,8 @@
         "original_weight": 4,
         "reason": "ALREADY_CREDITED",
         "new_evidence": [
-          ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+          ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json"
         ],
         "credit_change": 0
       },
@@ -229,8 +240,13 @@
       }
     ],
     "outside_current_baseline": [
-      "Exercise catalog rename/personal alias/archive/restore/owned-unused delete (new explicit Owner requirement)",
-      "Static packaging tool and Git/storage operations do not create product credit"
+      "Exercise catalog management was an explicit separate Owner increment, not a new weighted leaf",
+      "Git/storage/package/progress tools do not create product credit"
+    ],
+    "blockers": [
+      "Actual CLI Edge startup blocked by Docker socket",
+      "Native PG17 is not full Supabase platform/pool/OAuth acceptance",
+      "Phone passive inspection is not new OEM ingestion acceptance"
     ]
   },
   "previous_progress": 32,
@@ -256,6 +272,14 @@
       "status": "PASS",
       "acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/node.xml",
+          "sha256": "070f7d1d27c728504a66bccd21b8332db579e5a6b5b85532c485a4fbe3771690"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+          "sha256": "386b893d378b3262e382f488d89bc29d10c850343685d5d2d31d2b4e3d4b1a25"
+        },
         {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml",
           "sha256": "61656cab2176a038be1717c2f7e65880e419cb882b22b59558a89fb2ce4993ac"
@@ -287,6 +311,22 @@
       "acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
       "evidence": [
         {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+          "sha256": "8463065f8df7228d4ae860a0221aeb9c6e9f6c5dc37607128a053931e6b89db8"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+          "sha256": "386b893d378b3262e382f488d89bc29d10c850343685d5d2d31d2b4e3d4b1a25"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+          "sha256": "64a7ba656f3e78757187191002935fec1c9ca26d60f8ef646b881230c431c3da"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+          "sha256": "180aea777d55e677f10a34519575eb8d2e42fdcede9d7059b6ae7a3caad77f14"
+        },
+        {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
           "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
         },
@@ -316,6 +356,14 @@
       "status": "PASS",
       "acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+          "sha256": "6d623c8f4147f8b05becac3f4a1b182962aa4ede264e0637a3481a6fa77e2b2e"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+          "sha256": "86ccb1298ff4340c18a3ac336b6c16d3442d978397cbdcd39b9d3487c1a28f4b"
+        },
         {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
           "sha256": "c0efbbdf1f6ca828db7fe009106d01ae280f556704b733d4a20fcd2c864afc87"
@@ -351,6 +399,10 @@
       "acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
       "evidence": [
         {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+          "sha256": "6d623c8f4147f8b05becac3f4a1b182962aa4ede264e0637a3481a6fa77e2b2e"
+        },
+        {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
           "sha256": "c0efbbdf1f6ca828db7fe009106d01ae280f556704b733d4a20fcd2c864afc87"
         },
@@ -372,6 +424,18 @@
       "status": "PASS",
       "acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+          "sha256": "8463065f8df7228d4ae860a0221aeb9c6e9f6c5dc37607128a053931e6b89db8"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+          "sha256": "41657941336b0913e561b46407594c20b26fafcf3e08a106962ba5db8e50fb13"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+          "sha256": "180aea777d55e677f10a34519575eb8d2e42fdcede9d7059b6ae7a3caad77f14"
+        },
         {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
           "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
@@ -398,6 +462,14 @@
       "status": "PASS",
       "acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+          "sha256": "86ccb1298ff4340c18a3ac336b6c16d3442d978397cbdcd39b9d3487c1a28f4b"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+          "sha256": "386b893d378b3262e382f488d89bc29d10c850343685d5d2d31d2b4e3d4b1a25"
+        },
         {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
           "sha256": "0e2d4f4cde6ee41696e0db523c871b010eec43d0cb4d78d8c26aa28b8cd8edbe"
@@ -438,6 +510,22 @@
       "acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
       "evidence": [
         {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+          "sha256": "386b893d378b3262e382f488d89bc29d10c850343685d5d2d31d2b4e3d4b1a25"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/barriers17.json",
+          "sha256": "08af0dc5f5fac91d2f40bdaa8c1b11f1d0db543bae569f869319c6ac28eb149f"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+          "sha256": "180aea777d55e677f10a34519575eb8d2e42fdcede9d7059b6ae7a3caad77f14"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+          "sha256": "64a7ba656f3e78757187191002935fec1c9ca26d60f8ef646b881230c431c3da"
+        },
+        {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
           "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
         },
@@ -463,6 +551,14 @@
       "status": "PASS",
       "acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
       "evidence": [
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+          "sha256": "8463065f8df7228d4ae860a0221aeb9c6e9f6c5dc37607128a053931e6b89db8"
+        },
+        {
+          "path": ".engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+          "sha256": "41657941336b0913e561b46407594c20b26fafcf3e08a106962ba5db8e50fb13"
+        },
         {
           "path": ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
           "sha256": "b31b68e1e1318a841e13d59887e31140e40e592cb31d9afb0b7d55561a6e50a4"
@@ -625,6 +721,239 @@
       "acceptance": "Explicitly authorized release, distribution smoke, backup and rollback acceptance in named environment.",
       "evidence": [],
       "evidence_valid": false
+    }
+  ],
+  "continuation_history": [
+    {
+      "run_id": "health-release-exercise-20260913-120836",
+      "source_baseline": "efe83ed44034ac19d58e1f96e0c3c7dac6a41eaf",
+      "scope_or_weight_changed": false,
+      "engineering_increment_pp": 0,
+      "ledger_correction_pp": 0,
+      "ledger_omission": "NONE_CONFIRMED",
+      "gates": [
+        {
+          "gate_id": "canonical_ingestion",
+          "original_acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "local_identity",
+          "original_acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "frozen_formula",
+          "original_acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "reference_engineering",
+          "original_acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "nutrition_label_local",
+          "original_acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "portable_core_parity",
+          "original_acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "edge_execution",
+          "original_acceptance": "Supabase CLI Edge handler -> canonical identity -> actual engine -> dedicated PostgreSQL passes security/error/resource tests; no host Python or remote fallback.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "postgres_recompute",
+          "original_acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "existing_browser",
+          "original_acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
+          "original_weight": 4,
+          "reason": "ALREADY_CREDITED",
+          "new_evidence": [
+            ".engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json"
+          ],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "overview_training_weekly",
+          "original_acceptance": "Full confirmed-version overview, training/body input,14-day aggregate and rolling7-day reporting UI regression; contracts alone insufficient.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "android_nondevice_build",
+          "original_acceptance": "Fresh JVM/lint plus legitimate intended Beta APK variant build with reviewed config; unit-only evidence cannot satisfy build.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "android_oem_device",
+          "original_acceptance": "OEM background bounded HTTP/retry/lock/swipe/process-death/idempotency and ingestion-to-score real-device E2E.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "ios_build",
+          "original_acceptance": "Confirmed iOS delivery route build/static acceptance on supported Apple toolchain; optional native helper scope decision remains visible.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "ios_device",
+          "original_acceptance": "iOS Shortcut/HealthKit permitted data -> canonical ingestion -> displayed output on device; platform scope explicitly confirmed.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "photo_model",
+          "original_acceptance": "Licensed model weights and real inference path, no fixture or external manual handoff substituted.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "photo_reference_accuracy",
+          "original_acceptance": "Licensed representative photo ground truth and predeclared evaluation; actual accuracy and limitations measured.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "food_reference",
+          "original_acceptance": "Food reference source/version/license, preparation/edible/portion conversions and values independently validated.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "new_score_validity",
+          "original_acceptance": "New domain formulas have justified populations/thresholds/weights and independent reference/real-world validation.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "remote_beta_oauth",
+          "original_acceptance": "Authorized remote Beta API/UI integration, real Google OAuth identity and tenant isolation smoke; local synthetic tokens insufficient.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "line_v4",
+          "original_acceptance": "Roadmap V4 verified LIFF Google link/unlink, account separation and weekly LINE notification acceptance.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "recovery_v2",
+          "original_acceptance": "Roadmap V2 full-body/local-muscle load, sleep features and user-feedback recovery acceptance; new adapter alone insufficient.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "guidance_v3",
+          "original_acceptance": "Roadmap V3 context-based intensity/body-part guidance, RPE/RIR and Deload/imbalance acceptance.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "personalization_v5",
+          "original_acceptance": "Roadmap V5 long-term personalization, explainable weight decisions and cross-domain guidance with validation.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "release_security_privacy",
+          "original_acceptance": "Pre-release privacy/security, data backup/retention/permissions and legal distribution review; high-risk findings closed.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        },
+        {
+          "gate_id": "authorized_release",
+          "original_acceptance": "Explicitly authorized release, distribution smoke, backup and rollback acceptance in named environment.",
+          "original_weight": 4,
+          "reason": "ACCEPTANCE_NOT_FULLY_MET",
+          "new_evidence": [],
+          "credit_change": 0
+        }
+      ],
+      "outside_current_baseline": [
+        "Exercise catalog rename/personal alias/archive/restore/owned-unused delete (new explicit Owner requirement)",
+        "Static packaging tool and Git/storage operations do not create product credit"
+      ]
     }
   ]
 }

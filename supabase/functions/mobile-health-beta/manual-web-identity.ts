@@ -24,6 +24,7 @@ export async function prepareManualRead(tx:any,identity:Json) {
 export async function prepareManualWrite(tx:any,identity:Json) {
   if(identity.kind==='web')await checkManualWebMapping(tx,identity,true);
 }
-export async function manualPrivilegedRead(sql:any,identity:Json,read:(tx:any)=>Promise<any>) {
-  return await sql.begin(async(tx:any)=>{await tx.unsafe('set transaction read only');if(identity.kind==='web')await checkManualWebMapping(tx,identity);return await read(tx);});
+export async function manualPrivilegedRead(sql:any,identity:Json,read:(tx:any)=>Promise<any>,snapshot=false) {
+  const work=async(tx:any)=>{await tx.unsafe('set transaction read only');if(identity.kind==='web')await checkManualWebMapping(tx,identity);return await read(tx);};
+  return snapshot?await sql.begin('isolation level repeatable read read only',work):await sql.begin(work);
 }

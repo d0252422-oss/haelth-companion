@@ -1,6 +1,111 @@
 # Multi-domain engine test report
 
-## 2026-09-13 — manual release/exercise readiness (current; new execution)
+## 2026-09-13 — actual Edge / PG17 / concurrency closure (current; new execution)
+
+RUN_ID=`health-edge-pg17-20260913-2210`.
+CURRENT_PHASE=`EDGE_PG17_CONCURRENCY_RELEASE_BLOCKER_CLOSURE`.
+STATUS=`PARTIAL_BLOCKED_NOT_PASS`; the actual CLI Edge/platform/OAuth gates remain
+unaccepted. This run continued canonical D at `a8f7a1cb2ce9fa7fe963c3e193231a4743243126`,
+not a repeat of `efe83ed`. Final scoped revision, commands, timestamps, exit codes,
+changed-source hashes and the selected latest report paths are in the external
+`D:/Dev/Evidence/health-edge-pg17-20260913-2210/REPORT.md` and `evidence-manifest.json`.
+Prior raw failures and original Android changes are retained, not included in commits.
+
+| Fresh suite / gate | Latest accepted result; no duplicate rerun counting |
+|---|---|
+| Python reference |134 tests PASS; `python-fresh.xml` |
+| Node |208 named cases +5 whole-file assertion entrypoints =213 JUnit rows PASS; `node-reviewed-junit.xml`; UI tests already included |
+| Deno portable/runtime |71 PASS (60 portable,8 auth/runtime,3 hosted contracts); `deno-reviewed-junit.xml`; original28 vectors nested, not28 extra tests |
+| Native PG17 SQL/engine/RLS |6 Deno integration cases PASS; `pg17-native-reviewed/native-junit.xml` |
+| Original Browser/default handler/PG17 AB |10 integrated gates PASS; latest source-bound report selected in manifest |
+| A-only schema/default handler/PG17 Browser |5 integrated gates PASS; B tables absent, Web-session new-context readback/isolation included |
+| Strict lifecycle concurrency |12 barriers on PG17.11 and12 on PG18.6; independent connections and observed DB blockers, not sleep-ordered HTTP |
+| Hosted SQL factory/PG17 |6 integrated gates PASS, including effective inheritance rejection and deterministic snapshot read/write barrier; not actual Edge/Supavisor |
+| Typecheck / targeted lint |Effective handler and PG17 test check PASS;11 changed runtime/support files lint PASS; builds/lint are not test cases |
+| Offline package |Actual frontend + hosted backend source graph, locked config, reviewed function CLI config and migration artifacts, default OFF; NOT an Edge-compiled/released bundle |
+| Actual CLI Edge + platform PG17 + Web; Supavisor/TLS; live OAuth; remote Beta |NOT_RUN_BLOCKED; ordinary Deno/native PG do not substitute |
+| Android native JVM/lint/APK/OEM ingestion; iOS; remote CI |NOT_RUN fresh this Web/API run. Prior Android60 is historical, not re-counted |
+
+Fresh cached test credit0; final unit/integration failures0 subject to the final manifest
+selection. Earlier failed attempts are preserved below and excluded from repeated totals.
+No one-number total mixes named tests, whole-file entries, integration gates or builds.
+Runtime cache used only for pinned dependencies; passing tests actually executed fresh.
+
+### New defects reproduced and fixed
+
+- Higher-isolation lifecycle transactions produced PostgreSQL40001/40P01 but the API
+  classified them as non-retryable400. They now return503 `DB_CONFLICT_RETRYABLE`;
+  the same immutable request succeeds or reaches the correct lifecycle rejection in
+  a fresh transaction. Four transaction orders each run at READ COMMITTED, REPEATABLE
+  READ and SERIALIZABLE. No lifecycle rule, index or formula was loosened.
+- Hosted first-login incorrectly showed the synthetic A/B selector; the actual Google
+  renderer is restored outside isolated local mode. Actual LINE account-link action
+  names remain on the existing auth provider. Two red/green route units do not perform
+  real login or linking. Unknown/manual data actions never fall back to Sheets.
+- A NOINHERIT login can still inherit through PG17 membership options. A real negative
+  fixture proved the old guard accepted it. The guard now rejects effective service_role
+  USAGE inheritance as well as superuser/BYPASSRLS/wrong login; fixture retest passes.
+- A real reader paused after queue SELECT while another transaction committed a meal
+  revision. The old snapshot returned revision2 with revision1 valid output. A bounded
+  REPEATABLE READ transaction now returns a consistent old snapshot; the next fresh
+  read sees revision2 and STALE until recompute. Native read RLS is retained. No mock
+  data, timing sleep, new score, changed golden values or widened tolerance.
+- Existing reference/delete harness assumed PG18 RESTRICT SQLSTATE23001. PG17's
+  upstream contract is23503; exact major-specific assertions preserve final SQL history.
+  The alleged older independent race used one pool connection and could deadlock its
+  own metadata probe; the corrected test uses two explicit connections and bounds.
+
+Root reproduced all final-review product defects; a separate Codex reviewer approved
+the bounded source fixes without writing files or claiming executed tests. See new
+`REVIEW.md`. Optional agent quota failures did not stop the main line or count as tests.
+
+### Boundaries, failures and reproducibility
+
+PostgreSQL17.11 official EDB portable tools were reviewed in an independent D directory.
+Real pgcrypto1.3/plpgsql1.0; pg_cron,pg_net,vault and outbound scheduler are absent/omitted,
+not fake implementations. Each migration is a transaction; deliberate failed DDL42P01
+rolled back while existing synthetic users stayed intact. Full Supabase extension,
+remote patch, pool host, role provisioning and platform CPU/memory limits remain unknown.
+The ZIP SHA/ETag and extracted-file hashes do not equal publisher-signature or full
+vulnerability certification; no new npm dependency or remote service was added.
+
+Low-role RLS uses authenticated NOSUPERUSER NOBYPASSRLS, own rows visible/other rows
+hidden; anon/write grants tested separately. Hosted SQL uses a dedicated NOINHERIT
+login with explicit SET ROLE service_role, so server canonical authorization is an
+independent security boundary. It is not claimed to be low-privilege Web RLS.
+
+Early red logs remain: lifecycle API retry failure; fixture input-contract mistakes;
+Node dependency/source-shape harness failures; Deno entry invoked without DB config;
+TypeScript timer/nullable test typing and package regex syntax; PG17 SQLSTATE mismatch;
+the original same-client test deadlock and subsequent occupied-port failure; final
+review login/link/role/snapshot counterexamples. One known synthetic held transaction
+was terminated to release that failed test, then only its verified owned PG cluster
+was normally stopped. No other project or retained DB was reset/deleted.
+
+An overbroad Deno lint invocation also found4 pre-existing cross-environment test-harness
+diagnostics (one prefer-const, three browser window references). They are not hidden
+as a zero-warning whole-repo lint PASS. Relevant11-file lint and browser-runner syntax
+passed. Original44 Android lint warnings remain historical, not measured afresh here.
+
+Native performance is synthetic 1 user/40 records/8 days with raw per-operation timings
+in `pg17-native-reviewed/native-performance.json`; lock tests use configured2s lock,
+10s statement and15s transaction limits, a local6s test ceiling. Actual measured values
+are in selected reports, not a production SLA or real-world algorithm accuracy claim.
+
+Docker29.7.2/Desktop4.88.1 and pinned CLI2.115.0: local endpoint verified, one normal
+start failed on `sailor-ingest.sock` Windows1920; one normal stop failed. Underlying ACL
+cause not proven. No reset, socket removal, elevation, image pull or remote fallback.
+The existing error dialog needs normal Quit and an authorized reviewed non-reset repair.
+
+New phone authorization allowed ADB/passive inspection: POCO X6 Pro Android16/SDK36,
+installed beta.12-debug code12 and APK hash recorded. Latest15:49Z sample shows input
+unrestricted. Old TERMINAL/PARTIAL work with zero request count is not a new baseline
+PASS. No Sync, install, network toggle, health payload or browser token extraction.
+Actual user-scoped Beta ingestion still needs explicit remote-write authority; online
+page unchanged. Photo model MISSING, food reference NOT_VERIFIED and new score validity
+EXPERIMENTAL_UNVALIDATED remain independent gates.
+
+## 2026-09-13 — manual release/exercise readiness (historical execution)
 
 RUN_ID=`health-release-exercise-20260913-120836`.
 CURRENT_PHASE=`MANUAL_SQL_RELEASE_READINESS_AND_EXERCISE_MANAGEMENT`.

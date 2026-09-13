@@ -4,6 +4,8 @@ import {randomUUID,createHash} from 'node:crypto';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {writeFile} from 'node:fs/promises';
+import postgres from 'postgres';
+async function fkBarrier(promise){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('FK_WRITER_BARRIER_TIMEOUT')),5000);})]);}finally{clearTimeout(timer);}}
 export async function runExerciseReleaseGates(h){
   const {pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,setPage}=h;
   const a=await loginCookie('A'),b=await loginCookie('B');
@@ -83,9 +85,21 @@ export async function runExerciseReleaseGates(h){
     await pg.admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},'fk-race')`;
     let inserted,commit;const ready=new Promise(r=>inserted=r),finish=new Promise(r=>commit=r),rid=randomUUID();
     const sid=randomUUID(),validBody={source:'MANUAL_WEB',recordId:rid,sessionId:sid,exerciseId:'fk-race',exerciseName:'SYNTHETIC FK race',muscleGroup:'腿',date:day,weight:0,reps:1,totalSets:1,totalVolume:0,durationMinutes:1,revision:1};
-    const writing=pg.admin.begin(async tx=>{await tx`insert into public.manual_workout_sets(canonical_user_id,record_id,exercise_id,session_id,local_date,revision,body) values(${A},${rid},'fk-race',${sid},${day},1,${tx.json(validBody)})`;inserted();await finish;});
-    await ready;const deleting=pg.admin.begin(async tx=>{await tx.unsafe("set local lock_timeout='4s'");await tx`delete from public.manual_exercise_preferences where canonical_user_id=${A} and exercise_id='fk-race'`;}).then(()=>({deleted:true}),e=>({code:e.code}));
-    commit();await writing;assert.equal((await deleting).code,'23001'); // ON DELETE RESTRICT: documented restrict_violation, not NO ACTION's FK violation.
+    const major=Number((await pg.admin`show server_version_num`)[0].server_version_num)/10000|0;
+    assert.ok([17,18].includes(major));
+    const fkWriter=postgres({...pg.config,username:'engine_owner',max:1}),fkDeleter=postgres({...pg.config,username:'engine_owner',max:1});
+    let writing,restricted;
+    try{
+    writing=fkWriter.begin(async tx=>{await tx.unsafe("set local idle_in_transaction_session_timeout='5s'");await tx`insert into public.manual_workout_sets(canonical_user_id,record_id,exercise_id,session_id,local_date,revision,body) values(${A},${rid},'fk-race',${sid},${day},1,${tx.json(validBody)})`;inserted();await finish;});
+    writing.catch(()=>{}); // Result is still awaited below; avoid unhandled rejection during fault recovery.
+    await fkBarrier(ready);
+    const deleting=fkDeleter.begin(async tx=>{await tx.unsafe("set local lock_timeout='4s'");await tx`delete from public.manual_exercise_preferences where canonical_user_id=${A} and exercise_id='fk-race'`;}).then(()=>({deleted:true}),e=>({code:e.code}));
+    // Version-specific upstream ri_ReportViolation: PG17 uses FK23503; PG18 distinguishes RESTRICT23001.
+    // See postgres/postgres REL_17_STABLE and REL_18_STABLE src/backend/utils/adt/ri_triggers.c.
+    commit();await writing;restricted=await deleting;assert.equal(restricted.code,major===17?'23503':'23001');
+    }finally{commit();await Promise.allSettled([writing]);await Promise.all([fkWriter.end({timeout:2}),fkDeleter.end({timeout:2})]);}
+    assert.equal((await pg.admin`select record_id from public.manual_workout_sets where record_id=${rid}`).length,1);
+    report.restrict_sqlstate={server_major:major,actual:restricted.code,contract:'referenced preference cannot be deleted; existing history retained',upstream:'https://github.com/postgres/postgres/blob/REL_'+major+'_STABLE/src/backend/utils/adt/ri_triggers.c'};
     report.training_lock={database:pg.evidence.database,version:pg.evidence.binary_version,configured_lock_ms:2000,observed_http_ms:elapsed,scope:'LOCAL_OBSERVATION_NOT_ONLINE_SLA'};
     record('Atomic invalid session rollback, bounded lock retry, concurrent replay, API race and SQL FK reference/delete race');
   });

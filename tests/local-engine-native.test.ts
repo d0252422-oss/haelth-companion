@@ -114,7 +114,7 @@ Deno.test("real signed identity / expiry / forged identity / low-privilege RLS",
     assert.equal(grants[0].anon_rpc, false);
     assert.equal(grants[0].mapped_read, true);
     await Deno.writeTextFile(
-      ".engine-artifacts/blocker-closure/rls.json",
+      (Deno.env.get('LOCAL_ENGINE_NATIVE_EVIDENCE_DIR')||'.engine-artifacts/blocker-closure')+'/rls.json',
       JSON.stringify({ roles, protectedCount, grants }, null, 2),
     );
     await runtime.mutate(a, {
@@ -381,7 +381,7 @@ Deno.test("native PostgreSQL health ingestion -> existing queue -> all other dom
       shift(day, -27)
     } and ${day}`;
     await Deno.writeTextFile(
-      ".engine-artifacts/blocker-closure/native-performance.json",
+      (Deno.env.get('LOCAL_ENGINE_NATIVE_EVIDENCE_DIR')||'.engine-artifacts/blocker-closure')+'/native-performance.json',
       JSON.stringify(
         {
           environment: {

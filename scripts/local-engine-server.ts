@@ -109,9 +109,9 @@ const server = Deno.serve(
         headers: { ...headers, "content-type": "text/html; charset=utf-8" },
       });
     }
-    if (url.pathname === "/scripts/local-engine-web.js") {
+    if (["/scripts/local-engine-web.js","/scripts/manual-sql-config.js"].includes(url.pathname)) {
       return new Response(
-        await Deno.readTextFile("scripts/local-engine-web.js"),
+        await Deno.readTextFile(url.pathname.slice(1)),
         { headers: { ...headers, "content-type": "text/javascript" } },
       );
     }

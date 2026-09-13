@@ -53,7 +53,28 @@ credits merely from a cached report. Incomplete scope is never rounded to100%.
 
 Required first-line reporting is now saved in effective root `AGENTS.md`.
 
-## 2026-09-13 release/exercise continuation — new evidence, unchanged denominator
+## 2026-09-13 Edge/PG17 closure — new evidence, unchanged denominator
+
+Run `health-edge-pg17-20260913-2210` continues `a8f7a1c`, not `efe83ed` again.
+Native PG17.11 migration/core SQL, strict lifecycle barriers, actual default-handler
+Browser regressions and a real hosted SQL factory were exercised with new synthetic
+data. Review also reproduced and fixed hosted login/auth routing, inherited membership
+guard and mixed-revision snapshot defects. Their fixed regression strengthens accepted
+local gates; it does not grant a second weight or imply remote availability.
+
+The current per-leaf accounting preserves all25 original acceptance conditions and
+weights; previous accounting is retained in `continuation_history`. Eight local leaves
+remain ALREADY_CREDITED,17 remain ACCEPTANCE_NOT_FULLY_MET. Added exercise management
+remains OUTSIDE_CURRENT_BASELINE; LEDGER_OMISSION remains NONE_CONFIRMED. Engineering
+increment0.0pp; ledger correction0.0pp. No scope change or new progress system.
+
+Actual CLI Edge remains blocked by an inaccessible Docker startup socket. Ordinary
+PG17 lacks the full Supabase platform extensions; true OAuth/pool/platform acceptance
+is not credited. Connected POCO beta.12 and passive metadata are not the OEM ingestion
+Gate. Phone online page has not changed. Same calculation:100 ×32/100 =32.0% known
+scope; overall UNKNOWN. See the new external REPORT/manifest and current test report.
+
+## 2026-09-13 release/exercise continuation — historical execution
 
 Run `health-release-exercise-20260913-120836`, starting at `efe83ed`, produced new
 real-handler, PostgreSQL18.6, verified Web-session mapping and exercise Browser

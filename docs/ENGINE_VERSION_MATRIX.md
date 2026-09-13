@@ -1,5 +1,29 @@
 # Engine version matrix
 
+## 2026-09-13 PG17 and hosted-provider continuation
+
+Run `health-edge-pg17-20260913-2210` reuses all application lock versions unchanged.
+Effective function deno.json now explicitly points to the tracked reviewed lock;
+the older untracked generated deno.lock is preserved but not used/shipped. Native
+PG17.11-3 is a separate test tool, not a new deployed service or downgrade of PG18.
+Official provenance, multipart ETag, archive SHA256, every extracted-file hash,
+licenses and three actual --version results are in `pg17-tools/pg17-tool-manifest.json`.
+Unsigned/no official publisher ZIP SHA and native third-party advisory/SBOM coverage
+remain limitations. No full new dependency vulnerability scan or zero-risk claim.
+
+Actual native server17.11 extensions are pgcrypto1.3 and plpgsql1.0; pg_cron/pg_net/
+supabase_vault unavailable, outbound scheduler not rehearsed. General PG17 native
+SQL/schema/role acceptance must not be called full Supabase platform PASS.
+Docker29.7.2/Desktop4.88.1, CLI2.115.0, Deno2.9.6/TS6.0.3 unchanged; actual Edge image
+version/bundle execution unavailable after the single failed ordinary startup.
+No image pulls, alternative runtime install or hosted fallback. Node24.19/Python3.12.14.
+
+No new formula, weights, domain or health-score-v1.0 mutation. Code licenses, model
+weights and food reference licenses remain separate. PHOTO_MODEL_IMPLEMENTATION=MISSING;
+FOOD_REFERENCE_VALIDATION=NOT_VERIFIED; NEW_SCORE_VALIDITY=EXPERIMENTAL_UNVALIDATED.
+PG17 error-code contract is version-specific from official ri_ReportViolation source;
+40001/40P01 return retryable503 through the real runtime, not arbitrary tolerance changes.
+
 ## 2026-09-13 manual release/exercise review
 
 Run `health-release-exercise-20260913-120836` reuses the pinned dependencies below;

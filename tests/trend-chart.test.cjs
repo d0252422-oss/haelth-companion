@@ -124,6 +124,8 @@ assert.match(html, /--radius-card:15px/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .find(value => value.trim());
+// Match the existing page's shared external script dependency before its inline app.
+vm.runInContext(fs.readFileSync('scripts/local-engine-web.js','utf8'), context, { filename:'local-engine-web.js' });
 vm.runInContext(script, context, { filename: 'index.inline.js' });
 
 function evaluate(expression) {

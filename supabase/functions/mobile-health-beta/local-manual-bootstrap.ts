@@ -12,7 +12,7 @@ export function validateLocalManualConfig(config: Record<string, any>, env: (nam
   const url=new URL(env('SUPABASE_URL')||'https://invalid.invalid');
   if(env('HEALTH_ENGINE_LOCAL_ONLY')!=='1'||env('DENO_DEPLOYMENT_ID')||env('HEALTH_MANUAL_EDGE_REHEARSAL')!=='1'
     ||url.protocol!=='http:'||url.pathname!=='/'||url.username||url.password||url.search||url.hash||!(/^(127\.0\.0\.1|localhost|host\.docker\.internal|supabase_kong_[a-z0-9_-]+)$/.test(url.hostname))
-    ||!['127.0.0.1','host.docker.internal'].includes(config.host)||![57483,57484].includes(config.port)
+    ||!['127.0.0.1','host.docker.internal'].includes(config.host)||![57483,57484,57485].includes(config.port)
     ||!/^health_engine_[a-f0-9]{32}$/.test(config.database)||config.username!=='service_role'
     ||config.path||config.socket||config.ssl||config.password)throw Error('UNSAFE_LOCAL_EDGE_CONFIGURATION');
   return {host:config.host,port:config.port,database:config.database,username:config.username};

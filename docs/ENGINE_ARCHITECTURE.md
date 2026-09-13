@@ -1,5 +1,184 @@
 # Multi-domain engine architecture (non-production)
 
+## 2026-09-13 — Edge/PG17/concurrency release closure (current)
+
+Run `health-edge-pg17-20260913-2210`, baseline `a8f7a1c`, same canonical D checkout.
+This section supersedes the older inert/local-only provider descriptions, **not**
+the historical execution evidence. No Git isolation, relocation, engine rewrite,
+formula change, production/Beta write or new application dependency was performed.
+
+### New hosted connection, still OFF by default
+
+| Edge in the call path | Actual file / function |
+|---|---|
+| Original forms, immutable retry envelopes and render guards | `index.html:sessionPost`; `scripts/local-engine-web.js:localEngineRequest` |
+| Public default-OFF environment binding | `scripts/manual-sql-config.js`; `hostedManualConfig/hostedManualNamespace` |
+| Existing verified-session transport, no Sheets data fallback | `hostedManualFetch/ensureHostedManualIdentity`; HTTPS Edge endpoint, bearer header, credentials omitted |
+| Real function and SDK middleware | `mobile-health-beta/index.ts:default.fetch`, exact `/v1/engine/web` route before unrelated mobile callback config |
+| Separate hosted configuration and SQL factory | `hosted-manual-bootstrap.ts:validateHostedManualConfig/hostedManualBootstrap/createHostedManualRuntime/scopedManualSql` |
+| Verified Web subject/email to existing canonical ID | `index.ts:verifyWebIdentity` then `manual-web-identity.ts:resolveVerifiedManualWebIdentity/checkManualWebMapping` |
+| Shared semantics / real SQL / portable calculation | `LocalEngineRuntime`, `ManualBodyLocalStore`, optional `ManualTrainingLocalStore`, `PortableEngineRuntime` |
+| Return / recovery | persisted records and receipts -> same provider -> original Web; cache namespace includes endpoint/release/schema/canonical ID |
+
+Hosted and synthetic-local environments are different constructors, not an allowRemote
+override. All original local target guards remain. Hosted manual identity is Web-only;
+missing/native session-kind is denied. Existing Apps Script login/profile/logout stays
+in that explicit auth path; its token is **not** asserted to be a Supabase Auth JWT.
+Manual data actions never fall back to Apps Script on error or unsupported action.
+The server never accepts a client user ID and never calls the account-linking RPC.
+Mapping changes are rechecked inside every data transaction; write mapping rows are
+locked. Missing/conflicting/inactive mappings fail closed. No production test issuer
+or synthetic account is imported by the hosted path.
+
+Hosted configuration requires exact project-bound Supabase URL, reviewed transaction
+pool host, port6543/postgres and `health_manual_api.<project_ref>` username, verified TLS,
+an exact HTTPS Web origin and Apps Script verifier URL. No query-string URI overrides,
+localhost target, alternate credential role or disabled TLS is accepted. Configuration
+fingerprint changes fail closed. This validates a proposed connection contract, not the
+existence of a remote login or permission to use it. No secret is in frontend/artifacts.
+
+Reuse postgres3.4.8 with `prepare:false`, max2, connect5s. Every tag, unsafe, begin,
+RPC and compute query uses a transaction-scoped facade. The dedicated proposed login
+is `NOINHERIT NOSUPERUSER NOBYPASSRLS`, explicitly allowed SET ROLE service_role;
+the facade verifies these properties and sets role and bounds locally per transaction.
+Lock2s, statement10s, idle-in-transaction10s, transaction15s; admission remains bounded.
+The role check also has SQL timeouts. This is **privileged service_role execution**,
+not least-privilege Web RLS. Server canonical authorization is separately tested;
+native authenticated NOBYPASSRLS tests remain distinct. No Data API service key is
+treated as a SQL password. Actual Supavisor pooling/TLS remains a separate unrun Gate.
+
+Final read-only review found and reproduced additional connection defects. Hosted
+first-login now retains the original Google renderer (only local mode shows synthetic
+A/B login); actual `completeLineGoogleLink` and `linkLineIdentity` actions stay on the
+existing verified-session auth provider, never the SQL data action list. Those route
+unit tests do not execute OAuth or account linking. The SQL guard now rejects effective
+service_role inheritance via `pg_has_role(...,'USAGE')`, even when the login's
+`rolinherit` is false: PG17 membership options are independently checked. No remote
+role was changed. See [PG17 privilege inquiry](https://www.postgresql.org/docs/17/functions-info.html).
+
+Snapshot queue/input/head/history reads now share one bounded REPEATABLE READ,
+READ ONLY transaction. Native data reads still SET LOCAL ROLE authenticated and
+use RLS; verified Web mapping remains checked. A deterministic test pauses after the
+real queue SELECT, commits a real meal revision on another connection, then releases
+the reader. The in-flight result must retain the old consistent snapshot; the next
+read must show the new revision with STALE outputs until recomputed. This fixes a
+reproduced mixed-revision response without changing scores, tolerances or migrations.
+See [PG17 transaction isolation](https://www.postgresql.org/docs/17/sql-set-transaction.html).
+
+New ingress helper `manual-request-body.ts` limits input to1MiB and10s, cancelling a
+stalled reader so it cannot hold admission forever. PostgreSQL40001/40P01 now return
+503 `DB_CONFLICT_RETRYABLE` instead of non-retryable400. Stable request IDs may be
+retried in a new transaction. No lock model, golden result or numerical tolerance changed.
+
+### PG17, concurrency and platform boundary
+
+Native PostgreSQL17.11-3 was obtained from official EDB HTTPS using a separate reviewed
+portable directory, verified archive multipart ETag, SHA256, extraction bounds and
+three binary version probes. No installer/service/admin change or PG18 data-directory
+reuse. It is unsigned and no publisher ZIP SHA was found: this is not signature/SBOM
+or zero-vulnerability certification. `pgcrypto1.3` and `plpgsql1.0` are real extensions.
+Native synthetic auth contract tables are explicitly fixtures, not Supabase Auth.
+Unavailable pg_cron/pg_net/vault and outbound scheduler are omitted, never replaced
+with fake functions. Native PG17 core SQL PASS cannot prove full-platform extension parity.
+
+`test-exercise-lifecycle-barriers.ts` uses independent connections and explicit Promise
+barriers; pg_backend_pid/pg_blocking_pids prove who blocked whom before COMMIT. Four
+orders run at READ COMMITTED, REPEATABLE READ and SERIALIZABLE on PG17 and PG18:
+archive->reference rejects, reference->archive preserves/editable history, reference->
+delete rejects, delete->reference rejects. Receipt replay, new-request lifecycle checks,
+foreign-key final state, personal archive scope and retry after40001 are covered.
+Initial PG18 higher-isolation API failure remains evidence; final status is in REPORT.
+
+Upstream `ri_ReportViolation` emits FK23503 for RESTRICT in PG17 and a distinct23001
+in PG18. The existing browser harness now declares the exact per-major contract and
+checks history remains. This is not relaxed acceptance: see the official source
+[PG17](https://github.com/postgres/postgres/blob/REL_17_STABLE/src/backend/utils/adt/ri_triggers.c)
+and [PG18](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/utils/adt/ri_triggers.c).
+The older harness's alleged independent race used one pooled connection; its new SQL
+race uses two explicitly separate clients with bounds. Strict four-order evidence is
+the dedicated barrier runner, not this supplementary browser-harness race.
+
+Release A excludes the B migration entirely and denies all B actions plus workout
+refresh before B SQL. Shared B store construction has no SQL side effects. A-only
+factory/database/browser tests assert absent B tables, genuine body/meal persistence
+and new-context verified synthetic Web read-back. Release B requires its own additive
+migration/capability and acceptance; hiding UI alone is not isolation. Raw body/workout
+still say records saved, analysis not enabled/no scheduled job. No new score or formula.
+
+### Deliverable and remaining activation wiring
+
+`prepare-manual-beta-package.mjs <new-output> --release=A` now packages the actual
+frontend, hosted backend source graph, versioned migrations, effective locked function
+config and byte-identical frozen score implementation at its real relative import path.
+It checks every literal relative backend import. The frozen JS under fixtures is runtime
+calculation code, not fixture responses; synthetic issuer/identity fixtures are excluded.
+The package also derives a single-function `supabase/config.toml` from the checked-in
+function block, preserving custom-session gateway settings, PG17 major and seeds OFF.
+It does not copy unrelated local service settings. Actual local startup still requires
+a separate new unique project/ports configuration and the blocked Edge acceptance.
+All flags remain OFF. Isolated offline Deno check is **not** an actual CLI Edge compiled
+bundle, nor proof of paid/public production capability. CLI serve/deploy help was checked
+at pinned2.115.0; its upgrade suggestion was not followed.
+
+Real local Docker startup failed on `sailor-ingest.sock` (Windows1920); one normal start
+and one normal stop failed. No socket/ACL manipulation, runtime reset, image pull,
+new service or remote fallback. Actual CLI Edge + Supavisor + Web and platform resource
+measurements remain blocked. Docker's existing error dialog must be Quit normally;
+further diagnosis/repair of the exact socket requires separate operator authorization,
+not speculative reset commands. See the external run's Docker report.
+
+The documented Beta target remains project `health-companion-beta`, ref
+`uavimjgccigpbwqmfkhh`, function `mobile-health-beta`; proposed isolated Web entry
+`https://d0252422-oss.github.io/health-companion-beta/manual-preview/` (not authorized or
+freshly verified remote state). Backend manual origin would be
+`https://d0252422-oss.github.io`, not the full subpath. Preserve current root/production
+and all old manual data. Do not deploy just because a source package now exists.
+
+Required separate authorization, in dependency order:
+
+1. Resolve existing Docker socket access after a reviewed non-reset diagnosis. Then
+   inventory image/storage requirements and run a new isolated actual CLI Edge + PG17
+   + verified local auth + original Web acceptance; real pool/TLS and extension tests.
+2. Read-only target schema/major/patch/extensions/role/identity/provider inventory and
+   compare migration hashes. Remote patch, pool host, approved verifier and role are
+   currently UNKNOWN; no automatic `db push`, default migration replay or identity backfill.
+3. Authorize only missing additive A schema and reviewed custom SQL login/membership,
+   secret placement and backend manual settings for the named Beta project. Role DDL
+   proposal: health_manual_api LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS with explicit
+   service_role SET membership, INHERIT FALSE; credential supplied through approved secret
+   management, never generated/pasted in a report. Broad privilege risk needs review.
+4. After required checks, separately authorize deployment of that single function and
+   proposed Web subpath. Prepared syntax (NOT RUN): `supabase functions deploy
+   mobile-health-beta --project-ref uavimjgccigpbwqmfkhh`. Do not use --prune, --use-api
+   as a way around the local Gate, deploy all functions, or change existing gateway auth
+   without reviewing the custom verifier path. Existing JWT verification settings must
+   match this function's custom verified-session contract; no naked auth bypass.
+5. Authorize named Beta synthetic accounts and a bounded data manifest for remote
+   create/read/update/replay/delete acceptance; real Google/LINE login and mapping
+   performed by the account owner, not extracted browser tokens. Then enable the A
+   public configuration/backend flags together. No automatic account linking/import,
+   dual-write or Sheets fallback. B remains disabled until separately accepted.
+6. Owner's later message permits physical-device checks, but does not explicitly revoke
+   the no-remote-write boundary. ADB/beta.12/passive metadata were checked without Sync.
+   A true POCO network/retry/ingestion Gate additionally needs explicit user-scoped Beta
+   ingestion authorization and a legitimate pending work trigger; never repeat manual
+   Sync to contaminate evidence or claim old PARTIAL metadata is a new PASS.
+
+Stop rollout on cross-user access, identity mismatch, unbounded requests, lost receipts,
+partial SQL transactions, changed frozen scores or unexplained stale output. Rollback
+first stops new SQL writes (backend flag OFF) and disables the new preview entry; restore
+last reviewed frontend/function without dropping schema, clearing receipts or deleting
+new records. Preserve a compatible SQL read/export path and all new rows/tombstones;
+never silently redirect new SQL data to Sheets. Snapshot/retention access must be approved.
+Hosting/pool resource and cost impact remains UNKNOWN until the authorized target review;
+no new paid service was introduced or presumed free.
+
+References reviewed via the Supabase skill:
+[connection/pool modes](https://supabase.com/docs/guides/database/connecting-to-postgres),
+[Edge Postgres driver](https://supabase.com/docs/guides/functions/connect-to-postgres),
+[custom auth](https://supabase.com/docs/guides/functions/auth), and current changelog
+entries on grants, extension pins and self-hosted PG17. No tool upgrade or remote mutation.
+
 ## 2026-09-13 — manual release readiness and exercise management (current)
 
 Run `health-release-exercise-20260913-120836`, continuing `efe83ed` in the

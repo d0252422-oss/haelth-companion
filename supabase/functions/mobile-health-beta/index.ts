@@ -37,6 +37,10 @@ export async function dispatchLocalEngine(request: Request): Promise<Response | 
 export default {
   fetch: withSupabase({ auth: "none", cors: "disabled", supabaseOptions:{global:{fetch:boundedSdkFetch}} }, async (request, ctx) => {
     const origin = request.headers.get("origin") ?? "";
+    // Manual Web has an independent, default-OFF provider; never uses the mobile auth callback guard.
+    if(relativePath(new URL(request.url).pathname)==='/v1/engine/web'&&Deno.env.get('HEALTH_ENGINE_LOCAL_ONLY')!=='1'){
+      return await(await import('./hosted-manual-bootstrap.ts')).hostedManualBootstrap(request);
+    }
     const localManual = Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") === "1" && !Deno.env.get("DENO_DEPLOYMENT_ID")
       && relativePath(new URL(request.url).pathname) === "/v1/engine/web";
     if (localManual) {

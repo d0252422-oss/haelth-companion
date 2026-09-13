@@ -16,6 +16,8 @@ const base = 'http://127.0.0.1:57841';
 const phase = process.env.MANUAL_SQL_EVIDENCE_DIR || 'D:/MigrationReports/dual-project/20260912-2035/git-manual-sql-20260913-020110';
 const runId = randomUUID(), evidence = path.join(phase, 'manual-sql-e2e-' + runId);
 const releaseExercise = process.argv.includes('--release-exercise');
+const releaseA=process.argv.includes('--release-a');
+assert.ok(!(releaseA&&releaseExercise),'Choose independent Release A or full AB');
 const privateTraceRoot = process.env.MANUAL_SQL_PRIVATE_TRACE_DIR;
 assert.ok(privateTraceRoot && path.isAbsolute(privateTraceRoot), 'Explicit private trace retention root required');
 assert.ok(path.isAbsolute(phase) && ['d:\\migrationreports\\','d:\\dev\\evidence\\'].some(root=>path.resolve(phase).toLowerCase().startsWith(root)), 'External D evidence only');
@@ -37,6 +39,7 @@ for (const file of ['index.html', 'scripts/local-engine-web.js', 'scripts/local-
 for (const file of (await readdir('supabase/migrations')).filter(name => name.endsWith('.sql')).sort()) report.source_hashes['supabase/migrations/' + file] = hash(await readFile('supabase/migrations/' + file));
 for (const file of ['supabase/functions/mobile-health-beta/manual-training-local.ts','supabase/functions/mobile-health-beta/local-manual-bootstrap.ts','supabase/functions/mobile-health-beta/manual-web-identity.ts','supabase/functions/mobile-health-beta/bounded-auth-fetch.ts','scripts/exercise-release-gates.mjs','scripts/check-manual-web-revocation.ts']) report.source_hashes[file]=hash(await readFile(file));
 report.command += releaseExercise ? ' --release-exercise' : '';
+report.command += releaseA ? ' --release-a' : '';
 report.handler_path='existing mobile-health-beta default.fetch -> @supabase/server middleware -> signed local authority -> canonical PostgreSQL mapping -> real SQL/portable engine; NOT actual Edge';
 const record = (step, detail = {}) => { report.steps.push({ step, at: now(), ...detail }); console.log('PASS ' + step); };
 async function gate(name, fn) {
@@ -96,15 +99,16 @@ async function expectedDialog(p, kind, action, expectedId) {
 }
 async function customRange(p, start, end) { await p.locator('#global-range').selectOption('custom'); await p.locator('#global-start-date').fill(start); await p.locator('#global-end-date').fill(end); await p.locator('#date-range-form button[type="submit"]').click(); await p.locator('#date-range-backdrop').waitFor({ state: 'hidden' }); }
 try {
-  await portFree(57841); await portFree(57483);
+  const pgPort=process.env.LOCAL_ENGINE_PG_MAJOR==='17'?57485:57483;
+  await portFree(57841); await portFree(pgPort);
   console.log('START dedicated PostgreSQL initialization ' + now());
-  pg = await createLocalPostgres({ port: 57483 }); report.database = pg.evidence;
+  pg = await createLocalPostgres({ port: pgPort,release:releaseA?'A':'AB' }); report.database = pg.evidence;
   console.log('READY dedicated PostgreSQL ' + now());
   assert.equal(pg.config.host, '127.0.0.1'); assert.match(pg.config.database, /^health_engine_[a-f0-9]{32}$/);
   const config = path.join(evidence, 'runtime-config.json'); await writeFile(config, JSON.stringify(pg.config));
   const childEnv = { ...process.env, HEALTH_ENGINE_LOCAL_ONLY: '1' }; delete childEnv.ALGORITHM_PYTHON;
   childEnv.HEALTH_EXERCISE_MANAGEMENT_LOCAL=releaseExercise?'1':'0';
-  childEnv.HEALTH_MANUAL_WEB_SESSION_LOCAL=releaseExercise?'1':'0';
+  childEnv.HEALTH_MANUAL_WEB_SESSION_LOCAL=(releaseExercise||releaseA)?'1':'0';
   const denoExecutable = process.env.DENO_EXECUTABLE || 'deno';
   const runtimeArgs = ['run', '--cached-only', '--frozen-lockfile', '--node-modules-dir=none', '--config', 'config/engine-local.deno.json', '--allow-env', '--allow-read', '--allow-sys', '--allow-net=127.0.0.1', 'scripts/local-engine-server.ts', config];
   report.tools.deno = execFileSync(denoExecutable, ['--version'], { encoding: 'utf8', timeout: 10000, windowsHide: true, env: childEnv }).trim();
@@ -246,6 +250,18 @@ try {
     await page.reload(); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); assert.equal(await page.locator(`[data-meal-record-id="${id}"]`).count(), 0); assert.equal((await http(a, 'getNutritionRecords', { startDate: date, endDate: date })).data.length, 0);
     ({ context, page } = await browserContext('B')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); assert.equal(await page.locator('[data-meal-record-id]').count(), 0);
     await page.screenshot({ path: path.join(evidence, 'historical-nutrition-deleted-B-isolation.png'), fullPage: true }); record('Historical meal confirmed delete/reload/B isolation; missing data not fabricated');
+  });
+  if(releaseA)await gate('release_A_no_exercise_schema_web_session_readback',async()=>{
+    for(const table of ['manual_exercise_catalog','manual_exercise_preferences','manual_workout_sets'])assert.equal((await pg.admin`select to_regclass(${'public.'+table}) as object`)[0].object,null);
+    for(const [name,user]of Object.entries(subjects).filter(([name])=>['A','B'].includes(name)))await pg.admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${hash('web-session-'+user.auth)},${hash(name.toLowerCase()+'@example.invalid')},${user.canonical})`;
+    const a=await loginCookie('A',{kind:'web'}),b=await loginCookie('B',{kind:'web'}),date=shift(-3);
+    const saved=await http(a,'upsertBodyRecord',{date,weight:84,clientRequestId:randomUUID()});assert.equal(saved.ok,true);
+    for(const action of ['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus'])assert.equal((await http(a,action)).error,'EXERCISE_MANAGEMENT_DISABLED');
+    assert.equal((await http(a,'refreshDerivedData',{recordType:'workout'})).error,'EXERCISE_MANAGEMENT_DISABLED');
+    ({context,page}=await browserContext('web_a'));await bodyScreen(page);await weightEditor(page,date);assert.equal(await page.locator('#weight-input').inputValue(),'84');assert.equal(await page.locator('#exercise-management').count(),0);
+    assert.equal((await http(b,'getBodyRecords',{date})).data.length,0);
+    ({context,page}=await browserContext('web_b'));await bodyScreen(page);await weightEditor(page,date);assert.equal(await page.locator('#weight-input').inputValue(),'');
+    report.release_A_independence={exercise_tables:'ABSENT',exercise_actions:'DENIED_BEFORE_SQL',body_meal_browser:'PASS',verified_web_session_new_context:'PASS_SYNTHETIC_NOT_OAUTH'};
   });
   if(releaseExercise)await (await import('./exercise-release-gates.mjs')).runExerciseReleaseGates({pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,customRange,weightEditor,bodyScreen,setPage:value=>{page=value;}});
   assert.deepEqual(report.page_errors, []); assert.deepEqual(report.blocked_external_requests, []);

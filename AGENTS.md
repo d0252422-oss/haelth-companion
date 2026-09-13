@@ -37,6 +37,10 @@ because compatible code exists.
 Use only new, dedicated loopback synthetic PostgreSQL clusters. The legacy bundled
 18.4 binary is retained for provenance but must not be executed: set
 `LOCAL_ENGINE_PG_BIN` to a reviewed official PostgreSQL 18.6+ portable bin directory.
+The explicitly authorized PG17 compatibility track may use reviewed official 17.11+
+with `LOCAL_ENGINE_PG_MAJOR=17`, its own new data/database and isolated available port
+(normally 57485; the standalone native runner uses 57484). Never point PG17 at a PG18
+data directory or equate ordinary PostgreSQL with all Supabase platform extensions.
 Do not reset/clear existing databases. Preserve raw run evidence and failed attempts;
 manifest commands, times, exit codes and source hashes. Classify fresh/cached/not-run
 separately; repeated runs and nested golden vectors are not additional test cases.

@@ -5,7 +5,7 @@ import {LocalEngineRuntime} from '../supabase/functions/mobile-health-beta/local
 import {resolveVerifiedManualWebIdentity} from '../supabase/functions/mobile-health-beta/manual-web-identity.ts';
 import subjects from '../fixtures/engine-local-identities.json' with {type:'json'};
 const config=JSON.parse(await Deno.readTextFile(Deno.args[0]));
-if(Deno.env.get('HEALTH_ENGINE_LOCAL_ONLY')!=='1'||config.host!=='127.0.0.1'||![57483,57484].includes(config.port)||!/^health_engine_[a-f0-9]{32}$/.test(config.database)||config.username!=='service_role')throw Error('UNSAFE_TEST_DATABASE');
+if(Deno.env.get('HEALTH_ENGINE_LOCAL_ONLY')!=='1'||config.host!=='127.0.0.1'||![57483,57484,57485].includes(config.port)||!/^health_engine_[a-f0-9]{32}$/.test(config.database)||config.username!=='service_role')throw Error('UNSAFE_TEST_DATABASE');
 const admin=postgres({...config,username:'engine_owner',max:1});
 const runtime=new LocalEngineRuntime(config,()=>Promise.reject(Error('HTTP_AUTH_NOT_PART_OF_REPOSITORY_TEST')));
 const before=(await admin`select status from public.users where id=${subjects.A.canonical}`)[0].status;
