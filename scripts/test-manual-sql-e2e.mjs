@@ -39,6 +39,10 @@ for (const file of ['index.html', 'scripts/local-engine-web.js', 'scripts/local-
 for (const file of (await readdir('supabase/migrations')).filter(name => name.endsWith('.sql')).sort()) report.source_hashes['supabase/migrations/' + file] = hash(await readFile('supabase/migrations/' + file));
 for (const file of ['supabase/functions/mobile-health-beta/manual-training-local.ts','supabase/functions/mobile-health-beta/local-manual-bootstrap.ts','supabase/functions/mobile-health-beta/manual-web-identity.ts','supabase/functions/mobile-health-beta/bounded-auth-fetch.ts','scripts/exercise-release-gates.mjs','scripts/check-manual-web-revocation.ts']) report.source_hashes[file]=hash(await readFile(file));
 report.source_hashes['supabase/functions/mobile-health-beta/manual-daily-read.ts']=hash(await readFile('supabase/functions/mobile-health-beta/manual-daily-read.ts'));
+report.source_hashes['scripts/web-view-state.js']=hash(await readFile('scripts/web-view-state.js'));
+report.source_hashes['scripts/manual-ux-browser-gates.mjs']=hash(await readFile('scripts/manual-ux-browser-gates.mjs'));
+report.source_hashes['scripts/manual-observation-browser-gates.mjs']=hash(await readFile('scripts/manual-observation-browser-gates.mjs'));
+for(const file of ['scripts/manual-observation-web.js','scripts/manual-observation-pg-gates.mjs','supabase/functions/mobile-health-beta/manual-observations-local.ts','supabase/functions/mobile-health-beta/manual-observation-projection.ts','supabase/functions/mobile-health-beta/score-bridge.ts'])report.source_hashes[file]=hash(await readFile(file));
 report.command += releaseExercise ? ' --release-exercise' : '';
 report.command += releaseA ? ' --release-a' : '';
 report.handler_path='existing mobile-health-beta default.fetch -> @supabase/server middleware -> signed local authority -> canonical PostgreSQL mapping -> real SQL/portable engine; NOT actual Edge';
@@ -221,7 +225,7 @@ try {
 
   await gate('browser_nutrition_history_crud', async () => {
     const date = shift(-40), food = 'MANUAL SQL SYNTHETIC LABEL ' + runId.slice(0, 8);
-    ({ context, page } = await browserContext('A')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); await page.locator('#add-meal').click();
+    ({ context, page } = await browserContext('A')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="records-center"]').click(); await page.locator('#add-meal').click();
     await page.locator('#meal-date').fill(date); await page.locator('#meal-food').fill(food); await page.locator('#meal-time').fill('12:00'); await page.locator('#meal-label-mode').check(); await page.locator('#meal-weight-grams').fill('150'); await page.locator('#meal-reference-source').fill('SYNTHETIC LABEL v1; arithmetic only');
     for (const [name, value] of Object.entries({ calories: 200, protein: 10, carbs: 20, fat: 5 })) await page.locator('#meal-' + name).fill(String(value));
     await page.locator('#meal-save').click(); await page.locator('#meal-form').waitFor({ state: 'hidden' });
@@ -236,10 +240,10 @@ try {
     const history = await http(a, 'getNutritionRecords', { startDate: date, endDate: date }); assert.equal(history.ok, true); assert.equal(history.data.find(r => r.mealRecordId === id).calories, 300);
     assert.equal((await http(a, 'getNutritionRecords', { startDate: day, endDate: day })).data.some(r => r.mealRecordId === id), false);
     assert.equal((await http(b, 'getNutritionRecords', { startDate: date, endDate: date })).data.length, 0);
-    await page.reload(); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); await page.locator(`[data-meal-record-id="${id}"]`).waitFor(); await page.locator(`[data-meal-record-id="${id}"]`).click(); assert.equal(await page.locator('#meal-weight-grams').inputValue(), '150'); assert.equal(await page.locator('#meal-calories').inputValue(), '200');
+    await page.reload(); await page.locator('.mobile-nav-btn[data-screen="records-center"]').click(); await page.locator(`[data-meal-record-id="${id}"]`).waitFor(); await page.locator(`[data-meal-record-id="${id}"]`).click(); assert.equal(await page.locator('#meal-weight-grams').inputValue(), '150'); assert.equal(await page.locator('#meal-calories').inputValue(), '200');
     await page.locator('#meal-weight-grams').fill('200'); await page.locator('#meal-save').click(); await page.locator('#meal-form').waitFor({ state: 'hidden' }); await until(async () => { row = (await meals()).find(r => r.meal_id === id); return Number(row.revision) === 2 && row.body.calories === 400; }, 'historical-meal-updated');
     const updatedHead = await until(async () => { const head = await nutritionHead(date); return head?.payload?.metrics?.totals?.calories === 400 ? head : false; }, 'updated-engine-aggregate'); assert.equal(Number(updatedHead.score), 23.5); assert.notEqual(updatedHead.input_fingerprint, createdHead.input_fingerprint);
-    ({ context, page } = await browserContext('A')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); await page.locator(`[data-meal-record-id="${id}"]`).waitFor();
+    ({ context, page } = await browserContext('A')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="records-center"]').click(); await page.locator(`[data-meal-record-id="${id}"]`).waitFor();
     assert.equal(await page.evaluate(id => appState.mealsToday.some(r => r.mealRecordId === id), id), false, 'historical meal must never contaminate today list');
     record('Historical meal replay is idempotent; updated aggregate and new-context login re-read actual SQL');
     await page.locator(`[data-meal-record-id="${id}"]`).click(); const before = await meals(); await expectedDialog(page, 'meal', 'dismiss', id); assert.deepEqual(await meals(), before); record('Historical meal update and cancel-delete preserve versioned SQL values');
@@ -248,9 +252,25 @@ try {
     assert.equal(deletedHead.payload.metrics.meal_count, null); assert.ok(Object.values(deletedHead.payload.metrics.totals).every(value => value === null));
     const frozen = await pg.admin`select score,algorithm_version from public.beta_health_scores where canonical_user_id=${subjects.A.canonical} and score_date=${date} and score_type='nutrition'`; assert.ok(frozen.every(r => r.score === null && r.algorithm_version === 'health-score-v1.0'));
     report.nutrition_engine_assertions = { created: createdHead, updated: updatedHead, deleted: deletedHead, original_frozen_nutrition_unchanged: frozen };
-    await page.reload(); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); assert.equal(await page.locator(`[data-meal-record-id="${id}"]`).count(), 0); assert.equal((await http(a, 'getNutritionRecords', { startDate: date, endDate: date })).data.length, 0);
-    ({ context, page } = await browserContext('B')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click(); assert.equal(await page.locator('[data-meal-record-id]').count(), 0);
+    await page.reload(); await page.locator('.mobile-nav-btn[data-screen="records-center"]').click(); assert.equal(await page.locator(`[data-meal-record-id="${id}"]`).count(), 0); assert.equal((await http(a, 'getNutritionRecords', { startDate: date, endDate: date })).data.length, 0);
+    ({ context, page } = await browserContext('B')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="records-center"]').click(); assert.equal(await page.locator('[data-meal-record-id]').count(), 0);
     await page.screenshot({ path: path.join(evidence, 'historical-nutrition-deleted-B-isolation.png'), fullPage: true }); record('Historical meal confirmed delete/reload/B isolation; missing data not fabricated');
+  });
+  await gate('browser_incomplete_meal_null_zero_decimal_sql_readback',async()=>{
+    const date=shift(-39),cookie=await loginCookie('A');
+    ({context,page}=await browserContext('A'));await customRange(page,date,date);await page.locator('.mobile-nav-btn[data-screen="records-center"]').click();
+    for(const [label,calories,protein]of[['UNKNOWN',null,null],['EXPLICIT ZERO',0,12.5]]){
+      const food='SYNTHETIC '+label+' '+runId.slice(0,8);await page.locator('#add-meal').click();await page.locator('#meal-date').fill(date);await page.locator('#meal-food').fill(food);
+      if(calories!==null)await page.locator('#meal-calories').fill(String(calories));if(protein!==null)await page.locator('#meal-protein').fill(String(protein));
+      await page.locator('#meal-save').click();await page.locator('#meal-form').waitFor({state:'hidden'});
+      const row=await until(async()=> (await meals()).find(r=>r.body.foodName===food),'incomplete meal persisted');
+      assert.equal(row.body.calories,calories);assert.equal(row.body.protein,protein);assert.equal(row.body.carbs,null);assert.equal(row.body.fat,null);
+      const read=(await http(cookie,'getNutritionRecords',{startDate:date,endDate:date})).data.find(r=>r.mealRecordId===row.meal_id);assert.equal(read.calories,calories);assert.equal(read.includedInTotals,false);
+      const write=await until(async()=>report.http.find(r=>r.transport==='BROWSER_ACTUAL_HTTP'&&r.action==='upsertMealRecord'&&r.payload.foodName===food),'null/zero browser request');assert.equal(write.payload.calories,calories);
+      await page.reload();await page.locator('.mobile-nav-btn[data-screen="records-center"]').click();await page.locator(`[data-meal-record-id="${row.meal_id}"]`).click();assert.equal(await page.locator('#meal-calories').inputValue(),calories===null?'':String(calories));
+      await expectedDialog(page,'meal','accept',row.meal_id);await page.locator('#meal-form').waitFor({state:'hidden'});assert.equal((await meals()).find(r=>r.meal_id===row.meal_id).deleted,true);
+    }
+    record('Actual original form preserves name-only unknown kcal=null, explicit0 and12.5g; SQL/read/reload agree, incomplete excluded from totals');
   });
   if(releaseA)await gate('release_A_no_exercise_schema_web_session_readback',async()=>{
     for(const table of ['manual_exercise_catalog','manual_exercise_preferences','manual_workout_sets'])assert.equal((await pg.admin`select to_regclass(${'public.'+table}) as object`)[0].object,null);
@@ -274,10 +294,12 @@ try {
     assert.match(await p.locator('#data-storage-provider').textContent(),/本機測試資料庫/);
     assert.equal(await p.locator('#data-last-updated').getAttribute('data-state'),'OBSERVED');
     assert.match(await p.locator('#data-last-updated').textContent(),/最近 SQL 讀寫確認/);
-    const rejected=await p.evaluate(async()=>{try{await localEngineRequest('getBodyRecords',{date:'not-a-date'});return null;}catch(e){return e.code;}});assert.equal(rejected,'INVALID_DATE');
-    assert.equal(await p.locator('#data-connection-state').getAttribute('data-state'),'CONNECTED');
-    assert.equal(await p.locator('#technical-database-status').getAttribute('data-state'),'UNKNOWN');
-    assert.match(await p.locator('#data-connection-state').textContent(),/資料庫尚未確認/);
+    // Observe this real rejected request atomically. Independent bootstrap SQL
+    // reads may legitimately reconnect between separate Playwright round trips.
+    // Retain the response and DOM state together, without suppressing real reads.
+    const rejected=await p.evaluate(async()=>{try{await localEngineRequest('getBodyRecords',{date:'not-a-date'});return null;}catch(e){return {error:e.code,api:document.getElementById('data-connection-state').dataset.state,database:document.getElementById('technical-database-status').dataset.state,text:document.getElementById('data-connection-state').textContent,at:new Date().toISOString()};}});
+    assert.equal(rejected.error,'INVALID_DATE');assert.equal(rejected.api,'CONNECTED');assert.equal(rejected.database,'UNKNOWN');assert.match(rejected.text,/資料庫尚未確認/);
+    report.invalid_request_source_state=rejected;
     await p.evaluate(()=>localEngineRequest('localEngineSnapshot',{}));
     assert.equal(await p.locator('#technical-database-status').getAttribute('data-state'),'CONNECTED');
     assert.notEqual(await p.locator('#data-analysis-state').getAttribute('data-state'),'UPDATING');
@@ -307,6 +329,9 @@ try {
     await until(async()=>/結果待更新/.test(await page.locator('#activity-steps-note').textContent()),'stale-notice');
     report.daily_read={seed:'SYNTHETIC_NATIVE_CONTRACT_NOT_DEVICE_DATA',real_SQL_and_published_engine:true,new_browser_contexts:true,legacy_sleep_score_mapping:'NOT_CONNECTED',energy_active_total_mapping:'NOT_CONNECTED',stale_values:'SUPPRESSED'};
   });
+  if(releaseExercise)await (await import('./manual-ux-browser-gates.mjs')).runManualUxGates({pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,customRange,weightEditor,bodyScreen,setPage:value=>{page=value;}});
+  await (await import('./manual-observation-pg-gates.mjs')).runManualObservationPgGates({pg,subjects,gate,http,loginCookie,day,shift,until,report});
+  await (await import('./manual-observation-browser-gates.mjs')).runManualObservationBrowserGates({pg,subjects,gate,http,loginCookie,browserContext,until,evidence,day,shift,base,report,customRange,setPage:value=>{page=value;}});
   assert.deepEqual(report.page_errors, []); assert.deepEqual(report.blocked_external_requests, []);
 } catch (error) { report.errors.push(redact(error.stack || error.message)); }
 finally {

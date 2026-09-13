@@ -3,7 +3,7 @@ import {writeFile,mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
 const output=process.env.LOCAL_ENGINE_NATIVE_EVIDENCE_DIR;
-const suite=process.argv.includes('--queue-publication')?'tests/engine-queue-publication.test.ts':'tests/local-engine-native.test.ts';
+const suite=process.argv.includes('--observation-publication')?'tests/manual-observation-publication.test.ts':process.argv.includes('--queue-publication')?'tests/engine-queue-publication.test.ts':'tests/local-engine-native.test.ts';
 if(!output||!path.isAbsolute(output))throw Error('EXPLICIT_NEW_NATIVE_EVIDENCE_DIR_REQUIRED');
 await mkdir(output,{recursive:false});
 const pg=await createLocalPostgres({port:57484});

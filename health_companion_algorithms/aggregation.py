@@ -82,6 +82,38 @@ def _union_minutes(intervals: list[tuple[datetime, datetime]]) -> float | None:
     return round(total + (end - start).total_seconds() / 60, 3)
 
 
+def _manual_source_excluded(record: CanonicalRecord, day: date) -> bool:
+    """Apply a bounded internal projection mask without rewriting source intervals.
+
+    This metadata is supplied by the authenticated SQL projection, not a manual
+    input value or a rule that prefers a source. Retaining the canonical record
+    in ``active`` keeps its provenance and mask in the aggregate fingerprint.
+    """
+    if "manual_reconciliation" not in record.payload:
+        return False
+    reconciliation = record.payload["manual_reconciliation"]
+    if (
+        not isinstance(reconciliation, dict)
+        or reconciliation.get("policy") != "manual-source-exclusion-v1"
+    ):
+        raise ValueError("INVALID_MANUAL_RECONCILIATION")
+    excluded = reconciliation.get("excluded_local_dates")
+    if not isinstance(excluded, list) or len(excluded) > 32:
+        raise ValueError("INVALID_MANUAL_RECONCILIATION")
+    seen: set[str] = set()
+    for item in excluded:
+        if not isinstance(item, str) or len(item) != 10 or item in seen:
+            raise ValueError("INVALID_MANUAL_RECONCILIATION")
+        try:
+            parsed = date.fromisoformat(item)
+        except ValueError as error:
+            raise ValueError("INVALID_MANUAL_RECONCILIATION") from error
+        if parsed.isoformat() != item:
+            raise ValueError("INVALID_MANUAL_RECONCILIATION")
+        seen.add(item)
+    return day.isoformat() in seen
+
+
 def aggregate_day(
     records: list[CanonicalRecord],
     subject: str,
@@ -96,6 +128,9 @@ def aggregate_day(
     meals: list[Meal] = []
     left, right = day_bounds(day, timezone)
     for record in active:
+        if _manual_source_excluded(record, day):
+            flags.add("SOURCE_CONFLICT:" + record.domain)
+            continue
         if record.domain == "nutrition":
             meals.append(Meal.model_validate(record.payload))
             continue

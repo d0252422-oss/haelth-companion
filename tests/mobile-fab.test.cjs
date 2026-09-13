@@ -21,7 +21,9 @@ assert.doesNotMatch(html, /await loadRange\(globalDateRange,\{force:true\}\);clo
 assert.match(html, /upsertBodyRecord\(data\);setSubmitting\(btn,false\);closeSheet\(\);toast/);
 assert.match(html, /upsertHealthCheckin\([\s\S]*?\);closeSheet\(\);toast\("身體狀態已更新。"\)/);
 // Local unresolved writes must retain their envelope before normal draft creation.
-assert.match(html, /start-workout"\)\.onclick=\(\)=>\{if\(manualSqlEnabled\(\)&&workoutSession\?\.sqlLocked\)return toast\([^;]+\);workoutSession=/);
+assert.match(html, /start-workout"\)\.onclick=\(\)=>requestWorkoutStart\(\)/);
+const views=fs.readFileSync(path.join(__dirname,'..','scripts/web-view-state.js'),'utf8');
+assert.match(views,/function requestWorkoutStart\(\)[\s\S]*?workoutSession\?\.saving[\s\S]*?workoutSession\?\.sqlLocked[\s\S]*?showModal\(\)[\s\S]*?beginWorkoutDraft\(\)/);
 assert.match(html, /UI_TEST_MODE=/);
 assert.match(html, /document\.elementFromPoint\(event\.clientX,event\.clientY\)/);
 assert.match(html, /function optimisticUpsertMeals\(records\)/);

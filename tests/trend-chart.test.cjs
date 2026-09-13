@@ -14,10 +14,13 @@ function fakeElement() {
     classList: { add() {}, remove() {}, toggle() {} },
     addEventListener() {},
     appendChild() {},
+    prepend() {},
+    append() {},
+    setAttribute() {},
     replaceChildren() {},
     remove() {},
     closest() { return null; },
-    querySelector() { return null; },
+    querySelector(selector) { return ['[data-record-view]','[data-record-range]'].includes(selector)?{value:''}:null; },
     querySelectorAll() { return []; },
   };
 }
@@ -126,6 +129,8 @@ const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .find(value => value.trim());
 // Match the existing page's shared external script dependency before its inline app.
 vm.runInContext(fs.readFileSync('scripts/local-engine-web.js','utf8'), context, { filename:'local-engine-web.js' });
+vm.runInContext(fs.readFileSync('scripts/web-view-state.js','utf8'), context, { filename:'web-view-state.js' });
+vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'), context, { filename:'manual-observation-web.js' });
 vm.runInContext(script, context, { filename: 'index.inline.js' });
 
 function evaluate(expression) {

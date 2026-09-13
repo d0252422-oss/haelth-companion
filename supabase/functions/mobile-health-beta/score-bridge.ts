@@ -42,7 +42,7 @@ const SCORE_TYPES = [
 const SCORE_INPUT_PAGE_SIZE = 1000;
 const MAX_SCORE_INPUT_ROWS = 20_000;
 
-export async function recomputeBetaScore(admin: any, userId: string, localDate: string): Promise<Json> {
+export async function recomputeBetaScore(admin: any, userId: string, localDate: string, projectRows?: (rows: HealthRow[], dates: string[]) => Promise<HealthRow[]>): Promise<Json> {
   if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)) throw new Error("INVALID_SCORE_SCOPE");
   const { data: generationRows, error: generationError } = await admin.rpc("beta_get_score_generation", {
     p_canonical_user_id: userId, p_score_date: localDate,
@@ -52,7 +52,9 @@ export async function recomputeBetaScore(admin: any, userId: string, localDate: 
   if (!queue || !["DIRTY", "PROCESSING"].includes(String(queue.status))) return { status: "NOT_DIRTY", local_date: localDate };
 
   const dates = boundedDates(localDate, 29);
-  const rows = await loadActiveRows(admin, userId, dates);
+  const nativeRows = await loadActiveRows(admin, userId, dates);
+  const rows = projectRows ? await projectRows(nativeRows,dates) : nativeRows;
+  if(rows.length>MAX_SCORE_INPUT_ROWS)throw Error('SCORE_INPUT_BOUND_EXCEEDED');
   const evidence = rows.map((row) => ({
     id: row.id, hash: row.source_content_hash, revision: row.source_revision,
     updated_at: row.source_updated_at ?? row.updated_at,

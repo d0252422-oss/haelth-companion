@@ -186,7 +186,7 @@ export async function runExerciseReleaseGates(h){
     assert.equal(exit,0,output);assert.equal(JSON.parse(output.trim()).checks.length,9);
     assert.deepEqual(await aliases(),beforeAliases);assert.deepEqual(await users(),beforeUsers);
     let {page:p}=await browserContext('WEB_A');setPage(p);await h.customRange(p,shift(-4),shift(-4));await h.bodyScreen(p);await p.locator('#body-current').filter({hasText:'65'}).waitFor();await h.weightEditor(p,shift(-4));await p.locator('#weight-input').fill('66');await p.locator('#weight-save').click();await p.locator('#weight-form').waitFor({state:'hidden'});
-    ({page:p}=await browserContext('WEB_A'));setPage(p);await h.customRange(p,shift(-4),shift(-4));await h.bodyScreen(p);await p.locator('#body-current').filter({hasText:'66'}).waitFor();await p.locator('.mobile-nav-btn[data-screen="nutrition-screen"]').click();await p.locator(`[data-meal-record-id="${meal.recordId}"]`).waitFor();
+    ({page:p}=await browserContext('WEB_A'));setPage(p);await h.customRange(p,shift(-4),shift(-4));await h.bodyScreen(p);await p.locator('#body-current').filter({hasText:'66'}).waitFor();await p.locator('.mobile-nav-btn[data-screen="records-center"]').click();await p.locator(`[data-meal-record-id="${meal.recordId}"]`).waitFor();
     ({page:p}=await browserContext('WEB_B'));setPage(p);await h.customRange(p,shift(-4),shift(-4));await h.bodyScreen(p);assert.equal(await p.locator('#body-current').innerText(),'—');
     // Same browser context can recover from an expired opposite-provider cookie.
     await p.request.post(base+'/local-login',{data:{account:'A',expired:true}});

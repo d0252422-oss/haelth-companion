@@ -4,9 +4,26 @@ import application,{registerLocalEngineHandler,dispatchLocalEngine,authenticateN
 import {validateLocalManualConfig,localManualEnvironmentFingerprint} from '../supabase/functions/mobile-health-beta/local-manual-bootstrap.ts';
 import {boundedSdkFetch,AUTH_HTTP_TIMEOUT_MS} from '../supabase/functions/mobile-health-beta/bounded-auth-fetch.ts';
 import {exerciseName} from '../supabase/functions/mobile-health-beta/manual-training-local.ts';
-import {LocalEngineRuntime} from '../supabase/functions/mobile-health-beta/local-engine-runtime.ts';
+import {LocalEngineRuntime,manualMealPresentation} from '../supabase/functions/mobile-health-beta/local-engine-runtime.ts';
 const config={host:'127.0.0.1',port:57483,database:'health_engine_'+'a'.repeat(32),username:'service_role'};
 const environment:Record<string,string>={HEALTH_ENGINE_LOCAL_ONLY:'1',HEALTH_MANUAL_EDGE_REHEARSAL:'1',SUPABASE_URL:'http://127.0.0.1:54321'};
+Deno.test('meal completeness is based on explicit four main nutrients, not confirmation alone',()=>{
+  for(const nutrients of [{calories:null,protein:null,carbs:null,fat:null},{calories:0,protein:12.5,carbs:null,fat:null}]){
+    const input={...nutrients,userConfirmed:true,includedInTotals:true},out=manualMealPresentation(input);
+    assert.equal(out.includedInTotals,false);assert.equal(out.nutritionCompleteness,'INCOMPLETE');
+    for(const key of ['calories','protein','carbs','fat'])assert.equal(out[key],(nutrients as any)[key]);
+    assert.equal(input.includedInTotals,true,'read normalization does not mutate stored historical object');
+  }
+});
+Deno.test('complete explicit zero/decimal meal is preserved; unconfirmed never earns complete totals',()=>{
+  for(const values of [{calories:0,protein:0,carbs:0,fat:0},{calories:200,protein:12.5,carbs:20.25,fat:3.5}]){
+    assert.equal(manualMealPresentation({...values,userConfirmed:true}).includedInTotals,true);
+    assert.equal(manualMealPresentation({...values,userConfirmed:false}).nutritionCompleteness,'UNCONFIRMED');
+  }
+});
+Deno.test('invalid historical nutrient types cannot be advertised as complete',()=>{
+  for(const value of ['',null,undefined,NaN,Infinity,-1,'200'])assert.equal(manualMealPresentation({userConfirmed:true,calories:value,protein:1,carbs:1,fat:1}).includedInTotals,false);
+});
 Deno.test('local Edge target guard rejects remote/deployment/socket/credentials/non-dedicated targets',()=>{
   assert.deepEqual(validateLocalManualConfig(config,k=>environment[k]),config);
   for(const change of [{host:'remote.example'},{database:'postgres'},{port:5432},{username:'engine_owner'},{path:'/tmp/socket'},{password:'forbidden-local-config'}])assert.throws(()=>validateLocalManualConfig({...config,...change},k=>environment[k]));

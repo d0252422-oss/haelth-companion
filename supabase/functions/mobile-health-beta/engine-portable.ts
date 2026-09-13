@@ -548,6 +548,14 @@ async function aggregate(
     left = BigInt(midnight(day, zone)) * 1000n,
     right = BigInt(midnight(shiftDay(day, 1), zone)) * 1000n;
   for (const r of active) {
+    // Internal canonical projection, not a measured value or source preference.
+    // Keep original intervals/evidence; suppress only explicitly conflicted days.
+    const reconciliation = r.payload?.manual_reconciliation;
+    if (reconciliation !== undefined && (reconciliation===null || reconciliation.policy!=='manual-source-exclusion-v1' || !Array.isArray(reconciliation.excluded_local_dates) || reconciliation.excluded_local_dates.length>32 || new Set(reconciliation.excluded_local_dates).size!==reconciliation.excluded_local_dates.length || reconciliation.excluded_local_dates.some((d:unknown)=>typeof d!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(d)||!Number.isFinite(Date.parse(d))||new Date(d).toISOString().slice(0,10)!==d)))throw Error('INVALID_MANUAL_RECONCILIATION');
+    if (reconciliation?.excluded_local_dates.includes(day)) {
+      flags.add('SOURCE_CONFLICT:' + r.domain);
+      continue;
+    }
     if (r.domain === "nutrition") {
       meals.push(r.payload);
       continue;

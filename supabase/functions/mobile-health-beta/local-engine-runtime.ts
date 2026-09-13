@@ -8,9 +8,17 @@ import {manualBodyEngineRecords} from './manual-body-engine.ts';
 import { ManualTrainingLocalStore } from "./manual-training-local.ts";
 import {resolveVerifiedManualWebIdentity,prepareManualRead,prepareManualWrite,manualPrivilegedRead} from './manual-web-identity.ts';
 import {readManualRequest} from './manual-request-body.ts';
-import {readPublishedDaily} from './manual-daily-read.ts';
+import {readPublishedDaily,readPublishedDailySnapshot,projectPublishedDaily} from './manual-daily-read.ts';
+import {ManualObservationsLocalStore} from './manual-observations-local.ts';
+import {observationEngineProjection,projectManualObservationDay} from './manual-observation-projection.ts';
 
 type Json = Record<string, any>;
+// Presentation completeness is not confirmation, a new engine rule, or a
+// historical data rewrite. Preserve every known/null nutrient and provenance.
+export function manualMealPresentation(body:Json):Json {
+  const complete=body.userConfirmed===true&&['calories','protein','carbs','fat'].every(key=>typeof body[key]==='number'&&Number.isFinite(body[key])&&body[key]>=0);
+  return {...body,includedInTotals:complete,nutritionCompleteness:body.userConfirmed!==true?'UNCONFIRMED':complete?'COMPLETE':'INCOMPLETE'};
+}
 const pgDay = (value: any) =>
   value instanceof Date
     ? value.toISOString().slice(0, 10)
@@ -155,6 +163,7 @@ export class LocalEngineRuntime {
   private activeRequests = 0;
   manualBody: ManualBodyLocalStore;
   manualTraining: ManualTrainingLocalStore;
+  manualObservations: ManualObservationsLocalStore;
   private hosted: boolean;
   private exerciseEnabled: boolean;
   constructor(config: Json, verify: (token: string) => Promise<Json>, private verifyWeb?: (token:string)=>Promise<{subject:string,email:string}>, mode?: {kind:'hosted';sql:any;release:'A'|'AB'}) {
@@ -182,6 +191,7 @@ export class LocalEngineRuntime {
     this.worker = new PortableEngineRuntime();
     this.manualBody = new ManualBodyLocalStore(this.sql);
     this.manualTraining = new ManualTrainingLocalStore(this.sql);
+    this.manualObservations = new ManualObservationsLocalStore(this.sql);
   }
   async start() {
     await this.worker.start();
@@ -252,7 +262,7 @@ export class LocalEngineRuntime {
         await tx`select * from private.engine_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${requestId}`;
       if (receipt.length) {
         if (receipt[0].input_hash !== hash) throw Error("REQUEST_ID_CONFLICT");
-        return { ...receipt[0].response, replayed: true };
+        return { ...receipt[0].response,record:manualMealPresentation(receipt[0].response.record),replayed: true };
       }
       const old =
         (await tx`select * from public.engine_meals where canonical_user_id=${identity.canonical} and meal_id=${mealId} for update`)[
@@ -296,7 +306,7 @@ export class LocalEngineRuntime {
         }
         nutrients[key] = n === null ? null : n * (labelMode ? grams / 100 : 1);
       }
-      const body = remove ? old.body : {
+      const body = manualMealPresentation(remove ? old.body : {
         ...input,
         mealRecordId: mealId,
         revision,
@@ -319,7 +329,7 @@ export class LocalEngineRuntime {
         nutritionSource: labelMode
           ? "USER_LABEL_PER_100G"
           : "CONFIRMED_MANUAL_TOTALS",
-      };
+      });
       const canonical = {
         subject_ref: identity.canonical,
         source: "web-confirmed",
@@ -365,15 +375,21 @@ export class LocalEngineRuntime {
   }
   async compute(user: string, day: string) {
     const begin = performance.now();
-    const {rows,health,body}=await this.sql.begin('isolation level repeatable read read only',async(tx:any)=>{
+    const {rows,health,body,observations}=await this.sql.begin('isolation level repeatable read read only',async(tx:any)=>{
       const rows=await tx`select canonical_record from public.engine_meals where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 5001`;
       const health=await tx`select * from public.beta_health_records where canonical_user_id=${user} and operation='UPSERT' and invalidated_at is null
       and affected_local_dates && array(select generate_series(${day}::date-27,${day}::date,'1 day')::date) limit 5001`;
       const body=await tx`select * from public.engine_manual_body_records where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 29`;
       if(body.length>28)throw Error('SCORE_INPUT_BOUND_EXCEEDED');
-      return {rows,health,body};
+      const observations=await tx`select * from public.engine_manual_observations where canonical_user_id=${user} and not deleted
+        and (local_date between ${day}::date-27 and ${day}::date or (domain='sleep' and local_date between ${day}::date-28 and ${day}::date+1)) limit 5001`;
+      if(observations.length>5000)throw Error('SCORE_INPUT_BOUND_EXCEEDED');
+      return {rows,health,body,observations};
     });
     const bodyRecords=manualBodyEngineRecords(body,user);
+    const windowStart=new Date(Date.parse(day)-27*86400000).toISOString().slice(0,10);
+    const manualDays=[...new Set<string>(observations.map((r:Json)=>pgDay(r.local_date)))].filter(date=>date>=windowStart&&date<=day).map(date=>({date,...observationEngineProjection(observations,health,user,date)}));
+    const observationRecords=manualDays.flatMap(p=>p.records);
     const healthRecords = health.map((r: Json) => ({
       subject_ref: user,
       source: r.source_app,
@@ -387,8 +403,9 @@ export class LocalEngineRuntime {
       started_at: r.canonical_record.started_at || null,
       ended_at: r.canonical_record.ended_at || null,
       source_quality: "UNKNOWN",
+      payload: {manual_reconciliation:{policy:'manual-source-exclusion-v1',excluded_local_dates:manualDays.filter(p=>r.affected_local_dates.map(pgDay).includes(p.date)&&p.blockedDomains.some(d=>d===r.domain||d==='sleep'&&r.domain==='sleep_stage')).map(p=>p.date).sort()}},
     }));
-    if (rows.length + health.length + bodyRecords.length > 5000) {
+    if (rows.length + health.length + bodyRecords.length + observationRecords.length > 5000) {
       throw Error("SCORE_INPUT_BOUND_EXCEEDED");
     }
     const result = await this.worker.execute({
@@ -405,13 +422,14 @@ export class LocalEngineRuntime {
           ...rows.map((r: Json) => r.canonical_record),
           ...healthRecords,
           ...bodyRecords,
+          ...observationRecords,
         ],
         calculated_at: new Date().toISOString(),
       },
     });
     this.timings.push({
       date: day,
-      records: rows.length + health.length + bodyRecords.length,
+      records: rows.length + healthRecords.length + bodyRecords.length + observationRecords.length,
       elapsed_ms: performance.now() - begin,
     });
     return result.normalized.bundle;
@@ -443,13 +461,46 @@ export class LocalEngineRuntime {
             await tx`update private.beta_score_recompute_queue set engine_published_generation=${job.generation} where canonical_user_id=${user} and score_date=${day}`;
           });
           // Frozen original eight-score computation remains unchanged, including missing training/nutrition.
-          const result = await recomputeBetaScore(admin, user, day);
+          const result = await recomputeBetaScore(admin, user, day,(rows,dates)=>this.frozenManualRows(rows,user,dates));
           if(result.status==='NOT_DIRTY'){
             const [current]=await this.sql`select generation,status,engine_published_generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date=${day}`;
             if(current?.status==='COMPLETE'&&BigInt(current.generation)>=BigInt(job.generation)&&String(current.engine_published_generation)===String(current.generation))return {status:'SUPERSEDED',local_date:day};
           }
           if (!['PERSISTED','REPLAYED'].includes(String(result.status))) throw Error('STALE_SCORE_INPUT');
           return result;
+  }
+  // Canonical input projection only: the frozen formulas and weights stay intact.
+  // A manual daily total never enters the native source-selection competition.
+  async frozenManualRows(nativeRows:any[], user:string, dates:string[]):Promise<any[]> {
+    const ordered=[...dates].sort(),start=ordered[0],end=ordered.at(-1)!;
+    const observations=await this.sql`select * from public.engine_manual_observations where canonical_user_id=${user} and not deleted
+      and (local_date between ${start}::date and ${end}::date or (domain='sleep' and local_date between ${start}::date-1 and ${end}::date+1)) limit 5001`;
+    if(observations.length>5000)throw Error('SCORE_INPUT_BOUND_EXCEEDED');
+    const blocked=new Map<string,Set<string>>(),added:any[]=[];
+    for(const date of ordered){
+      const projection=projectManualObservationDay(observations,nativeRows,date);
+      const manual=observations.filter((r:Json)=>pgDay(r.local_date)===date);
+      const block=(domain:string)=>{const set=blocked.get(date)||new Set<string>();set.add(domain);if(domain==='sleep')set.add('sleep_stage');blocked.set(date,set);};
+      const add=async(domain:string,value:number,records:Json[])=>{
+        const hash=await digest([...records].sort((a,b)=>String(a.body.recordId).localeCompare(String(b.body.recordId))).map(r=>r.body)),stamp=records.map(r=>new Date(r.updated_at).toISOString()).sort().at(-1)!;
+        added.push({id:`manual:${domain}:${date}`,domain,source_app:'MANUAL_WEB',source_record_id:`manual:${domain}:${date}`,
+          source_revision:Math.max(...records.map(r=>Number(r.revision))),source_updated_at:stamp,source_content_hash:hash,updated_at:stamp,
+          affected_local_dates:[date],canonical_record:{value,recorded_at:date+'T00:00:00+08:00',provenance:'manual',date_anchor_only:true}});
+      };
+      for(const [domain,metric]of[['sleep',projection.sleep],['steps',projection.steps]] as const){
+        if(metric.status==='SOURCE_CONFLICT'||metric.status.includes('CONFLICT')||metric.status==='OVERLAP_UNRESOLVED')block(domain);
+        else if(metric.status==='AVAILABLE'&&metric.value!==null)await add(domain,metric.value,manual.filter((r:Json)=>r.domain===domain));
+      }
+    }
+    // Remove only conflicting dates, not another valid day's native contribution.
+    // Manual body retains its existing portable Body Engine adapter; it is not
+    // introduced into the frozen 28-prior-day source-selection contract here.
+    const projected=await Promise.all(nativeRows.map(async row=>{
+      const retained=row.affected_local_dates.filter((date:string)=>!blocked.get(date)?.has(row.domain));
+      if(retained.length===row.affected_local_dates.length)return row;
+      return {...row,affected_local_dates:retained,source_content_hash:await digest({policy:'manual-source-exclusion-v1',original_hash:row.source_content_hash,original_dates:[...row.affected_local_dates].sort(),retained_dates:[...retained].sort()})};
+    }));
+    return [...projected.filter(row=>row.affected_local_dates.length),...added];
   }
   async drain(user: string) {
     const token = crypto.randomUUID();
@@ -499,7 +550,7 @@ export class LocalEngineRuntime {
     );
     return {
       meals: meals.filter((r: Json) => !r.deleted).map((r: Json) => ({
-        ...r.body,
+        ...manualMealPresentation(r.body),
         revision: Number(r.revision),
       })),
       outputs: history.filter((r: Json) =>
@@ -528,7 +579,14 @@ export class LocalEngineRuntime {
   async legacyTimeline(identity: Json, input: Json = {}) {
     const range = localReadRange(input);
     // Privileged repository access is always scoped by verified canonical identity.
-    const rows = await manualPrivilegedRead(this.sql,identity,tx=>tx`select * from public.beta_health_scores where canonical_user_id=${identity.canonical} and score_date between ${range.start}::date and ${range.end}::date order by score_date`);
+    const {rows,bodies,workouts,daily}=await manualPrivilegedRead(this.sql,identity,async(tx:any)=>{
+      const rows=await tx`select s.*,q.status as queue_status,q.generation,q.engine_published_generation from public.beta_health_scores s left join private.beta_score_recompute_queue q using(canonical_user_id,score_date) where s.canonical_user_id=${identity.canonical} and s.score_date between ${range.start}::date and ${range.end}::date order by s.score_date`;
+      const daily=await readPublishedDailySnapshot(tx,identity,input);
+      const bodies=await tx`select body from public.engine_manual_body_records where canonical_user_id=${identity.canonical} and not deleted and local_date between ${range.start}::date and ${range.end}::date limit 367`;
+      const workouts=this.exerciseEnabled?await tx`select body from public.manual_workout_sets where canonical_user_id=${identity.canonical} and not deleted and local_date between ${range.start}::date and ${range.end}::date limit 5001`:[];
+      if(bodies.length>366||workouts.length>5000)throw Error('READ_BOUND_EXCEEDED');
+      return {rows,bodies,workouts,daily};
+    },true);
     const names: Json = {
       sleep: "sleepSystemScore",
       activity: "activityScore",
@@ -542,17 +600,26 @@ export class LocalEngineRuntime {
     const days: Json = {};
     for (const row of rows) {
       const date = pgDay(row.score_date), entry = days[date] ??= { date };
-      if (names[row.score_type]) entry[names[row.score_type]] = row.score;
+      const current=row.queue_status==='COMPLETE'&&Number(row.engine_published_generation)>0&&String(row.engine_published_generation)===String(row.generation);
+      if (names[row.score_type]) entry[names[row.score_type]] = current?row.score:null;
       if (row.score_type === "health_overall") {
         entry.algorithmVersion = row.algorithm_version;
         entry.scoreMetadata = {
-          completeness: row.completeness,
-          confidence: row.confidence,
+          completeness: current?row.completeness:null,
+          confidence: current?row.confidence:null,
         };
-        entry.healthStatus = row.status;
+        entry.healthStatus = current?row.status:'STALE';
       }
     }
-    return Object.values(days);
+    for(const {body}of bodies){const entry=days[body.date]??={date:body.date};entry.weight=body.weight;entry.bodyFatPercentage=body.bodyFat;entry.bodySource='MANUAL_WEB';}
+    const grouped=new Map<string,Json[]>();for(const {body}of workouts)grouped.set(body.date,[...(grouped.get(body.date)||[]),body]);
+    for(const [date,records]of grouped){const entry=days[date]??={date};entry.trainingSets=records.length;entry.trainingVolume=records.reduce((n,r)=>n+r.totalVolume,0);entry.trainingSessions=new Set(records.map(r=>r.sessionId)).size;}
+    for(const domain of ['sleep','activity'] as const){for(const row of projectPublishedDaily(daily,domain)){
+      const entry=days[row.date]??={date:row.date};
+      if(domain==='sleep'){entry.sleepHours=row.totalSleepMinutes===null?null:row.totalSleepMinutes/60;entry.sleepScore=row.sleepScore;}
+      else {entry.steps=row.coverage?.steps==='PARTIAL_DAY'?null:row.steps;entry.caloriesBurned=row.coverage?.totalEnergy==='PARTIAL_DAY'?null:row.totalCalories;entry.activityCoverage=row.coverage||null;}
+    }}
+    return Object.values(days).sort((a:any,b:any)=>a.date.localeCompare(b.date));
   }
   async handle(request: Request) {
     // Bound admission as well as SQL execution; client abort does not release this slot.
@@ -579,6 +646,16 @@ export class LocalEngineRuntime {
         else data = await this.manualTraining.write(identity, action, payload);
       } else if (action === "getBodyRecords") {
         data = await this.manualBody.read(identity, payload);
+      } else if (action === 'getManualObservations') {
+        data = await this.manualObservations.read(identity,payload);
+      } else if (action === 'getManualObservationDaily') {
+        data = await this.manualObservations.daily(identity,payload);
+      } else if (action === 'getObservationWriteStatus') {
+        data = await this.manualObservations.status(identity,payload);
+      } else if (action === 'upsertManualObservation' || action === 'deleteManualObservation') {
+        data = await this.manualObservations.write(identity,payload,action==='deleteManualObservation');
+        try { await this.drain(identity.canonical); } catch { /* Committed raw record and receipt remain recoverable; never hide saved data. */ }
+        if(!data.deleted){try { const rows=await this.manualObservations.read(identity,{date:data.record.date,domain:data.record.domain});const saved=rows.find((r:Json)=>r.recordId===data.recordId);if(saved)data={...data,record:saved,analysisStatus:saved.analysisStatus,analysisJobScheduled:saved.analysisJobScheduled}; }catch {data={...data,analysisStatus:'ANALYSIS_UNAVAILABLE'};}}
       } else if (["addBodyRecord", "upsertBodyRecord", "deleteBodyRecord"].includes(action)) {
         data = await this.manualBody.write(identity, payload, action === "deleteBodyRecord");
         try{await this.drain(identity.canonical);}catch{/* Raw row + receipt + durable queue committed; expose actual retry/failure below. */}
@@ -664,6 +741,6 @@ export class LocalEngineRuntime {
   }
   async mealWriteStatus(identity:Json,payload:Json) {
     const receipt=await manualPrivilegedRead(this.sql,identity,tx=>tx`select response from private.engine_mutation_receipts where canonical_user_id=${identity.canonical} and request_id=${String(payload.clientRequestId)}`);
-    return {exists:receipt.length===1,...receipt[0]?.response};
+    return receipt.length?{exists:true,...receipt[0].response,record:manualMealPresentation(receipt[0].response.record)}:{exists:false};
   }
 }

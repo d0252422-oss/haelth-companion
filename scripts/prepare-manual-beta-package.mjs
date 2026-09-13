@@ -8,7 +8,7 @@ const output=process.argv[2],release=process.argv.includes('--release=AB')?'AB':
 if(!output||!path.isAbsolute(output))throw Error('EXPLICIT_NEW_ARTIFACT_DIRECTORY_REQUIRED');
 await mkdir(output,{recursive:false});
 const backend='supabase/functions/mobile-health-beta';
-const files=['index.html','scripts/local-engine-web.js','scripts/manual-sql-config.js',
+const files=['index.html','scripts/local-engine-web.js','scripts/web-view-state.js','scripts/manual-observation-web.js','scripts/manual-sql-config.js',
  'config/engine-local.deno.json','config/engine-local.deno.lock',backend+'/deno.json',
  'fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js'];
 for(const name of await readdir(backend))if(name.endsWith('.ts'))files.push(backend+'/'+name);

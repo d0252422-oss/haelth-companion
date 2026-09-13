@@ -23,15 +23,96 @@ function harness(fetch) {
     document: { querySelectorAll(){return [];}, getElementById(id) { if (!elements.has(id)) elements.set(id, { value: '', checked: false, dataset: {}, textContent: '', remove(){}, replaceChildren(){}, style:{}, classList: { add() {}, remove() {} } }); return elements.get(id); } },
   });
   vm.runInContext(source, ctx);
+  vm.runInContext(fs.readFileSync('scripts/web-view-state.js','utf8'), ctx);
+  ctx.activeScreen='dashboard-screen'; ctx.globalDateRange={preset:'7d'};
   return ctx;
 }
+
+test('ordinary workout draft survives navigation without a blank training screen',()=>{
+ const ctx=harness(()=>{});ctx.workoutSession={startTime:'retained',exercises:[{exerciseId:'one',sets:[{weight:0,reps:10}]}]};const original=ctx.workoutSession;
+ ctx.updatePageHeader=()=>{};ctx.window={scrollTo(){}};ctx.ensureScreenData=()=>Promise.resolve();ctx.handleScreenError=()=>{};
+ vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function navigate(')),ctx);
+ ctx.setTrainingView('workout_session');ctx.navigate('settings-screen');ctx.navigate('training-screen');
+ assert.equal(ctx.workoutSession,original);assert.equal(ctx.document.getElementById('training-screen').dataset.trainingView,'overview');assert.equal(ctx.document.getElementById('training-overview').hidden,false);assert.equal(ctx.document.getElementById('workout-session').hidden,true);assert.equal(ctx.document.getElementById('training-draft-notice').hidden,false);
+ ctx.setTrainingView('workout_session');assert.equal(ctx.workoutSession,original);assert.equal(ctx.document.getElementById('workout-session').hidden,false);
+});
+test('ordinary draft start asks before replacement and missing draft never selects an empty session',()=>{
+ const ctx=harness(()=>{}),original={exercises:[]};ctx.workoutSession=original;let asked=0;ctx.document.getElementById('training-draft-dialog').showModal=()=>asked++;
+ ctx.requestWorkoutStart();assert.equal(asked,1);assert.equal(ctx.workoutSession,original);
+ ctx.workoutSession=null;ctx.setTrainingView('workout_session');assert.equal(ctx.document.getElementById('training-screen').dataset.trainingView,'overview');
+ assert.throws(()=>ctx.setTrainingView('NONE_VISIBLE'),/INVALID_TRAINING_VIEW/);
+});
+
+test('in-flight workout save cannot be discarded or replaced by another start',()=>{
+ const ctx=harness(()=>{}),draft={saving:true,exercises:[{sets:[{weight:0,reps:1}]}]};ctx.workoutSession=draft;ctx.toast=()=>{};
+ ctx.requestWorkoutStart();assert.equal(ctx.workoutSession,draft);
+ const listener=html.split(/\r?\n/).find(line=>line.includes('getElementById("finish-workout").onclick='));
+ assert.ok(listener.indexOf('workoutSession.saving=true')<listener.indexOf('await '));
+ assert.match(listener,/if\(workoutSession!==savingDraft\|\|currentUser!==savingUser\)return/);
+});
+
+test('manual date load rejects deletion while stale binding/error is present',async()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ ctx.document.getElementById('observation-status').setAttribute=()=>{};ctx.document.getElementById('observation-domain').value='steps';ctx.document.getElementById('observation-date').value='2026-09-12';
+ vm.runInContext("observationEditor={user:currentUser,epoch:localSessionEpoch,record:{recordId:'old',date:'2026-09-11'},loadedDate:'2026-09-11'}",ctx);
+ let calls=0;ctx.localEngineRequest=()=>{calls++;throw Error('must not write');};
+ await ctx.saveObservation(true);assert.equal(calls,0);assert.match(ctx.document.getElementById('observation-status').textContent,/日期/);
+ ctx.localEngineRequest=()=>Promise.reject(Error('SQL unavailable'));ctx.readableError=e=>e.message;
+ await ctx.loadObservationDate();assert.equal(ctx.document.getElementById('observation-save').disabled,true);assert.equal(ctx.document.getElementById('observation-delete').disabled,true);
+});
+test('draft set validation matches SQL finite nonnegative load and positive integer reps',()=>{
+ const ctx=harness(()=>{});for(const pair of [[0,1],[0,10],[12.5,3],[1000,10000]])assert.equal(ctx.validWorkoutSet(...pair),true);
+ for(const pair of [[-1,10],[20,1.5],[20,0],[20,NaN],[Infinity,3],[null,3],['',3],[1001,3],[20,10001]])assert.equal(ctx.validWorkoutSet(...pair),false);
+});
+test('nutrition fields accept decimal macros and unknown calories remain optional',()=>{
+ for(const id of ['meal-calories','meal-protein','meal-carbs','meal-fat']){const input=html.match(new RegExp('<input id="'+id+'"[^>]+>'))[0];assert.match(input,/step="any"/);assert.doesNotMatch(input,/required/);}
+});
+
+test('actual meal submit preserves blank kcal as null, explicit zero and decimal macros',async()=>{
+ const ctx=harness(()=>{});let submit,payload;ctx.document.getElementById('meal-form').addEventListener=(type,fn)=>submit=fn;
+ Object.assign(ctx,{performance:{now:()=>1},mealAnalysis:null,num:value=>value===''?null:Number(value),mutationRequestId:()=>randomUUID(),setMealSaveState(){},recordMutationMetric(){},completeMealSave(){},toast(){},readableError:e=>e.message,isWriteStatusUnknownError:()=>false,classifyRequestError:()=>'',apiService:{upsertMealRecord:async p=>{payload=p;return{};}}});
+ vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('getElementById("meal-form").addEventListener("submit"')),ctx);
+ for(const [input,expected] of [['',null],['0',0],['12',12]]){
+  ctx.document.getElementById('meal-calories').value=input;ctx.document.getElementById('meal-protein').value='12.5';
+  await submit({preventDefault(){},currentTarget:ctx.document.getElementById('meal-form')});
+  assert.equal(payload.calories,expected);assert.equal(payload.protein,12.5);assert.equal(payload.carbs,null);
+ }
+});
+
+test('sleep reload uses exact stable record ID and newer revision; missing row cannot become create',async()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);ctx.readableError=e=>e.message;
+ ctx.document.getElementById('observation-status').setAttribute=()=>{};ctx.document.getElementById('observation-domain').value='sleep';ctx.document.getElementById('observation-date').value='2026-09-13';
+ vm.runInContext("observationEditor={user:currentUser,epoch:localSessionEpoch,record:{recordId:'sleep-2',date:'2026-09-13',revision:1},loadedDate:'2026-09-13'}",ctx);
+ let calls=0;ctx.localEngineRequest=async()=>{calls++;return[{recordId:'sleep-1',date:'2026-09-13',revision:4,value:30},{recordId:'sleep-2',date:'2026-09-13',revision:2,value:420,coverage:'SESSION'}];};
+ await ctx.loadObservationDate(true);assert.equal(calls,1);assert.equal(ctx.document.getElementById('observation-value').value,420);assert.equal(vm.runInContext('observationEditor.record.revision',ctx),2);
+ ctx.localEngineRequest=async()=>[];await ctx.loadObservationDate(true);assert.equal(ctx.document.getElementById('observation-save').disabled,true);assert.equal(ctx.document.getElementById('observation-delete').disabled,true);assert.match(ctx.document.getElementById('observation-status').textContent,/清單/);
+});
+test('records preference keys isolate provider and user without changing date range',()=>{
+ const ctx=harness(()=>{}),saved=new Map();let provider='local-A';ctx.dashboardProviderNamespace=()=>provider;ctx.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};ctx.navigate=screen=>ctx.screen=screen;
+ const range=ctx.globalDateRange;ctx.selectRecordsView('training');assert.equal(ctx.selectedRecordsView(),'training');assert.equal(ctx.screen,'training-screen');assert.equal(ctx.globalDateRange,range);
+ ctx.currentUser={userId:'B'};assert.equal(ctx.selectedRecordsView(),'nutrition');ctx.currentUser={userId:'synthetic-A'};provider='beta-B';assert.equal(ctx.selectedRecordsView(),'nutrition');
+});
+test('metric-aware body drill-down and training overview do not erase drafts',()=>{
+ const ctx=harness(()=>{});let renders=0;ctx.navigate=screen=>ctx.screen=screen;ctx.renderBody=()=>renders++;
+ ctx.openDashboardCard({dataset:{target:'body-screen',metric:'bodyFat'}});assert.equal(ctx.document.getElementById('body-metric-select').value,'bodyFat');assert.equal(ctx.screen,'body-screen');assert.equal(renders,1);
+ const draft={sqlLocked:true};ctx.workoutSession=draft;ctx.openDashboardCard({dataset:{target:'training-screen'}});assert.equal(ctx.workoutSession,draft);assert.equal(ctx.document.getElementById('training-overview').hidden,false);
+});
+test('weight hydration rejects older dates/accounts and exposes persistent retry',async()=>{
+ const ctx=harness(()=>{}),pending=[];ctx.apiService={getBodyRecords:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))};ctx.setValue=(id,v)=>ctx.document.getElementById(id).textContent=v;ctx.recordDateLabel=x=>x;ctx.readableError=e=>e.message;
+ vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('async function loadWeightFormDate(')),ctx);
+ ctx.document.getElementById('weight-date').value='2026-09-12';const old=ctx.loadWeightFormDate('2026-09-12');assert.equal(ctx.document.getElementById('weight-input').disabled,true);
+ ctx.document.getElementById('weight-date').value='2026-09-13';const fresh=ctx.loadWeightFormDate('2026-09-13');pending[1].resolve([{recordId:'new',date:'2026-09-13',weight:70,bodyFat:0}]);await fresh;pending[0].resolve([{recordId:'old',date:'2026-09-12',weight:90}]);await old;
+ assert.equal(ctx.document.getElementById('weight-record-id').value,'new');assert.equal(ctx.document.getElementById('fat-input').value,0);assert.equal(ctx.loadWeightFormDate.binding.date,'2026-09-13');
+ const failure=ctx.loadWeightFormDate('2026-09-13');pending[2].reject(Error('SQL unavailable'));await failure;assert.equal(ctx.document.getElementById('weight-save').disabled,true);assert.equal(ctx.document.getElementById('weight-load-retry').hidden,false);assert.equal(ctx.loadWeightFormDate.binding,null);
+ const switched=ctx.loadWeightFormDate('2026-09-13');ctx.currentUser={userId:'B'};pending[3].resolve([{recordId:'secret-A',date:'2026-09-13',weight:80}]);await switched;assert.notEqual(ctx.document.getElementById('weight-record-id').value,'secret-A');
+});
 
 test('daily SQL read validates shape, preserves measured zero and marks unavailable projections',async()=>{
  const row={date:'2026-09-13',dataStatus:'CURRENT',steps:0,activeMinutes:null,activeCalories:null,totalCalories:null};
  const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data:[row]})}));
  assert.equal((await ctx.localEngineRequest('getActivityRecords'))[0].steps,0);
  assert.equal(ctx.manualSourceStatus().database,'CONNECTED');assert.equal(ctx.manualSourceStatus().dataPresent,'PRESENT');
- ctx.renderDailySqlReadNotice('activity',[row]);assert.match(ctx.document.getElementById('activity-active-note').textContent,/尚無此熱量/);
+ ctx.renderDailySqlReadNotice('activity',[row]);assert.match(ctx.document.getElementById('activity-active-note').textContent,/尚無活動熱量/);
  ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{...row,steps:null,dataStatus:'STALE'}]});assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
  ctx.renderDailySqlReadNotice('activity',[{...row,dataStatus:'STALE'}]);assert.match(ctx.document.getElementById('activity-steps-note').textContent,/結果待更新/);
  assert.throws(()=>ctx.assertManualResponseShape('getActivityRecords',[{...row,steps:'0'}]),e=>e.code==='MALFORMED_RESPONSE');
@@ -300,6 +381,13 @@ test('actual nutrition render and daily rows distinguish all missing, explicit z
     assert.equal(ctx.dailyNutritionRows(meals)[0].calories, expectedTotal);
     assert.equal(ctx.localManualTotal(meals, 'calories'), expectedTotal);
   }
+});
+
+test('incomplete confirmed meal cannot disappear from daily completeness and inflate known subtotal',()=>{
+ const ctx=harness(()=>{});vm.runInContext(html.split('\n').find(line=>line.includes('function dailyNutritionRows(')),ctx);
+ const rows=[{date:'2026-09-13',userConfirmed:true,includedInTotals:true,nutritionCompleteness:'COMPLETE',calories:200,protein:20,carbs:20,fat:5},{date:'2026-09-13',userConfirmed:true,includedInTotals:false,nutritionCompleteness:'INCOMPLETE',calories:null,protein:null,carbs:null,fat:null}];
+ const totals=ctx.dailyNutritionRows(rows)[0];for(const key of ['calories','protein','carbs','fat'])assert.equal(totals[key],null);
+ assert.equal(ctx.localManualTotal([rows[0]],'calories'),200);
 });
 
 for (const kind of ['body', 'meal']) {

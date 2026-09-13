@@ -109,7 +109,7 @@ const server = Deno.serve(
         headers: { ...headers, "content-type": "text/html; charset=utf-8" },
       });
     }
-    if (["/scripts/local-engine-web.js","/scripts/manual-sql-config.js"].includes(url.pathname)) {
+    if (["/scripts/local-engine-web.js","/scripts/web-view-state.js","/scripts/manual-observation-web.js","/scripts/manual-sql-config.js"].includes(url.pathname)) {
       return new Response(
         await Deno.readTextFile(url.pathname.slice(1)),
         { headers: { ...headers, "content-type": "text/javascript" } },
