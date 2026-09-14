@@ -1,0 +1,18 @@
+{
+  "schema": "ai-pool-v2-local-tools-v1",
+  "toolsRoot": "D:/Dev/Tools",
+  "cacheRoot": "D:/Dev/Caches",
+  "venvRoot": "D:/Dev/Venvs/ai-pool-v2",
+  "tools": {
+    "osv": "osv-scanner/v2.5.1/osv-scanner.exe",
+    "trivy": "trivy/v0.74.0/trivy.exe",
+    "actionlint": "actionlint/v1.7.12/actionlint.exe",
+    "act": "act/v0.2.89/act.exe",
+    "zizmor": "zizmor/v1.30.1/zizmor.exe",
+    "syft": "syft/v1.51.1/syft.exe"
+  },
+  "pythonTools": {"schemathesis": "4.27.1", "sqlfluff": "4.3.0"},
+  "browser": {"framework": "REUSE_EXISTING_ENGINE_PLAYWRIGHT_MODULE", "version": "1.62.1", "chromiumRevision": "1234", "executable": "playwright-browsers/chromium-1234/chrome-win64/chrome.exe"},
+  "network": "No source/SBOM upload. OSV offline matching; Trivy database download then offline dependency identification; zizmor offline; no act jobs/images.",
+  "openapi": null
+}

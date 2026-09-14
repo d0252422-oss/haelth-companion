@@ -44,3 +44,13 @@ data directory or equate ordinary PostgreSQL with all Supabase platform extensio
 Do not reset/clear existing databases. Preserve raw run evidence and failed attempts;
 manifest commands, times, exit codes and source hashes. Classify fresh/cached/not-run
 separately; repeated runs and nested golden vectors are not additional test cases.
+
+## AI Pool v2 local tooling
+
+Use `scripts/ai-pool-v2-check.ps1` and `docs/AI_POOL_V2_TOOLCHAIN.md` for optional
+deterministic audits. Reuse installed tools, D-scoped caches and isolated Python venv;
+do not reinstall globally or move/clean Docker/WSL data. Scanner findings are distinct
+from execution failure and require triage. Never infer release/security PASS from an
+empty or incomplete scan, or run Schemathesis/act against real credentials by default.
+Reports/snapshots/traces remain ignored/local. Optional audit failures must not suppress
+independent required regression; no source/SBOM uploads or paid integrations by default.

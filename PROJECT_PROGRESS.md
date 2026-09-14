@@ -11,6 +11,13 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+AI Pool v2 toolchain run `ai-pool-v2-20260914-094638` adds dev-only tooling, D-scoped
+installs/cache and repeatable scans, not product features or weighted acceptance units.
+Existing local regression remains accepted; no scope/denominator/weight change.
+Known-scope32.0%, overall UNKNOWN, +0.0pp. Scanner findings and coverage limits are
+tracked separately in `docs/AI_POOL_V2.md`; installed tools do not resolve remote,
+OAuth, CLI-platform, real-device or scientific-validation release gates.
+
 Current preparation run `health-beta-preparation-20260914-092035` makes no product
 weight change. Fresh read-only Beta schema/settings/platform/rollback checks and an
 offline eight-migration/51-action inventory are new unweighted deliverables. Original

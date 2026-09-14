@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');const runner=read('scripts/ai-pool-v2-check.mjs'),config=JSON.parse(read('config/ai-pool-v2.tools.json'));
+test('toolchain paths and report roots are D scoped',()=>{for(const k of ['toolsRoot','cacheRoot','venvRoot'])assert.match(config[k],/^D:\//);assert.match(runner,/NEW_UNIQUE_D_REPORT_DIRECTORY_REQUIRED/);});
+test('runner never installs tools or executes Docker workflows',()=>{assert.doesNotMatch(runner,/docker.*(?:prune|pull|reset)|pip.*install|npm.*install/);assert.match(runner,/'act-list'/);assert.match(runner,/'--list'/);assert.match(runner,/'--secret-file',empty/);});
+test('security scans disable source-dependent network resolution',()=>{assert.match(runner,/'--offline','--no-resolve'/);assert.match(runner,/'--offline-scan'/);assert.match(runner,/'--offline','--no-progress'/);assert.equal(config.openapi,null);});
+test('private settings and untracked databases are excluded from scan inputs',()=>{assert.match(runner,/'ls-files','-z'/);assert.match(runner,/\.secrets/);assert.match(runner,/REDACTED/);assert.match(runner,/delete env\[key\]/);});
+test('optional failures continue and missing required browser is explicit',()=>{assert.match(runner,/Set existing reviewed LOCAL_ENGINE_PG_BIN/);assert.match(runner,/r.required&&r.status!==/);assert.match(runner,/NOT_APPLICABLE/);});
