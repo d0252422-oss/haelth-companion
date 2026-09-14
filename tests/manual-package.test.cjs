@@ -8,6 +8,7 @@ for(const release of ['A','AB'])test(`offline ${release} package public release 
  vm.runInNewContext(readFileSync(path.join(output,'scripts/manual-sql-config.js'),'utf8'),ctx);
  assert.equal(manifest.release,release);assert.equal(ctx.HEALTH_MANUAL_SQL_CONFIG.release,release);assert.equal(ctx.HEALTH_MANUAL_SQL_CONFIG.enabled,false);
  assert.equal(manifest.remote_operations,0);
+ assert.match(manifest.backend.actual_edge_execution,/NOT_INFERRED_FROM_SOURCE_PACKAGE/);
  assert.equal(manifest.files.some(f=>f.path.includes('manual_exercise_catalog_sql')),release==='AB');
  assert.ok(manifest.files.some(f=>f.path.includes('engine_queue_publication_guard')));
  for(const file of manifest.files){const b=readFileSync(path.join(output,file.path));assert.equal(createHash('sha256').update(b).digest('hex'),file.sha256);assert.equal(b.length,file.bytes);}

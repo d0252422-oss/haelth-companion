@@ -11,7 +11,26 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
-Current run `health-manual-ux-20260914-025012` adds SQL sleep/steps/total expenditure,
+Current run `health-edge-recovery-20260914-072059` recovered Docker and passed27
+original-Web/SQL gates through the official Supabase Edge user isolate and fresh
+nativePG17.11. Direct Docker orchestration is not the unchanged `edge_execution`
+leaf's Supabase CLI acceptance. The CLI platform remains blocked by the approved
+PG17.11+ image requirement; current official platform inventory is17.6.1.171 and the
+queried17.11 registry tag set is empty. This is not a reason to falsify platform
+metadata, lower the reviewed PostgreSQL baseline or mutate the old running stack.
+Fresh Node91, Deno99, package2 and Deno-host ReleaseA19 regression supplement the
+EdgeAB27 evidence; tests and integration gates are counted separately.
+
+The25 original acceptances/weights are copied in `edge_recovery_continuation`.
+Eight remain ALREADY_CREDITED;17 ACCEPTANCE_NOT_FULLY_MET. No accepted local gate was
+contradicted by the new harness failures; corrected import-map/entrypoint/TLS/policy
+attempts are preserved and the selected source-consistent Edge run passes. No ledger
+omission, weight change or extra4 points for running an already credited path again.
+New unweighted work: safe Docker recovery, reusable real-user-isolate harness,
+signature-verifying local TLS auth path, and verified Beta role/config/migration
+gap inventory. Overall UNKNOWN; provisional32.0%; engineering0.0pp; correction0.0pp.
+
+Previous run `health-manual-ux-20260914-025012` added SQL sleep/steps/total expenditure,
 training draft/navigation and body-date fixes, records history, decimal/null nutrition,
 and bounded neighbor/snapshot regression repairs. Its25 per-leaf accounting records
 are in `manual_ux_continuation` in the machine ledger; previous accounting is retained.
@@ -46,7 +65,7 @@ confirmation requires a new baseline version, not an engineering-progress increm
 |---|---:|---|
 | Local canonical data / identity / PG | 12 / 12 | Native synthetic tests, not remote production acceptance |
 | Engines | 12 / 16 | Engineering and label arithmetic only; real-world validity unverified |
-| Runtime | 4 / 8 | Portable core passed; actual Edge execution blocked |
+| Runtime | 4 / 8 | Portable core and direct official Edge passed; original CLI-platform leaf remains blocked |
 | Existing Web | 4 / 8 | Full meal Browser passed; full overview/training/weekly acceptance unverified |
 | Android | 0 / 8 | JVM/lint passed, but intended APK build and OEM device gates not accepted |
 | iOS | 0 / 8 | Build/platform scope/device evidence still required |

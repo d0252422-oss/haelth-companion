@@ -1,6 +1,123 @@
 # Multi-domain engine architecture (non-production)
 
-## 2026-09-14 — manual observations / original UI continuation (current)
+## 2026-09-14 — recovered Docker / actual Edge / Beta prerequisites (current)
+
+RUN_ID=`health-edge-recovery-20260914-072059`, source baseline=`639e3a2`.
+Existing local product code/CRUD/engines and accepted UX are preserved. The new
+test transport is deliberately distinct from hosted deployment:
+
+`existing index.html/scripts -> localhost transport-only local-engine-server.ts
+-> pinned official Edge container -> EdgeRuntime.userWorkers.create
+-> unchanged mobile-health-beta/index.ts default.fetch and SDK middleware
+-> verified signed native/Web test session -> canonical identity
+-> native dedicated PostgreSQL17.11 -> existing portable engine/queue -> response`.
+
+`scripts/local-edge-container.mjs` copies only allowlisted tracked source and
+unchanged frozen JS; generates a disposable dispatcher/entrypoint wrapper; mounts
+read-only source/public local CA; uses an exact local Docker endpoint, unique
+container and loopback57921. Private signing/TLS keys are not mounted. It starts
+the real Supabase user isolate, not an ordinary Deno HTTP server. Original Web and
+TLS test authority run on57841/57842; Edge mode never constructs the host SQL/engine
+runtime. Native syntheticPG17 is on57485. Per-requestCPU2s/memory256MB/wall150s limits
+are enforced; boot/resource errors fail the final report. All owned services stop
+after each run; clusters, traces and stopped containers remain for evidence.
+
+Reproduce safely (reviewed17.11 binaries, existing cached image, free local ports):
+
+```powershell
+$env:LOCAL_ENGINE_PG_BIN='D:/Dev/Evidence/health-edge-pg17-20260913-2210/pg17-tools/postgresql-17.11-3-reviewed/bin'
+$env:LOCAL_ENGINE_PG_MAJOR='17'
+$env:DENO_DIR='D:/DevCache/health-companion-canonical-20260913-020110/deno'
+# Set MANUAL_SQL_EVIDENCE_DIR and MANUAL_SQL_PRIVATE_TRACE_DIR to new dedicated D paths.
+node scripts/test-manual-sql-e2e.mjs --release-exercise --edge-container
+```
+
+This mode is `DOCKER_DIRECT_OFFICIAL_EDGE_NOT_SUPABASE_CLI_STACK`: finalAB27 PASS,
+no source mutation during execution. CLI2.115.0 has not served this stack. Its
+platform requires an approved patched PostgreSQL image; existing17.6 and the current
+official17.6.1.171 build do not meet the project's17.11+ rule. A fresh registry17.11
+query found no tags. Do not lower the safety baseline, fake CLI stack metadata, use
+an old shared DB or label ordinary Deno as a CLI substitute. NativePG17 extensions
+are pgcrypto/plpgsql; unavailable platform extensions were not stubbed into PASS.
+Docker itself is no longer the blocker; no reset/prune/reinstall/image pull occurred.
+
+The local test authority uses distinct real ES256 validation and readonly canonical
+mapping. Its TLS CA is ephemeral; a separate CA:false leaf is validated for hostname
+and server purpose. No production trust-store change or TLS verification bypass.
+This is synthetic authorization, not real Google/LINE or hosted Supavisor pool/TLS
+acceptance. Only the public local CA is trusted by the isolated test container.
+
+### Verified Beta delta and exact unfulfilled enablement prerequisites
+
+Fresh read-only inventory: `health-companion-beta/uavimjgccigpbwqmfkhh`,
+ap-southeast-1, Edge `mobile-health-beta` v14, DBserver17.6,16 migrations ending
+`20260903130618_unify_beta_web_native_identity`. Production exclusion
+`vptqedxdxfoohbqctujf` is recorded, not queried. Remote evidence includes source
+snapshot and schema/role/grant/policy metadata, not user health rows or secrets.
+
+The missing **ordered additive subset**, rehearsed in the fresh synthetic cluster:
+
+1. `20260912032458_multi_domain_engine_versioned_outputs.sql`
+2. `20260912041126_engine_local_runtime_integration.sql`
+3. `20260912182042_manual_body_local_sql.sql`
+4. `20260913041844_manual_exercise_catalog_sql.sql` (ReleaseB)
+5. `20260913164024_manual_body_engine_recompute.sql`
+6. `20260913164026_manual_exercise_category_update.sql` (ReleaseB)
+7. `20260913180000_engine_queue_publication_guard.sql`
+8. `20260913190152_manual_observation_canonical_sql.sql`
+
+Applying only number8 would be incomplete. Do not run a whole-history db push.
+No top-level destructive data transformation was found in this additive subset;
+DELETE/UPDATE inside lifecycle/queue function definitions or grant names are not
+mass operations. Rehearsal is ordinaryPG17, not full Supabase extension rehearsal.
+Reconfirm target and exact hashes before any eligible remote apply.
+
+Real hosted provider exists in `hosted-manual-bootstrap.ts`; it is fail-closed,
+not an inert mock. It requires dedicated `health_manual_api` (absent remotely),
+NOINHERIT/NOSUPERUSER/NOBYPASSRLS, controlled service_role membership, canonical
+server authorization and the verified TLS pool path. Do not bypass this guard or
+replace it with a frontend service-role key. Creating/permissioning its credential
+is a separate security-sensitive operation requiring scoped authorization.
+
+Missing six secret/config **names** (values never output):
+`HEALTH_MANUAL_SQL_HOSTED_ENABLED`, `HEALTH_MANUAL_RELEASE`,
+`HEALTH_MANUAL_ALLOWED_ORIGIN`, `HEALTH_MANUAL_EXPECTED_PROJECT_REF`,
+`HEALTH_MANUAL_EXPECTED_DB_HOST`, `HEALTH_MANUAL_DATABASE_URL`.
+The `BETA_WEB_AUTH_VERIFY_URL` name already exists; its actual value, legitimate
+test session and live canonical mapping were not available for acceptance.
+The non-secret provider switch is within the conditional Beta authorization;
+creating a new DB credential/role/privileges is not silently inferred from it.
+
+Remaining prerequisites, not a blanket request to reauthorize granted Beta actions:
+
+- Approved actual CLI platform execution and hosted pool/role/session integration.
+- A separately approved dedicated Beta-only SQL login/role/credential provisioning
+  plan; securely configured server secret, no value in chat or frontend.
+- A legitimate dedicated Beta A/B login route for remote verification; human
+  consent/MFA/CAPTCHA must not be bypassed. Synthetic local issuer cannot be deployed.
+- Complete existing frontend artifact/revision and flags/config rollback snapshot.
+  The browser fetch tool refused the documented public Beta URL; no alternate
+  fetch was used to bypass that refusal. Its deployment mechanism is unverified.
+- Whole-Web SQL-first scope still lacks weekly/check-in legacy contract evidence;
+  these actions fail closed. Manual domains passing does not silently implement
+  the missing contracts or authorize switching unrelated pages to broken reads.
+
+No migration, role/grant/config mutation, deployment or smoke write occurred.
+After prerequisites pass, retain the previously documented target-specific ordered
+migration -> Edge smoke -> frontend provider switch -> dedicated user-scoped E2E.
+Stop on auth/RLS/read-write/generation regression; restore the last verified
+frontend/flag/function, preserving new SQL records. No Sheets overwrite or destructive
+reverse migration. Source-package generation stays OFF and no longer hardcodes the
+obsolete Docker-startup failure; it cannot infer runtime acceptance.
+
+Sources: [official Edge API](https://raw.githubusercontent.com/supabase/edge-runtime/v1.74.3/types/global.d.ts),
+[worker policy](https://raw.githubusercontent.com/supabase/edge-runtime/v1.74.3/crates/base/src/worker/pool.rs),
+[function limits](https://supabase.com/docs/guides/functions/limits),
+[platform build configuration](https://raw.githubusercontent.com/supabase/postgres/develop/ansible/vars.yml).
+Exact observed versions/time/raw responses are in the run evidence, not inferred from
+the moving documentation URLs. No real-world score/food/photo validity is claimed.
+
+## 2026-09-14 — manual observations / original UI continuation (historical)
 
 RUN_ID=`health-manual-ux-20260914-025012`, START_HEAD=`7779dcdd`. Expanded Beta
 authorization is conditional on **all** Owner preconditions, now including sleep,

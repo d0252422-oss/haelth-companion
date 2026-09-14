@@ -1,9 +1,5 @@
 // Local-only synthetic authentication authority and existing Deno route host. No external auth calls.
 import { createSyntheticAuthority } from "./local-engine-auth.ts";
-import { LocalEngineRuntime } from "../supabase/functions/mobile-health-beta/local-engine-runtime.ts";
-import application, {
-  registerLocalEngineHandler,
-} from "../supabase/functions/mobile-health-beta/index.ts";
 import subjects from "../fixtures/engine-local-identities.json" with {
   type: "json",
 };
@@ -12,15 +8,43 @@ if (Deno.env.get("HEALTH_ENGINE_LOCAL_ONLY") !== "1" || Deno.env.get("DENO_DEPLO
   throw Error("LOCAL_ENGINE_DISABLED");
 }
 const config = JSON.parse(await Deno.readTextFile(Deno.args[0]));
+const edgeProxy = Deno.env.get('HEALTH_TEST_ACTUAL_EDGE_PROXY');
+if(edgeProxy && edgeProxy !== 'http://127.0.0.1:57921/functions/v1/mobile-health-beta/v1/engine/web')throw Error('UNSAFE_EDGE_TEST_PROXY');
 const authority = await createSyntheticAuthority();
 const webAuthority = await createSyntheticAuthority(); // Distinct signing keys, never native-JWT impersonation.
 // Server-only SDK construction fixtures: no real keys, no remote API, no bearer bypass.
 Deno.env.set("SUPABASE_URL", "http://127.0.0.1:57841");
 Deno.env.set("SUPABASE_PUBLISHABLE_KEYS", JSON.stringify({default:"local-sdk-construction-fixture"}));
 Deno.env.set("SUPABASE_SECRET_KEYS", JSON.stringify({default:"local-sdk-construction-fixture"}));
-const runtime = new LocalEngineRuntime(config, authority.verify, async token=>{const user=await webAuthority.verify(token);return {subject:'web-session-'+user.id,email:user.email};});
-await runtime.start();
-registerLocalEngineHandler((request) => runtime.handle(request));
+// In actual Edge mode this host serves only the original Web and a disposable,
+// signature-verifying test issuer. It never constructs a SQL/engine runtime.
+let runtime:any,application:any;
+if(!edgeProxy){
+ const module=await import('../supabase/functions/mobile-health-beta/index.ts');application=module.default;
+ const {LocalEngineRuntime}=await import('../supabase/functions/mobile-health-beta/local-engine-runtime.ts');
+ runtime=new LocalEngineRuntime(config,authority.verify,async token=>{const user=await webAuthority.verify(token);return {subject:'web-session-'+user.id,email:user.email};});
+ await runtime.start();module.registerLocalEngineHandler((request)=>runtime.handle(request));
+}
+let authServer:Deno.HttpServer|undefined;
+if(edgeProxy){
+ const tls=JSON.parse(await Deno.readTextFile(Deno.env.get('HEALTH_TEST_TLS_CONFIG')||''));
+ authServer=Deno.serve({hostname:'127.0.0.1',port:57842,cert:await Deno.readTextFile(tls.cert),key:await Deno.readTextFile(tls.key)},async request=>{
+  const url=new URL(request.url);
+  if(!['host.docker.internal','127.0.0.1'].includes(url.hostname))return new Response('LOCAL_ONLY',{status:403});
+  try{
+   if(url.pathname==='/auth/v1/user'&&request.method==='GET'){
+    const user=await authority.verify((request.headers.get('authorization')||'').replace(/^Bearer /,''));
+    return Response.json(user);
+   }
+   if(url.pathname==='/local-verify-web'&&request.method==='POST'){
+    const body=await request.json();if(body.action!=='getCurrentUser')return new Response('METHOD_REJECTED',{status:400});
+    const user=await webAuthority.verify(body.sessionToken);
+    return Response.json({data:{profile:{UserID:'web-session-'+user.id,Email:user.email}}});
+   }
+   return new Response('NOT_FOUND',{status:404});
+  }catch{return Response.json({error:'INVALID_SIGNED_SYNTHETIC_SESSION'},{status:401});}
+ });
+}
 const counters = { requests: 0 };
 const headers = {
   "cache-control": "no-store",
@@ -31,6 +55,10 @@ const server = Deno.serve(
   { hostname: "127.0.0.1", port: 57841 },
   async (request) => {
     const url = new URL(request.url);
+    if(edgeProxy&&url.hostname==='host.docker.internal'&&url.pathname==='/auth/v1/user'&&request.method==='GET'){
+      try{return Response.json(await authority.verify((request.headers.get('authorization')||'').replace(/^Bearer /,'')));}
+      catch{return Response.json({error:'INVALID_SIGNED_SYNTHETIC_SESSION'},{status:401});}
+    }
     if (url.hostname !== "127.0.0.1") {
       return new Response("LOCAL_ONLY", {
         status: 403,
@@ -86,14 +114,14 @@ const server = Deno.serve(
           "Bearer " + cookie,
         );
       }
-      const response = await application.fetch(
-        new Request(request, { headers: h }),
-      );
+      const response = edgeProxy
+        ? await fetch(edgeProxy,{method:request.method,headers:h,body:request.method==='GET'?undefined:await request.arrayBuffer(),signal:AbortSignal.timeout(30000)})
+        : await application.fetch(new Request(request, { headers: h }));
       return response || new Response("DISABLED", { status: 503 });
     }
     if (url.pathname === "/local-runtime-metrics") {
       return Response.json({
-        timings: runtime.timings,
+        timings: runtime?.timings ?? [],execution:edgeProxy?'ACTUAL_EDGE_PROXY_ONLY':'LOCAL_DENO',
       }, { headers });
     }
     if (url.pathname === "/" || url.pathname === "/index.html") {
@@ -120,6 +148,7 @@ const server = Deno.serve(
 );
 let draining = false;
 const timer = setInterval(async () => {
+  if(!runtime)return;
   if (draining) return;
   draining = true;
   try {
@@ -132,5 +161,6 @@ const timer = setInterval(async () => {
 Deno.addSignalListener("SIGINT", async () => {
   clearInterval(timer);
   await server.shutdown();
-  await runtime.close();
+  await authServer?.shutdown();
+  await runtime?.close();
 });

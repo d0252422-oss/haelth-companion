@@ -1,6 +1,74 @@
 # Multi-domain engine test report
 
-## 2026-09-14 — manual observations / mobile UX closure (current)
+## 2026-09-14 — Docker recovery / actual Edge continuation (current)
+
+RUN_ID=`health-edge-recovery-20260914-072059`; START_HEAD=`639e3a2`. Canonical
+workspace and six original Android-related file hashes preserved; no old worktree,
+formula/golden, product engine, migration, production or remote Beta data changed.
+New commands, raw failures, source hashes, screenshots/HTTP/SQL assertions and final
+selection: `D:/Dev/Evidence/health-edge-recovery-20260914-072059`.
+
+| Fresh selection | Result | Evidence / boundary |
+|---|---:|---|
+| Official Edge user isolate + PG17.11 + existing Web AB |27/27| `edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json`; actual source handler, no host engine or persistence/authorization mock |
+| Ordinary Deno host + PG17.11 + existing Web A |19/19| `legacy-A-regression/manual-sql-e2e-dade55de-f2cb-4f9a-9e7b-c9a88cccc6e5/report.json`; regression of the changed host bootstrap, NOT Edge |
+| Scoped Node |91/91| `edge-scoped-node-junit.xml`; UI already included,28 original golden vectors included |
+| Deno portable/handler/identity/body/observations |99/99| `critical-deno-junit.xml`;57 differential fixtures and grouped28 goldens included, not extra counts |
+| Offline frontend/backend source package contracts |2/2| `frontend-build-junit.xml`; A/AB parsing/hashes/flagsOFF, not CLI compiled bundles or deployed artifacts |
+| Typecheck / scoped lint / Node syntax |PASS| individual command metadata; build/check tasks are not extra test cases |
+
+Edge27 ran2026-09-13T23:56:54.442Z–2026-09-14T00:06:16.454Z. It covers all six
+manual domains, exercise management/history/alias safety, low-privilege RLS plus
+server tenant authorization, A/B/anonymous/forged/invalid/expired/missing/conflicting
+mapping, signed Web-session mapping, actual CRUD/replay/revision/response-loss/lock
+barriers, old/new dates, overlap/null/cumulative semantics, fresh contexts and mobile
+UI. Local body advisory-lock observation2058.359ms with2s SQL bound is a measurement,
+not an online SLA. Final resource/boot errors0; source hashes unchanged during run.
+
+Docker29.7.2 server/socket recovered after the failed normal startup reproduced
+inaccessible zero-byte AF_UNIX runtime entries. Exact transient directories were
+renamed and retained, no VHD/WSL/data/cache deletion, ACL change or reset. Original
+containers auto-resumed by their existing restart policies and were not modified.
+The five transient entries remain preserved; shared Docker stays running.
+
+Actual runtime: official cached `supabase/edge-runtime:v1.74.3`, digest
+`sha256:c52405002a890ca9fcf77978671c57f3a988e03174afb277f84ac65bc917013c`,
+compatibleDeno2.1.4. User worker limits remain256MB,2sCPU per request,150s wall;
+policy=per_request, no Python/host calculation fallback. Distinct signed local
+authorities and a disposable CA with separate CA:false leaf exercise verification,
+not real Google/LINE OAuth. Native PostgreSQL17.11 is not Supavisor/platform parity.
+
+Classification is deliberately split: ACTUAL_EDGE_RUNTIME_DIRECT=PASS,
+ACTUAL_CLI_EDGE=BLOCKED. CLI2.115.0 functions serve requires its running local stack.
+Cached platformPG17.6.1.155 is below the repo's reviewed17.11+ execution baseline.
+Fresh official postgres build config is17.6.1.171; registry query for17.11 returns
+zero tags (time/source/raw response in `image-availability.json`). No image pulled,
+tool upgraded, existing stack repurposed or fake platform metadata constructed.
+
+Retained first failures: wrong user-worker import-map property/path, entrypoint
+root, per-worker cumulative CPU configuration, and CA used as a TLS leaf. The first
+full booted AB run had15 failed/12 passing gates. Corrected with the documented
+context filesystem import-map, same-root wrapper, per_request policy at unchanged
+2s, and validated separate TLS leaf; final27/27 passes. No expected value/tolerance
+was relaxed. Bootstrap/diagnostic failures remain command failures, not test cases.
+Selected unresolved failures0; prior attempts remain failures. Dependency caches do
+not make fresh test execution cached. Python/Android/PG18 unchanged suites remain
+prior evidence, not newly counted. Root review is not a second AI review.
+
+Fresh read-only Beta inventory confirms project `uavimjgccigpbwqmfkhh`, Edgev14,
+server17.6 and only16 migrations through20260903130618. Eight additive engine/manual
+migrations are missing (seven predecessors plus observations); dedicated SQL role
+and six provider settings are absent. Edge source/schema metadata were preserved,
+but this is not a complete frontend/config/compiled rollback point. No usable real
+test OAuth session was acquired; no cookies/tokens harvested. See architecture
+current section and the run's authorization checklist for exact prerequisites.
+
+Beta migration/deploy/test writes0. SQL-first/internal manual Beta remains BLOCKED;
+Docker recovery does not grant missing hosted auth/pool/config/whole-Web acceptance.
+No device Gate ran; prior local PASS remains valid. Progress32.0% known scope,
+overallUNKNOWN, change0.0pp under the unchanged25-leaf baseline.
+
+## 2026-09-14 — manual observations / mobile UX closure (historical)
 
 RUN_ID=`health-manual-ux-20260914-025012`; START_HEAD=`7779dcdd` in the unique safe D
 checkout. This is new implementation/execution, not reused overnight PASS. Final scoped

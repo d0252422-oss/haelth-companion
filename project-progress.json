@@ -2,6 +2,255 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "edge_recovery_continuation": {
+    "run_id": "health-edge-recovery-20260914-072059",
+    "source_baseline": "639e3a2f514596e9a3e10ff64bbe5974f0f9b7fe",
+    "evidence_root": "D:/Dev/Evidence/health-edge-recovery-20260914-072059",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "ledger_correction_pp": 0,
+    "ledger_omission": "NONE_CONFIRMED",
+    "newly_completed_unweighted_deliverables": [
+      "Safe recovery of existing Docker without deleting data/settings or changing socket ACLs",
+      "Official Supabase Edge v1.74.3 user-isolate -> PG17.11 -> existing Web AB27 fresh PASS; direct Docker orchestration, not CLI platform acceptance",
+      "Isolated signed native/Web session verifier with disposable CA and separate TLS leaf; no host-engine fallback",
+      "Fresh Beta-only read-only inventory of missing migration chain, SQL role/config and incomplete rollback snapshot"
+    ],
+    "gates": [
+      {
+        "gate_id": "canonical_ingestion",
+        "original_acceptance": "Local canonical ingestion preserves units, source/revision, deduplication, timestamp boundaries and tombstone semantics on synthetic fixtures.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/legacy-A-regression/manual-sql-e2e-dade55de-f2cb-4f9a-9e7b-c9a88cccc6e5/report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "local_identity",
+        "original_acceptance": "Verified signed subject maps to distinct canonical ID; missing/forged/expired identity denied; A/B/anon isolation through server and low-privilege RLS.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/legacy-A-regression/manual-sql-e2e-dade55de-f2cb-4f9a-9e7b-c9a88cccc6e5/report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "frozen_formula",
+        "original_acceptance": "Original 28 health-score-v1.0 golden vectors retain score/completeness/confidence/missing/version and unchanged formula source.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/critical-deno-junit.xml",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-scoped-node-junit.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "reference_engineering",
+        "original_acceptance": "Existing multi-domain reference contracts, missing-data behavior, recompute and arithmetic regression pass; excludes real-world validity.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/critical-deno-junit.xml",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-scoped-node-junit.xml"
+        ],
+        "credit_change": 0,
+        "boundary": "Fresh cross-runtime differential fixtures strengthen engineering only; whole Python suite retained as prior evidence, not rerun."
+      },
+      {
+        "gate_id": "nutrition_label_local",
+        "original_acceptance": "Explicit synthetic per100g confirmed label scales by measured grams, persists provenance and nulls; edit/delete/replay reach engine/storage.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/legacy-A-regression/manual-sql-e2e-dade55de-f2cb-4f9a-9e7b-c9a88cccc6e5/report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "portable_core_parity",
+        "original_acceptance": "Pure portable calculation and existing handler adapter run without subprocess; 57 differential fixtures plus frozen full-contract vectors pass. Excludes actual Edge execution.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/critical-deno-junit.xml",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-scoped-node-junit.xml"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "edge_execution",
+        "original_acceptance": "Supabase CLI Edge handler -> canonical identity -> actual engine -> dedicated PostgreSQL passes security/error/resource tests; no host Python or remote fallback.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/image-availability.json"
+        ],
+        "credit_change": 0,
+        "boundary": "Direct official Edge is genuine execution but does not satisfy this leaf's explicitly unchanged Supabase CLI criterion; native PG17.11 is not the full platform/pool."
+      },
+      {
+        "gate_id": "postgres_recompute",
+        "original_acceptance": "Native PostgreSQL low privilege RLS, privileged tenant authorization, atomic publication, generation concurrency, stale/replay/tombstone and bounded old/new-date invalidation pass.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/legacy-A-regression/manual-sql-e2e-dade55de-f2cb-4f9a-9e7b-c9a88cccc6e5/report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "existing_browser",
+        "original_acceptance": "Existing Web full meal create/update/cancel-delete/confirm-delete/null/reload/B isolation via actual engine and PG; no persistence/auth mocks.",
+        "original_weight": 4,
+        "reason": "ALREADY_CREDITED",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/edge-AB-policy-tls-fixed/manual-sql-e2e-da4ea2d7-0135-4bd9-a0de-03d89950b389/report.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/legacy-A-regression/manual-sql-e2e-dade55de-f2cb-4f9a-9e7b-c9a88cccc6e5/report.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "overview_training_weekly",
+        "original_acceptance": "Full confirmed-version overview, training/body input,14-day aggregate and rolling7-day reporting UI regression; contracts alone insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "android_nondevice_build",
+        "original_acceptance": "Fresh JVM/lint plus legitimate intended Beta APK variant build with reviewed config; unit-only evidence cannot satisfy build.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "android_oem_device",
+        "original_acceptance": "OEM background bounded HTTP/retry/lock/swipe/process-death/idempotency and ingestion-to-score real-device E2E.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "ios_build",
+        "original_acceptance": "Confirmed iOS delivery route build/static acceptance on supported Apple toolchain; optional native helper scope decision remains visible.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "ios_device",
+        "original_acceptance": "iOS Shortcut/HealthKit permitted data -> canonical ingestion -> displayed output on device; platform scope explicitly confirmed.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "photo_model",
+        "original_acceptance": "Licensed model weights and real inference path, no fixture or external manual handoff substituted.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "photo_reference_accuracy",
+        "original_acceptance": "Licensed representative photo ground truth and predeclared evaluation; actual accuracy and limitations measured.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "food_reference",
+        "original_acceptance": "Food reference source/version/license, preparation/edible/portion conversions and values independently validated.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "new_score_validity",
+        "original_acceptance": "New domain formulas have justified populations/thresholds/weights and independent reference/real-world validation.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "remote_beta_oauth",
+        "original_acceptance": "Authorized remote Beta API/UI integration, real Google OAuth identity and tenant isolation smoke; local synthetic tokens insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/beta-readonly-inventory.json",
+          "D:/Dev/Evidence/health-edge-recovery-20260914-072059/beta-schema-before.json"
+        ],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "line_v4",
+        "original_acceptance": "Roadmap V4 verified LIFF Google link/unlink, account separation and weekly LINE notification acceptance.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "recovery_v2",
+        "original_acceptance": "Roadmap V2 full-body/local-muscle load, sleep features and user-feedback recovery acceptance; new adapter alone insufficient.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "guidance_v3",
+        "original_acceptance": "Roadmap V3 context-based intensity/body-part guidance, RPE/RIR and Deload/imbalance acceptance.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "personalization_v5",
+        "original_acceptance": "Roadmap V5 long-term personalization, explainable weight decisions and cross-domain guidance with validation.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "release_security_privacy",
+        "original_acceptance": "Pre-release privacy/security, data backup/retention/permissions and legal distribution review; high-risk findings closed.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      },
+      {
+        "gate_id": "authorized_release",
+        "original_acceptance": "Explicitly authorized release, distribution smoke, backup and rollback acceptance in named environment.",
+        "original_weight": 4,
+        "reason": "ACCEPTANCE_NOT_FULLY_MET",
+        "new_evidence": [],
+        "credit_change": 0
+      }
+    ]
+  },
   "manual_ux_continuation": {
     "run_id": "health-manual-ux-20260914-025012",
     "source_baseline": "7779dcdd50c87b2aaf5f9fcbe6867744dac84ec6",

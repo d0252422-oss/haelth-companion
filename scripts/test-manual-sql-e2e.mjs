@@ -17,6 +17,7 @@ const phase = process.env.MANUAL_SQL_EVIDENCE_DIR || 'D:/MigrationReports/dual-p
 const runId = randomUUID(), evidence = path.join(phase, 'manual-sql-e2e-' + runId);
 const releaseExercise = process.argv.includes('--release-exercise');
 const releaseA=process.argv.includes('--release-a');
+const actualEdge=process.argv.includes('--edge-container');
 assert.ok(!(releaseA&&releaseExercise),'Choose independent Release A or full AB');
 const privateTraceRoot = process.env.MANUAL_SQL_PRIVATE_TRACE_DIR;
 assert.ok(privateTraceRoot && path.isAbsolute(privateTraceRoot), 'Explicit private trace retention root required');
@@ -46,6 +47,12 @@ for(const file of ['scripts/manual-observation-web.js','scripts/manual-observati
 report.command += releaseExercise ? ' --release-exercise' : '';
 report.command += releaseA ? ' --release-a' : '';
 report.handler_path='existing mobile-health-beta default.fetch -> @supabase/server middleware -> signed local authority -> canonical PostgreSQL mapping -> real SQL/portable engine; NOT actual Edge';
+if(actualEdge){
+ report.command+=' --edge-container';report.runtime_classification='OFFICIAL_SUPABASE_EDGE_USER_ISOLATE_NATIVE_PG17_SYNTHETIC_SIGNED_AUTH';
+ report.handler_path='Existing Web -> local transport-only proxy -> official Supabase Edge user isolate -> real default.fetch/SDK/local bootstrap -> actual signed session verifier -> canonical PostgreSQL17 -> real engine';
+ report.cli_stack='NOT_RUN_IN_THIS_MODE';
+ report.source_hashes['scripts/local-edge-container.mjs']=hash(await readFile('scripts/local-edge-container.mjs'));
+}
 const record = (step, detail = {}) => { report.steps.push({ step, at: now(), ...detail }); console.log('PASS ' + step); };
 async function gate(name, fn) {
   const started = now();
@@ -54,7 +61,7 @@ async function gate(name, fn) {
 }
 async function portFree(port) { await new Promise((resolve, reject) => { const probe = net.createServer(); probe.once('error', () => reject(Error('PORT_ALREADY_IN_USE_' + port))); probe.listen(port, '127.0.0.1', () => probe.close(resolve)); }); }
 async function until(fn, description, timeout = 20000) { const deadline = Date.now() + timeout; let value; while (Date.now() < deadline) { value = await fn(); if (value) return value; await sleep(100); } throw Error('BOUNDED_WAIT_FAILED_' + description); }
-let pg, child, browser, page, context;
+let pg, child, browser, page, context, edge;
 const contexts = [], responsePromises = new Set(); let stdout = '', stderr = '';
 const http = async (cookie, action, payload = {}) => {
   const start = now(), response = await fetch(base + '/v1/engine/web', { method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: JSON.stringify({ action, payload }), signal: AbortSignal.timeout(30000) });
@@ -114,6 +121,12 @@ try {
   const childEnv = { ...process.env, HEALTH_ENGINE_LOCAL_ONLY: '1' }; delete childEnv.ALGORITHM_PYTHON;
   childEnv.HEALTH_EXERCISE_MANAGEMENT_LOCAL=releaseExercise?'1':'0';
   childEnv.HEALTH_MANUAL_WEB_SESSION_LOCAL=(releaseExercise||releaseA)?'1':'0';
+  if(actualEdge){
+   await portFree(57842);await portFree(57921);
+   edge=await(await import('./local-edge-container.mjs')).prepareEdgeTest(evidence,privateDir,pg.config,releaseExercise);
+   childEnv.HEALTH_TEST_ACTUAL_EDGE_PROXY=edge.proxy;childEnv.HEALTH_TEST_TLS_CONFIG=edge.tlsConfig;
+   report.actual_edge=edge.metadata;
+  }
   const denoExecutable = process.env.DENO_EXECUTABLE || 'deno';
   const runtimeArgs = ['run', '--cached-only', '--frozen-lockfile', '--node-modules-dir=none', '--config', 'config/engine-local.deno.json', '--allow-env', '--allow-read', '--allow-sys', '--allow-net=127.0.0.1', 'scripts/local-engine-server.ts', config];
   report.tools.deno = execFileSync(denoExecutable, ['--version'], { encoding: 'utf8', timeout: 10000, windowsHide: true, env: childEnv }).trim();
@@ -121,6 +134,11 @@ try {
   child = spawn(denoExecutable, runtimeArgs, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: childEnv });
   child.stdout.on('data', data => { stdout += redact(data); }); child.stderr.on('data', data => { stderr += redact(data); });
   await until(async () => { if (child.exitCode !== null) throw Error('LOCAL_HOST_EXIT_' + child.exitCode); try { return (await fetch(base + '/local-health', { signal: AbortSignal.timeout(1000) })).ok; } catch { return false; } }, 'host-health', 15000);
+  if(edge){
+   edge.start();
+   await until(async()=>{try{return(await fetch('http://127.0.0.1:57921/_health',{signal:AbortSignal.timeout(1000)})).ok;}catch{return false;}},'actual-edge-health',30000);
+   const boundary=await http(null,'getDashboardData',{});assert.equal(boundary.http_status,401,'Actual product handler must deny anonymous before browser E2E');
+  }
   browser = await chromium.launch({ executablePath: browserPath, headless: true }); report.tools.browser = browser.version();
 
   await gate('browser_body_crud', async () => {
@@ -346,6 +364,7 @@ finally {
   }
   if (browser) await browser.close();
   if (child && child.exitCode === null) { if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); else child.kill('SIGTERM'); }
+  if(edge)try{report.edge_cleanup=await edge.close();if(report.edge_cleanup.resourceErrors.length)report.errors.push('ACTUAL_EDGE_RESOURCE_OR_BOOT_FAILURE');}catch(error){report.errors.push('EDGE_CLEANUP_FAILED: '+error.message);}
   if (pg) await pg.close();
   report.source_hashes_after = {}; report.source_changed_during_run = [];
   for (const [file, before] of Object.entries(report.source_hashes)) {
