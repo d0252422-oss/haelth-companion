@@ -11,7 +11,17 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
-Current run `health-edge-recovery-20260914-072059` recovered Docker and passed27
+Current preparation run `health-beta-preparation-20260914-092035` makes no product
+weight change. Fresh read-only Beta schema/settings/platform/rollback checks and an
+offline eight-migration/51-action inventory are new unweighted deliverables. Original
+local PASS evidence is retained. `edge_execution`, `overview_training_weekly` and
+`remote_beta_oauth` remain ACCEPTANCE_NOT_FULLY_MET (CLI platform, whole-site SQL and
+hosted auth still blocked); existing local leaves ALREADY_CREDITED. No ledger omission,
+reweight or denominator change. Engineering0.0pp, correction0.0pp, known scope32.0%.
+See [remote enablement preparation](docs/BETA_REMOTE_ENABLEMENT_PLAN.md). No remote
+role/settings/migration/deployment/data mutation was performed.
+
+Previous run `health-edge-recovery-20260914-072059` recovered Docker and passed27
 original-Web/SQL gates through the official Supabase Edge user isolate and fresh
 nativePG17.11. Direct Docker orchestration is not the unchanged `edge_execution`
 leaf's Supabase CLI acceptance. The CLI platform remains blocked by the approved

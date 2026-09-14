@@ -2,6 +2,25 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "beta_preparation_continuation": {
+    "run_id": "health-beta-preparation-20260914-092035",
+    "source_baseline": "29346ace9842d9bbde221d0fcf4026a52ad3b80c",
+    "evidence_root": "D:/Dev/Evidence/health-beta-preparation-20260914-092035",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "ledger_correction_pp": 0,
+    "ledger_omission": "NONE_CONFIRMED",
+    "existing_credited_leaves": "ALREADY_CREDITED; prior accepted local evidence retained",
+    "unmet_leaves": ["edge_execution", "overview_training_weekly", "remote_beta_oauth"],
+    "unmet_reason": "ACCEPTANCE_NOT_FULLY_MET: CLI stack, full-site hosted contract and real remote authentication not accepted",
+    "newly_completed_unweighted_deliverables": [
+      "Fresh metadata-only Beta target/schema/role/six-setting inventory",
+      "Eight-migration dependency and literal Web action/source SQL audit",
+      "Strict hosted pool DNS/TCP/TLS readiness diagnosis without credentials or data queries",
+      "Immutable deployed frontend source recovery and explicit expired/live-artifact limitations",
+      "Role privilege exception, test-login contract and bounded future authorization request"
+    ]
+  },
   "edge_recovery_continuation": {
     "run_id": "health-edge-recovery-20260914-072059",
     "source_baseline": "639e3a2f514596e9a3e10ff64bbe5974f0f9b7fe",

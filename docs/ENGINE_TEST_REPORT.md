@@ -1,6 +1,28 @@
 # Multi-domain engine test report
 
-## 2026-09-14 — Docker recovery / actual Edge continuation (current)
+## 2026-09-14 — Beta read-only preparation (current)
+
+RUN_ID=`health-beta-preparation-20260914-092035`; product source=`29346ace`.
+Evidence root: `D:/Dev/Evidence/health-beta-preparation-20260914-092035`.
+New work: offline dependency/SQL-action audit, role/settings/login design, strict
+pool probe, immutable frontend source recovery and exact pending authorization plan.
+No product handler, formula, migration, dependency or Android code changed; no remote
+mutation. Local Edge/PG/browser/golden PASS below remains prior evidence, not fresh.
+
+CLI2.115.0 help/config parse succeeds; local migration listing/serve fail because the
+approved CLI stack is unavailable. Existing platform image selection is17.6, while
+the reviewed security floor is17.11. Strict pool TLS returns SELF_SIGNED_CERT_IN_CHAIN;
+DNS/TCP succeed, authentication not attempted. Six required settings and the dedicated
+runtime role are absent. Admin metadata SELECT is not runtime-role/RLS acceptance.
+
+Fresh audit/test command reports are in the new run's `commands/`; preparation tests
+are static contract checks, not six domain E2E suites. The generated action inventory
+does not promote unsupported profile/check-in/weekly/photo to SQL-ready. Source-only
+frontend recovery verified Git blob/SHA256; expired artifact/live CDN/rollback deploy
+remain unverified. Details: [enablement plan](BETA_REMOTE_ENABLEMENT_PLAN.md) and
+[rollback boundary](BETA_FRONTEND_ROLLBACK.md). All blockers retained; progress unchanged.
+
+## 2026-09-14 — Docker recovery / actual Edge continuation (prior)
 
 RUN_ID=`health-edge-recovery-20260914-072059`; START_HEAD=`639e3a2`. Canonical
 workspace and six original Android-related file hashes preserved; no old worktree,

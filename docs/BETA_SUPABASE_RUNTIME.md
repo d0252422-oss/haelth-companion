@@ -2,6 +2,11 @@
 
 Status: deployed for closed non-production testing on 2026-08-29.
 
+2026-09-14 read-only continuation: deployed connector runtime is not the new manual
+SQL provider. Fresh Beta v14/schema/settings inventory and future authorization
+requirements are in [BETA_REMOTE_ENABLEMENT_PLAN.md](BETA_REMOTE_ENABLEMENT_PLAN.md).
+No new role, secret, migration, Edge or frontend deployment occurred in that run.
+
 - Organization plan verified by the Management API: `free`.
 - Project: `health-companion-beta`.
 - Beta ref: `uavimjgccigpbwqmfkhh` (`ap-southeast-1`).
