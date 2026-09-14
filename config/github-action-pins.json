@@ -1,0 +1,44 @@
+[
+  {
+    "action": "actions/checkout",
+    "tag": "v4",
+    "sha": "11d5960a326750d5838078e36cf38b85af677262",
+    "url": "https://api.github.com/repos/actions/checkout/commits/v4",
+    "verified_at": "2026-09-14T02:37:30.966Z"
+  },
+  {
+    "action": "actions/setup-node",
+    "tag": "v4",
+    "sha": "49933ea5288caeca8642d1e84afbd3f7d6820020",
+    "url": "https://api.github.com/repos/actions/setup-node/commits/v4",
+    "verified_at": "2026-09-14T02:37:31.227Z"
+  },
+  {
+    "action": "actions/setup-python",
+    "tag": "v5",
+    "sha": "a26af69be951a213d495a4c3e4e4022e16d87065",
+    "url": "https://api.github.com/repos/actions/setup-python/commits/v5",
+    "verified_at": "2026-09-14T02:37:31.503Z"
+  },
+  {
+    "action": "actions/setup-java",
+    "tag": "v4",
+    "sha": "cf277c60eb25467037889841efdb72551f06f6c3",
+    "url": "https://api.github.com/repos/actions/setup-java/commits/v4",
+    "verified_at": "2026-09-14T02:37:31.764Z"
+  },
+  {
+    "action": "gradle/actions/setup-gradle",
+    "tag": "v4",
+    "sha": "ed408507eac070d1f99cc633dbcf757c94c7933a",
+    "url": "https://api.github.com/repos/gradle/actions/commits/v4",
+    "verified_at": "2026-09-14T02:37:32.049Z"
+  },
+  {
+    "action": "actions/upload-artifact",
+    "tag": "v4",
+    "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "url": "https://api.github.com/repos/actions/upload-artifact/commits/v4",
+    "verified_at": "2026-09-14T02:37:32.313Z"
+  }
+]

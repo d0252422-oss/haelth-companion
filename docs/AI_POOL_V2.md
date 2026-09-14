@@ -31,9 +31,11 @@ release path. Style-only SQL findings, SBOM generation and incomplete-schema
 Schemathesis remain informational. An unavailable optional tool must not suppress
 unrelated tests. No scanner automatically upgrades dependencies or changes CI permissions.
 
-Current scan: actionlint PASS; zizmor11 High/High unpinned-uses and3 Medium/Low
-artipacked findings need review. SQLFluff1179 layout/reference-name findings, no
-PRS/LXR errors. No automatic formatting. OSV/Trivy did not report known vulnerabilities
+Security closure: fresh source audit found 10 (not previously reported 11) unpinned
+uses plus 3 low-confidence artipacked findings. Pins and credential persistence were
+fixed; see GITHUB_ACTIONS_SECURITY_POLICY.md. SQLFluff found 1179 migration findings,
+1180 including staging/drafts; hash baseline avoids noisy repeated reports. See
+SQL_LINT_POLICY.md. No automatic formatting. OSV/Trivy did not report known vulnerabilities
 in their extracted subset; this is not zero risk. The retained legacy PG18.4 binary
 remains prohibited by project instructions regardless of scanner findings. Gradle
 dependencies lack complete locked resolution. Model/data licenses are separate.
@@ -41,3 +43,15 @@ dependencies lack complete locked resolution. Model/data licenses are separate.
 Use [AI_POOL_V2_TOOLCHAIN.md](AI_POOL_V2_TOOLCHAIN.md) for exact paths, tools and commands.
 This tooling adds no product acceptance weight. Overall progress remains UNKNOWN;
 known-scope-v0.1-provisional-2026-09-12 stays32.0% pending its unchanged product gates.
+
+## Policy-aware runner
+
+`scripts/ai-pool-v2-check.ps1 -Mode fast|security|full|release -ReportRoot <new D evidence directory>`.
+FAST runs actionlint, changed SQL, policy/critical tests and build; SECURITY runs audit
+tools offline; FULL and RELEASE include native PG/browser and security. Legacy modes
+remain accepted. Required missing/invalid reports fail closed. Review-required security
+findings stop release acceptance; cosmetic changed SQL warnings are advisory.
+Output statuses: PASS, FAIL_BLOCKING, WARN_REVIEW_REQUIRED, INFO_BASELINED,
+NOT_APPLICABLE, NOT_RUN. Raw tool exit codes are retained separately from final policy.
+No canonical OpenAPI: see API_SCHEMA_GAP.md. No scanner result is proof of complete
+dependency coverage; Gradle/transitive Python and installed tool binaries remain partial.

@@ -3,7 +3,9 @@ import fs from 'node:fs';import path from 'node:path';import {spawn} from 'node:
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const cfg=JSON.parse(fs.readFileSync(path.join(repo,'config/ai-pool-v2.tools.json'),'utf8'));
 const argv=process.argv.slice(2),arg=(key,fallback)=>argv.includes(key)?argv[argv.indexOf(key)+1]:fallback;
-const mode=arg('--mode','tools');if(!['tools','regression','all'].includes(mode))throw Error('MODE');
+import {modes,acceptable,classify} from './ai-pool-policy.mjs';
+const mode=arg('--mode','fast');if(!modes.includes(mode))throw Error('MODE');
+const security=['security','tools','full','release','all'].includes(mode), comprehensive=['full','release','all','regression'].includes(mode);
 const id=new Date().toISOString().replace(/[:.]/g,'-');const out=path.resolve(arg('--report-root',path.join(repo,'reports/ai-pool-v2',id)));
 if(!out.toLowerCase().startsWith('d:\\')||fs.existsSync(out))throw Error('NEW_UNIQUE_D_REPORT_DIRECTORY_REQUIRED');
 fs.mkdirSync(out,{recursive:true});for(const d of ['security','sbom','commands'])fs.mkdirSync(path.join(out,d));
@@ -11,6 +13,8 @@ const cache=cfg.cacheRoot,env={...process.env,TEMP:cache+'/ai-pool-temp',TMP:cac
 for(const key of Object.keys(env))if(/TOKEN|PASSWORD|SECRET|API_KEY/i.test(key))delete env[key];
 for(const d of ['ai-pool-temp','python','osv','trivy'])fs.mkdirSync(path.join(cache,d),{recursive:true});
 const results=[];const head=execFileSync('git',['--no-optional-locks','rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim();
+const sourceFiles=execFileSync('git',['--no-optional-locks','ls-files','--cached','--others','--exclude-standard','-z'],{cwd:repo,encoding:'utf8'}).split('\0').filter(f=>/^(scripts|config|tests|\.github)\//.test(f)&&/\.(mjs|cjs|ps1|json|ya?ml)$/.test(f));
+fs.writeFileSync(path.join(out,'source-manifest.json'),JSON.stringify(sourceFiles.filter(f=>fs.existsSync(path.join(repo,f))).map(file=>({file,sha256:crypto.createHash('sha256').update(fs.readFileSync(path.join(repo,file))).digest('hex')})),null,2));
 function save(){fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify({head,mode,started_at:id,updated_at:new Date().toISOString(),results,remote_uploads:0,docker_jobs:0,docker_images_added:0},null,2));}
 function skip(name,status,reason,required=false){results.push({name,status,reason,required});save();}
 async function run(name,exe,args,{timeout=240000,required=false,findings=false,cwd=repo}={}){
@@ -20,7 +24,7 @@ async function run(name,exe,args,{timeout=240000,required=false,findings=false,c
   child.on('error',e=>{error=e.code;clearTimeout(timer);resolve(null)});child.on('close',c=>{clearTimeout(timer);resolve(c)});
  });for(const fd of Object.values(logs))fs.closeSync(fd);
  const record={name,command:[exe,...args],cwd,start,end:new Date().toISOString(),exit_code:code,error,timedOut,required,status:error||timedOut?'BLOCKED':code===0?'PASS':'FAIL',classification:code!==0&&findings?'FINDINGS_OR_ERROR_INSPECT_REPORT':'EXECUTION',fresh:true};
- fs.writeFileSync(path.join(dir,'command.json'),JSON.stringify(record,null,2));results.push(record);save();console.log(name+': '+record.status);return record;
+ fs.writeFileSync(path.join(dir,'command.json'),JSON.stringify(record,null,2));results.push(record);save();console.log(name+': EXECUTED exit='+code);return record;
 }
 const tool=n=>path.join(cfg.toolsRoot,cfg.tools[n]);const py=path.join(cfg.venvRoot,'Scripts/python.exe');
 const tracked=execFileSync('git',['--no-optional-locks','ls-files','-z'],{cwd:repo,encoding:'utf8'}).split('\0').filter(Boolean);
@@ -36,9 +40,11 @@ if(mode!=='regression'){
  fs.writeFileSync(path.join(out,'scan-scope.json'),JSON.stringify({files:copied,excludes:'untracked/private settings, git history, binary artifacts, local datasets, node_modules, real credentials; locked dependencies only; missing Gradle locks reported as coverage limits'},null,2));
  const workflows=tracked.filter(f=>/^\.github\/workflows\/.*\.ya?ml$/.test(f));
  await run('actionlint',tool('actionlint'),['-shellcheck=','-pyflakes=',...workflows],{required:true});
- await run('zizmor',tool('zizmor'),['--offline','--no-progress','--format','json','--cache-dir',cache+'/zizmor','.github/workflows'],{findings:true});
- await run('sqlfluff',py,['-m','sqlfluff','lint','--dialect','postgres','--format','json','--processes','1','supabase/migrations'],{findings:true});
- if(mode==='all')await regression();
+ await run('sqlfluff',process.execPath,['scripts/sql-lint-changed.mjs'],{required:true});
+ await run('policy-tests',process.execPath,['--test','tests/ai-pool-policy.test.mjs','tests/ai-pool-v2-toolchain.test.mjs'],{required:true});
+ if(mode==='fast'||comprehensive)await regression();
+ if(security){
+ await run('zizmor',tool('zizmor'),['--offline','--no-progress','--format','json','--cache-dir',cache+'/zizmor','.github/workflows'],{findings:true,required:true});
  skip('schemathesis','NOT_APPLICABLE','PREPARED_NO_OPENAPI_SCHEMA; do not fabricate schema or fuzz production');
  const empty=path.join(out,'empty.env');fs.writeFileSync(empty,'');
  await run('act-list',tool('act'),['--list','--no-cache-server','--env-file',empty,'--secret-file',empty,'--var-file',empty,'-P','ubuntu-latest=node:24-bookworm-slim'],{});
@@ -49,6 +55,7 @@ if(mode!=='regression'){
  await run('trivy',tool('trivy'),['fs','--offline-scan','--skip-db-update','--skip-java-db-update','--skip-check-update','--skip-version-check','--scanners','vuln,misconfig,secret,license','--format','json','--output',path.join(out,'security/trivy-report.json'),'--cache-dir',cache+'/trivy',snapshot],{findings:true,timeout:300000});
  const trivyFile=path.join(out,'security/trivy-report.json');if(fs.existsSync(trivyFile)){try{const report=JSON.parse(fs.readFileSync(trivyFile,'utf8'));for(const result of report.Results||[])for(const secret of result.Secrets||[]){secret.Match='[REDACTED]';if(secret.Code)secret.Code={Lines:[],redacted:true};}fs.writeFileSync(trivyFile,JSON.stringify(report,null,2));}catch{}}
  await run('syft',tool('syft'),['scan','dir:'+snapshot,'--source-name','health-companion','--source-version',head,'-o','cyclonedx-json='+path.join(out,'sbom/health-companion.cdx.json')],{});
+ }
 }
 async function regression(){
  const projectPython=path.join(repo,'.venv/Scripts/python.exe');env.ALGORITHM_PYTHON=projectPython;
@@ -57,7 +64,8 @@ async function regression(){
  await run('node-critical',process.execPath,['--test','tests/algorithm-golden-parity.test.cjs','tests/domain-score-response.test.cjs','tests/manual-sql-ui.test.cjs','tests/local-edge-harness.test.cjs'],{required:true});
  await run('python-critical',projectPython,['-m','pytest','-q','tests_python/test_algorithm_golden_parity.py','tests_python/test_domain_engines.py','--junitxml='+path.join(out,'python-critical.xml'),'-o','cache_dir='+cache+'/python/pytest'],{required:true});
  await run('frontend-build',process.execPath,['--test','tests/manual-package.test.cjs'],{required:true});
- if(env.LOCAL_ENGINE_PG_BIN&&env.ENGINE_PLAYWRIGHT_MODULE){
+ if(mode==='fast')skip('postgres-browser','NOT_RUN','FAST excludes integration; required in FULL/RELEASE');
+ else if(env.LOCAL_ENGINE_PG_BIN&&env.ENGINE_PLAYWRIGHT_MODULE){
   env.DENO_DIR=env.DENO_DIR||cfg.toolsRoot+'/deno-cache';env.ENGINE_BROWSER_EXECUTABLE=path.join(cfg.toolsRoot,cfg.browser.executable);env.MANUAL_SQL_EVIDENCE_DIR=out;env.MANUAL_SQL_PRIVATE_TRACE_DIR=out+'/private-traces';
   if(!out.toLowerCase().startsWith('d:\\dev\\evidence\\'))skip('postgres-browser','BLOCKED','existing E2E requires explicit D:/Dev/Evidence private synthetic evidence root',true);
   else await run('postgres-browser',process.execPath,['scripts/test-manual-sql-e2e.mjs','--implementation-ready','--release-exercise'],{required:true,timeout:900000});
@@ -66,4 +74,9 @@ async function regression(){
  skip('edge-health','NOT_RUN','Only if an existing run-owned local Edge endpoint is available; no stack/container started by toolchain runner');
 }
 if(mode==='regression')await regression();
-save();console.log('Evidence: '+out);process.exitCode=results.some(r=>r.required&&r.status!=='PASS')?1:0;
+for(const r of results){
+ const report={zizmor:'commands/zizmor/stdout.log',sqlfluff:'commands/sqlfluff/stdout.log',osv:'security/osv-report.json',trivy:'security/trivy-report.json',syft:'sbom/health-companion.cdx.json'}[r.name];
+ if(report){try{const data=JSON.parse(fs.readFileSync(path.join(out,report),'utf8'));if(r.name==='sqlfluff'&&(!['PASS','INFO_BASELINED','WARN_REVIEW_REQUIRED','FAIL_BLOCKING'].includes(data.status)||![0,1].includes(r.exit_code)))throw Error('Invalid SQL report');const decision=r.error||r.timedOut?{status:'FAIL_BLOCKING'}:r.name==='sqlfluff'?data:classify(r.name,data,r.exit_code);Object.assign(r,{policy:decision,status:decision.status,required:r.name==='sqlfluff'?decision.status==='FAIL_BLOCKING'||Boolean(decision.review):r.name!=='syft'});}catch{r.status='FAIL_BLOCKING';r.required=r.name!=='syft';}}
+ else if(r.status==='FAIL'||r.status==='BLOCKED')r.status=r.required?'FAIL_BLOCKING':'NOT_RUN';
+}
+save();for(const r of results)console.log(r.name+': '+r.status);console.log('Evidence: '+out);process.exitCode=results.some(r=>r.required&&!acceptable(r.status))?1:0;

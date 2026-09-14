@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {classify,classifySql,modes,acceptable,isBaselined} from '../scripts/ai-pool-policy.mjs';
+test('changed, new and renamed SQL cannot inherit baseline',()=>{const b={files:{'old.sql':{sha256:'a'}}};assert.equal(isBaselined(b,'old.sql','a'),true);assert.equal(isBaselined(b,'old.sql','b'),false);assert.equal(isBaselined(b,'new.sql','a'),false);});
+test('all four modes supported',()=>{for(const m of ['fast','security','full','release'])assert.ok(modes.includes(m));});
+test('malformed reports fail closed',()=>{for(const n of ['zizmor','osv','trivy','syft'])assert.equal(classify(n,{},0).status,'FAIL_BLOCKING');});
+test('execution errors cannot look clean',()=>assert.equal(classify('zizmor',[],2).status,'FAIL_BLOCKING'));
+test('unpinned blocks regardless confidence',()=>assert.equal(classify('zizmor',[{ident:'unpinned-uses',determinations:{confidence:'Low'}}],1).status,'FAIL_BLOCKING'));
+test('credential low confidence requires review',()=>assert.equal(classify('zizmor',[{ident:'artipacked',determinations:{confidence:'Low'}}],1).status,'WARN_REVIEW_REQUIRED'));
+test('critical Trivy finding blocks despite exit zero',()=>assert.equal(classify('trivy',{Results:[{Vulnerabilities:[{Severity:'CRITICAL'}]}]},0).status,'FAIL_BLOCKING'));
+test('unknown severity never automatically passes',()=>assert.equal(classify('trivy',{Results:[{Secrets:[{Severity:'UNKNOWN'}]}]},0).status,'WARN_REVIEW_REQUIRED'));
+test('OSV vulnerability requires triage',()=>assert.equal(classify('osv',{results:[{packages:[{vulnerabilities:[{id:'x'}]}]}]},0).status,'FAIL_BLOCKING'));
+test('SQL parser blocks while style stays nonblocking',()=>{assert.equal(classifySql([{violations:[{code:'PRS'}]}]).status,'FAIL_BLOCKING');assert.equal(classifySql([{violations:[{code:'LT01'}]}]).blocking,0);});
+test('review-required is not release acceptance',()=>assert.equal(acceptable('WARN_REVIEW_REQUIRED'),false));
+test('unresolved SQL references are not classified as formatting',()=>assert.equal(classifySql([{violations:[{code:'RF01'}]}]).review,1));
+test('baseline is hash based not path ignore',()=>{const b=JSON.parse(fs.readFileSync(new URL('../config/sql-lint-baseline.json',import.meta.url)));for(const f of Object.values(b.files))assert.match(f.sha256,/^[a-f0-9]{64}$/);});
+test('workflows retain read-only token and full pins',()=>{for(const f of fs.readdirSync(new URL('../.github/workflows/',import.meta.url))){const text=fs.readFileSync(new URL('../.github/workflows/'+f,import.meta.url),'utf8');assert.match(text,/permissions:\s+contents: read/);assert.doesNotMatch(text,/write-all|contents: write/);for(const m of text.matchAll(/uses: (\S+)/g))assert.match(m[1],/@[a-f0-9]{40}$/);assert.match(text,/persist-credentials: false/);}});

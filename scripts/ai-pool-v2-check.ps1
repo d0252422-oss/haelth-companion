@@ -1,5 +1,5 @@
 param(
- [ValidateSet('tools','regression','all')][string]$Mode='tools',
+ [ValidateSet('fast','security','full','release','tools','regression','all')][string]$Mode='fast',
  [string]$ReportRoot,
  [switch]$RefreshSecurityDb
 )

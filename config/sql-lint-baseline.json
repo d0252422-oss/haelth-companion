@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "source_revision": "7b7ada185a220dd5fc641c7f191154b56cceaead",
+  "tool": "SQLFluff 4.3.0 postgres",
+  "rules": {
+    "LT02": 453,
+    "LT01": 498,
+    "RF04": 9,
+    "LT05": 219,
+    "LT12": 1
+  },
+  "files": {
+    "supabase/drafts/health_data_layer_v2.sql": {
+      "sha256": "09667438758aedd9865fe8080cc688f94fab70c779aad3324dd000afa3565906",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260827010000_beta_minimum_canonical_schema.sql": {
+      "sha256": "6c382d026f2b5c24f41484a3f7c3302449ba0d07275fc0d028a4837531b48bda",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260827015836_mobile_health_helper_bootstrap.sql": {
+      "sha256": "bcaa9d5f1e82ae72a26a6eb91576608c54ff9ba17f95d21087d9e3ab8a8f8f6a",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260827023849_health_source_record_reconciliation.sql": {
+      "sha256": "071cf404e05a6a8369ff10ba4e3eca8210f8436f680c69c19aa3a16980108de8",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829045359_add_beta_manual_claim_binding.sql": {
+      "sha256": "5d4a53ccb24781e06961c16825afb1ac3feebff07152d9ef3e4c9de57bb9d7f0",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829082547_beta_ingestion_rpc.sql": {
+      "sha256": "33749d9a41e44217b43cff6e1ae83dac8dd69d3236699d0bad6c28a7e3f59139",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829083522_fix_beta_one_time_claim_binding_lifecycle.sql": {
+      "sha256": "68bffe3ca8b69a9674bf441fb69e8240dfd7a9b1cddf380bd8482a3707458131",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829090000_beta_ios_shortcut_session.sql": {
+      "sha256": "9d9f4d9db2121aaa049dca303dd26764dd478f3fb4618a4c8719a9db8389ff7c",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829090500_allow_ios_shortcut_claim_consumption.sql": {
+      "sha256": "f7ddac57ac0fe5a7bd449cb1a5190d0e927a759bc89c32c8ece365efc8f3f389",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829091747_beta_score_bridge_storage.sql": {
+      "sha256": "adb28b96c61b6935e035ae9b0bf0b365378d727eb69391a676635957c6feedfa",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260829135430_beta_score_dirty_old_dates.sql": {
+      "sha256": "86b33dd178af52b6a35bde7ecbc234f50e59ac8170cea9f8c5e222903539c977",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260830141842_android_connector_v2_sessions.sql": {
+      "sha256": "e4338986c94ccb863cc2f6fe7e73108df34ef9bed1c5cc98b09ec89080197a7c",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260831000913_android_native_auth_identity_link.sql": {
+      "sha256": "92f1766d13d5c4b2d27b4dad466da65837ed25ebeb87469245cf3a68da0571be",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260902150738_beta_bulk_ingestion_and_score_queue.sql": {
+      "sha256": "fb0edd1fada076a4099dfd27d3f0949b25aac6dd461e00a658a145fb09290ea4",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260903021109_durable_beta_score_processor.sql": {
+      "sha256": "fdc952d7aa9bbc49399efbec6ac211a376722e2ebb69c119b798fe33ed3a49f7",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260903062110_retry_beta_score_input_bound_after_capacity_fix.sql": {
+      "sha256": "2333041b2f795c2c8d390f0bbce3b128be19522b99e095c3c3f98e271fd33be5",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260903130618_unify_beta_web_native_identity.sql": {
+      "sha256": "e74121f44557dc22d4721f77b0a6744ac66b812bba29415b8baa70207447a35d",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260912032458_multi_domain_engine_versioned_outputs.sql": {
+      "sha256": "06ec1fe24895397f72c0f82d00302f5fd87e792b11172efce2f5babcebd90182",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260912041126_engine_local_runtime_integration.sql": {
+      "sha256": "04e0ab9e1c47d56d1efbc980104d45f027ee752279aef6fb4cb48e0409a8bb07",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260912182042_manual_body_local_sql.sql": {
+      "sha256": "7f1459d8985a37691f052f2c24c0d4e86225131637689eb75049c79912b420a1",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260913041844_manual_exercise_catalog_sql.sql": {
+      "sha256": "2014ccacd9d5025ec58390dd30ea3224853ad290561e46e859c8c0f2395b3aad",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260913164024_manual_body_engine_recompute.sql": {
+      "sha256": "973ee8c3e16532e85ee587ccf374858e1e5982a58378e327eccd2e6c0acfac2c",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260913164026_manual_exercise_category_update.sql": {
+      "sha256": "8ae8b072cc8d373baaf71212bf55d7c83d99695fd7f511eda6b4f2b5282826b2",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260913180000_engine_queue_publication_guard.sql": {
+      "sha256": "886e51338c501a96944a3dbd978e96feff8c4245ad7bf21734455344d4fa4a78",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/migrations/20260913190152_manual_observation_canonical_sql.sql": {
+      "sha256": "d18ba33cd883c36ee16d488a85ee765be439e38a42bcd38fcff6f932d2d5dcf6",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/staging/beta_runtime_tests.remote.sql": {
+      "sha256": "c49bfe479ae2ee2142f60d94b18600367d47a93857158c505fa57cefdbcc8ddb",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/staging/health_source_record_reconciliation_tests.local.sql": {
+      "sha256": "261a86012f40de3c5a2820a8d65c59bce9a9fb736ace513e50682782e2d1402e",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    },
+    "supabase/staging/mobile_health_helper_bootstrap_tests.local.sql": {
+      "sha256": "6d5d03d989fcd03a37e6364d3889eb9486d6584e2d60fa58a40273ada294c44f",
+      "reason": "Existing SQL, parser valid; style debt only, changes require fresh lint"
+    }
+  }
+}
