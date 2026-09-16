@@ -686,6 +686,12 @@ export class LocalEngineRuntime {
             ...(!this.hosted?{name:"Local synthetic " + (identity.kind==='web'?'Web session':identity.auth.slice(-1))}:{}),
           },
         };
+      } else if (action === 'getUserProfile') {
+        data=await manualPrivilegedRead(this.sql,identity,async(tx:any)=>{
+          const [row]=await tx`select id,status from public.users where id=${identity.canonical}`;
+          if(!row)throw Error('IDENTITY_NOT_FOUND');
+          return {userId:row.id,status:row.status,profileDetails:null,profileDetailsStatus:'NOT_CONFIGURED'};
+        });
       } else if (action === "localEngineSnapshot") {
         data = await this.snapshot(identity, payload);
       } else if (action === "getNutritionRecords") {

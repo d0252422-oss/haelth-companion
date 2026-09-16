@@ -19,12 +19,13 @@ const manifest={created_at:new Date().toISOString(),source_revision:execFileSync
  entry_evidence:'Existing Beta entry recorded in repository release docs; current remote frontend revision/artifact and login return-path NOT_VERIFIED. No new preview site is proposed.',
  pre_cutover_snapshot:'NOT_CAPTURED; package generation is not a rollback point for the current remote deployment',
  backend:{project_name:'health-companion-beta',project_ref:'uavimjgccigpbwqmfkhh',function:'mobile-health-beta',runtime:'Supabase Edge Runtime',route:'/functions/v1/mobile-health-beta/v1/engine/web',actual_edge_execution:'NOT_INFERRED_FROM_SOURCE_PACKAGE; verify the selected runtime report and source hashes'},
- flags:{manual_sql:'OFF',exercise_management:'OFF',existing_provider:'UNCHANGED_APPS_SCRIPT'},
+ flags:{manual_sql:'OFF',exercise_management:'OFF',background_sql:'OFF',existing_provider:'UNCHANGED_APPS_SCRIPT'},
+ background:{roles:['health_native_ingest','health_recompute_worker'],switch_boundary:'SQL-first rejects native ingestion/drain unless separate background config is ready; never privileged fallback',device_acceptance:'DEFERRED_NOT_INFERRED_FROM_SOURCE'},
  source_boundary:'Source deploy tree with derived single-function CLI config and effective pinned Deno config; NOT a verified CLI Edge compiled bundle',
  migration_execution:'Historical source only. Never apply this whole directory; compare the exact current Beta migration inventory and execute only the reviewed non-destructive missing subset after all preconditions PASS.',
  calculation_dependency:'Exact unchanged frozen health-score-v1.0 executable snapshot; no fixture outputs or synthetic issuer',
  exclusions:['.env','tokens','test issuer','synthetic identity fixtures','databases','source maps','Android','private evidence','untracked deno.lock'],
- required_settings:['HEALTH_MANUAL_SQL_HOSTED_ENABLED','HEALTH_MANUAL_RELEASE','HEALTH_MANUAL_ALLOWED_ORIGIN','HEALTH_MANUAL_EXPECTED_PROJECT_REF','HEALTH_MANUAL_EXPECTED_DB_HOST','HEALTH_MANUAL_DATABASE_URL','BETA_WEB_AUTH_VERIFY_URL','Supabase SDK project configuration'],
+ required_settings:['HEALTH_MANUAL_SQL_HOSTED_ENABLED','HEALTH_MANUAL_RELEASE','HEALTH_MANUAL_ALLOWED_ORIGIN','HEALTH_MANUAL_EXPECTED_PROJECT_REF','HEALTH_MANUAL_EXPECTED_DB_HOST','HEALTH_MANUAL_DATABASE_URL','HEALTH_BACKGROUND_SQL_ENABLED','HEALTH_NATIVE_DATABASE_URL','HEALTH_RECOMPUTE_DATABASE_URL','HEALTH_RECOMPUTE_TRIGGER_SECRET','BETA_WEB_AUTH_VERIFY_URL','Supabase SDK project configuration'],
  activation_conditions:['actual CLI Edge + PG17 + Web acceptance','actual verified Web session + existing canonical mapping; no automatic account links','actual transaction pool + TLS/custom role validation','authorized Beta migration/config/deployment','real OAuth user-scoped acceptance'],
  remote_operations:0};
 for(const name of files){

@@ -85,6 +85,21 @@ function renderHealthScoreDetail(metric) {
 }
 
 function initializeViewContracts() {
+  // Deferred features remain visibly unavailable in SQL-first, not legacy writes.
+  const legacyReport=renderReport,legacyCheckin=openCheckinEditor;
+  renderReport=async function(){
+    if(!manualSqlEnabled())return legacyReport();
+    detailReadState('report-screen','empty','週報尚未啟用；請使用總覽與紀錄查看已保存的 SQL 資料。');
+    ['report-score','report-weight','report-training','report-sleep'].forEach(id=>setValue(id,'—'));
+    setValue('report-period','週報尚未啟用');setValue('report-coach-copy','未產生週報分析。');
+    ['report-weight-chart','report-training-chart'].forEach(id=>{const el=document.getElementById(id);if(el)el.replaceChildren();});
+  };
+  openCheckinEditor=async function(date){
+    if(!manualSqlEnabled())return legacyCheckin(date);
+    resetCheckinForm(date);openSheet('checkin-form');
+    setValue('checkin-date-note','身體狀態紀錄尚未啟用；本模式不會寫入舊資料來源。');
+    document.getElementById('checkin-form').querySelectorAll('input,textarea,button').forEach(el=>{el.disabled=true;});
+  };
   setTrainingView('overview');
   const dialog=document.getElementById('training-draft-dialog');
   document.getElementById('resume-workout').onclick=()=>setTrainingView('workout_session');

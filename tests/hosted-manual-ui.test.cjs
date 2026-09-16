@@ -24,12 +24,13 @@ test('hosted first login retains Google entry; only isolated local mode shows sy
   assert.equal(googleRendered,local?0:1,'hosted login keeps the existing Google renderer');
  }
 });
-test('hosted data uses exact SQL endpoint and existing session; auth remains explicit legacy provider',async()=>{
+test('hosted data and canonical current-user read use SQL; logout remains explicit auth authority',async()=>{
  const calls=[],ctx=harness(async(url,init)=>{const request=JSON.parse(init.body);calls.push({url,init,request});return response(request.action==='getManualProviderIdentity'?identity:{ok:true,data:[]});});
  assert.equal((await ctx.sessionPost('getBodyRecords')).length,0);
  assert.equal(calls.length,2);assert.ok(calls.every(c=>c.url===endpoint&&c.init.credentials==='omit'&&c.init.headers.authorization==='Bearer synthetic-unit-A'&&c.init.headers['x-health-session-kind']==='web'));
  assert.ok(calls.every(c=>!('sessionToken'in c.request)&&!('user_id'in c.request.payload)));
- await ctx.sessionPost('getCurrentUser');assert.equal(calls.at(-1).url,'https://legacy.invalid');
+ await ctx.sessionPost('getCurrentUser');assert.equal(calls.at(-1).url,endpoint);
+ await ctx.sessionPost('logout');assert.equal(calls.at(-1).url,'https://legacy.invalid');
 });
 test('hosted unsupported or disabled data never silently falls back to Sheets',async()=>{
  const calls=[],ctx=harness(async(url,init)=>{calls.push({url,action:JSON.parse(init.body).action});return response(identity);});

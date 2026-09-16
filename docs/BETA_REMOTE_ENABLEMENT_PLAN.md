@@ -1,5 +1,15 @@
 # Beta remote platform preparation — not deployment approval
 
+## Current worker/CLI successor (2026-09-17)
+
+See BETA_REMOTE_ENABLEMENT_PACKAGE.md and BETA_CREDENTIAL_MATRIX.md. They supersede
+all older service_role membership/credential proposals below. Ordered local proposal
+now has10 engine/manual/worker migrations; all historical files are unchanged.
+Official project-scoped CLI2.117.0 still selects unapprovedPG17.6.1.166; platform Gate
+remains BLOCKED, not fixed by downloading a newer CLI. Background worker identity
+now has local actualEdge/PG17 evidence; remote credentials/OAuth/rollback remain
+separate blockers. Conditional authorization draft is not a ready deploy request.
+
 ## 2026-09-17 non-privileged continuation (current, supersedes role/TLS claims below)
 
 Run `health-nonprivileged-20260916-224316`, base d037387. REMOTE_MUTATIONS_PERFORMED = NO.

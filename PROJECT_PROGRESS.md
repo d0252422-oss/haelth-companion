@@ -11,6 +11,14 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Worker/CLI continuation `health-worker-20260917-055400` adds separate delegated
+ingestion and lease-bound recompute roles, pooled-context/retry rehearsal, SQL
+canonical profile routing and explicit weekly/check-in deferral. CLI2.117 still
+selects a patch below the approved platform baseline. These are unweighted
+deliverables or strengthening of already-credited local gates. Broader weekly,
+CLI-platform/remote/OAuth acceptance remains incomplete. Fixed denominator/weights
+unchanged:32.0%, engineering+0.0pp, ledger correction+0.0pp, overallUNKNOWN.
+
 Current non-privileged continuation `health-nonprivileged-20260916-224316` adds
 transaction-local verified Web identity, a restrictive manual runtime role/RLS
 successor, pooled-context isolation tests and strict official hosted CA validation.

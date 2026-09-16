@@ -1,5 +1,11 @@
 # Beta hosted pool / TLS / credential contract
 
+2026-09-17: background-bootstrap reuses this pinned publicCA/hostname validation,
+transaction-pool settings and bounded connection/transaction limits, with distinct
+native/recompute usernames listed in BETA_CREDENTIAL_MATRIX.md. Prior strictTLS
+transport evidence is retained, not counted as a new hosted login test. No remote
+credential or StartupMessage was added. HOSTED_DB_AUTH=PENDING_CREDENTIAL.
+
 Target only `uavimjgccigpbwqmfkhh`, organization `pcfenospezigjlgwcbtg`, ap-southeast-1.
 Last management identity inventory is the prior run; revalidate before any mutation.
 

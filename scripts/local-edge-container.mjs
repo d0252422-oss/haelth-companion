@@ -7,7 +7,7 @@ import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 const image='public.ecr.aws/supabase/edge-runtime@sha256:c52405002a890ca9fcf77978671c57f3a988e03174afb277f84ac65bc917013c';
 const docker=(args)=>execFileSync('docker',['--context','desktop-linux',...args],{encoding:'utf8',windowsHide:true,timeout:60000});
-export async function prepareEdgeTest(evidence,privateDir,config,exercise,nonprivileged=false){
+export async function prepareEdgeTest(evidence,privateDir,config,exercise,nonprivileged=false,background=null){
  assert.equal(config.host,'127.0.0.1');assert.equal(config.port,57485);assert.match(config.database,/^health_engine_[a-f0-9]{32}$/);
  const endpoint=JSON.parse(docker(['context','inspect','desktop-linux','--format','{{json .Endpoints.docker}}']));
  assert.equal(endpoint.Host,'npipe:////./pipe/dockerDesktopLinuxEngine');
@@ -29,11 +29,12 @@ export async function prepareEdgeTest(evidence,privateDir,config,exercise,nonpri
  const sql={host:'host.docker.internal',port:config.port,database:config.database,username:nonprivileged?'health_manual_api':'service_role'};
  const source=path.join(root,'source');await mkdir(source,{recursive:true});const sourceHashes={};
  const files=execFileSync('git',['--no-optional-locks','ls-files','supabase/functions/mobile-health-beta'],{encoding:'utf8',windowsHide:true}).trim().split(/\r?\n/).concat(['config/engine-local.deno.json','config/engine-local.deno.lock','fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js']);
- for(const file of new Set([...files,'supabase/functions/mobile-health-beta/manual-sql-context.ts','supabase/functions/mobile-health-beta/hosted-database-ca.ts'])){const bytes=await readFile(file);const target=path.join(source,file);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,bytes);sourceHashes[file]=createHash('sha256').update(bytes).digest('hex');}
+ for(const file of new Set([...files,...['manual-sql-context.ts','hosted-database-ca.ts','worker-sql-context.ts','background-runtime.ts','background-bootstrap.ts'].map(n=>'supabase/functions/mobile-health-beta/'+n)])){const bytes=await readFile(file);const target=path.join(source,file);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,bytes);sourceHashes[file]=createHash('sha256').update(bytes).digest('hex');}
  await writeFile(path.join(root,'source-hashes.json'),JSON.stringify(sourceHashes,null,2));
  const importMap=JSON.parse(await readFile('config/engine-local.deno.json','utf8'));
  await writeFile(path.join(root,'import-map.json'),JSON.stringify({imports:importMap.imports}));
  const env={HEALTH_ENGINE_LOCAL_ONLY:'1',HEALTH_MANUAL_EDGE_REHEARSAL:'1',HEALTH_MANUAL_SQL_LOCAL_CONFIG:JSON.stringify(sql),HEALTH_MANUAL_LOCAL_ORIGIN:'http://127.0.0.1:57841',HEALTH_MANUAL_WEB_SESSION_LOCAL:'1',HEALTH_EXERCISE_MANAGEMENT_LOCAL:exercise?'1':'0',SUPABASE_URL:'http://host.docker.internal:57841',SUPABASE_PUBLISHABLE_KEYS:JSON.stringify({default:'local-sdk-construction-fixture'}),SUPABASE_SECRET_KEYS:JSON.stringify({default:'local-sdk-construction-fixture'}),BETA_WEB_AUTH_VERIFY_URL:'https://host.docker.internal:57842/local-verify-web',SSL_CERT_FILE:'/test/cert.pem',DENO_TLS_CA_STORE:'mozilla,system'};
+ if(background){env.HEALTH_BACKGROUND_SQL_ENABLED='1';env.HEALTH_BACKGROUND_LOCAL_CONFIG=JSON.stringify(sql);env.HEALTH_RECOMPUTE_TRIGGER_SECRET=background.triggerSecret;}
  await writeFile(path.join(root,'local.env'),Object.entries(env).map(([k,v])=>`${k}=${v}`).join('\n')+'\n');
  await writeFile(path.join(root,'index.ts'),`// Local main-worker dispatcher using official EdgeRuntime userWorkers API.
 console.log(JSON.stringify({event:'ACTUAL_SUPABASE_EDGE_BOOT',version:Deno.version}));

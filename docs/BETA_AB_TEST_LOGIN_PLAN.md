@@ -1,5 +1,8 @@
 # Dedicated Beta A/B login plan
 
+Continuation runbook: BETA_AB_OAUTH_RUNBOOK.md. No accounts/session credentials
+were obtained or created in the background-worker continuation.
+
 REAL_AB_LOGIN=PENDING_OWNER_INTERACTION; synthetic ES256 authority is not Google OAuth.
 Existing Beta path: Google session → Apps Script verification bridge → verified
 subject/email hash pair → pre-existing Beta canonical alias. LINE/LIFF remains the

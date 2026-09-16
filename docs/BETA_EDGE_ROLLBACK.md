@@ -1,5 +1,14 @@
 # Beta Edge rollback — PARTIAL, not deploy-ready
 
+2026-09-17 continuation: CLI2.117.0 was provenance-verified onD, but this does not
+prove that its safe download can recover the refused previous artifact. No bypass
+extractor, new remote download or deployment was performed. Target worker successor
+adds HEALTH_BACKGROUND_SQL_ENABLED/HEALTH_NATIVE_DATABASE_URL/
+HEALTH_RECOMPUTE_DATABASE_URL/HEALTH_RECOMPUTE_TRIGGER_SECRET names; preserve their
+secure before-state before later deployment. Current source/package is not the old
+deployed artifact. Supported safe recovery plus local rollback serve/smoke still
+required; EDGE_ROLLBACK_READY remains PARTIAL_REMOTE_ARTIFACT_REQUIRED.
+
 Last readonly inventory: mobile-health-beta v14 ACTIVE, verify_jwt=false (existing
 custom verified-session handler), bundle digest
 `a40beb78e41f0a969af44b72a66efa0c31fed8234d794e51770284952749ed07`.

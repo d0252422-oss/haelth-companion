@@ -1,5 +1,17 @@
 # Hosted manual adapter trace
 
+## 2026-09-17 worker successor
+
+The historical native/scheduled blocker below is superseded locally by
+BACKGROUND_IDENTITY_INVENTORY.md and BACKGROUND_WORKER_IDENTITY_CONTRACT.md.
+When SQL-first/manual or background flags are enabled, ingestion/Shortcut/status
+POST and internal drain route BEFORE legacy admin paths to backgroundBootstrap.
+Missing background configuration returns503, never privileged fallback. Separate
+health_native_ingest/health_recompute_worker DB identities replace normal worker
+admin use; install/link/session provisioning is still explicitly administrative.
+Remote default flags stayOFF. Existing processHostedClaimedScoreJob is no longer
+the opt-in scheduled route; do not invoke it without verified Web context.
+
 Run `health-nonprivileged-20260916-224316`; successor to d037387 preparation.
 No remote configuration or data changed. Historical direct-Docker PASS is not CLI PASS.
 

@@ -381,6 +381,20 @@ try {
   if(releaseExercise)await (await import('./manual-ux-browser-gates.mjs')).runManualUxGates({pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,customRange,weightEditor,bodyScreen,setPage:value=>{page=value;}});
   await (await import('./manual-observation-pg-gates.mjs')).runManualObservationPgGates({pg,subjects,gate,http,loginCookie,day,shift,until,report});
   await (await import('./manual-observation-browser-gates.mjs')).runManualObservationBrowserGates({pg,subjects,gate,http,loginCookie,browserContext,until,evidence,day,shift,base,report,customRange,setPage:value=>{page=value;}});
+  await gate('critical_profile_dashboard_and_explicit_deferred_UI',async()=>{
+    const who='A',cookie=await loginCookie(who);
+    for(const action of ['getCurrentUser','getUserProfile','getDashboardData','getTodaySummary','getHealthTimeline']){
+      const r=await http(cookie,action,{date:day});assert.equal(r.ok,true,action+JSON.stringify(r));
+      if(action==='getUserProfile'){assert.equal(r.data.userId,subjects.A.canonical);assert.equal(r.data.profileDetails,null);}
+    }
+    ({context,page}=await browserContext(who));await page.setViewportSize({width:1280,height:900});
+    await page.locator('.side-btn[data-screen="report-screen"]').click();
+    await until(async()=>/週報尚未啟用/.test(await page.locator('#report-screen-read-state').textContent()),'deferred-report');
+    await page.evaluate(()=>openCheckinEditor());assert.equal(await page.locator('#checkin-save').isDisabled(),true);
+    assert.match(await page.locator('#checkin-date-note').textContent(),/尚未啟用/);
+    await page.screenshot({path:path.join(evidence,'explicit-deferred-checkin.png')});await page.evaluate(()=>closeSheet());
+    const unavailable=await http(cookie,'upsertHealthCheckin',{date:day});assert.equal(unavailable.ok,false);
+  });
   assert.deepEqual(report.page_errors, []); assert.deepEqual(report.blocked_external_requests, []);
 } catch (error) { report.errors.push(redact(error.stack || error.message)); }
 finally {

@@ -37,6 +37,11 @@ export async function dispatchLocalEngine(request: Request): Promise<Response | 
 export default {
   fetch: withSupabase({ auth: "none", cors: "disabled", supabaseOptions:{global:{fetch:boundedSdkFetch}} }, async (request, ctx) => {
     const origin = request.headers.get("origin") ?? "";
+    const workerPath=relativePath(new URL(request.url).pathname);
+    if(['/v1/health/ingestion/batches','/v1/connectors/ios-shortcut/ingest','/v1/mobile/connectors/status','/internal/score-recompute/drain'].includes(workerPath)
+      &&request.method!=='GET'&&(Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1'||Deno.env.get('HEALTH_BACKGROUND_SQL_ENABLED')==='1')){
+      return await(await import('./background-bootstrap.ts')).backgroundBootstrap(request);
+    }
     // Manual Web has an independent, default-OFF provider; never uses the mobile auth callback guard.
     if(relativePath(new URL(request.url).pathname)==='/v1/engine/web'&&Deno.env.get('HEALTH_ENGINE_LOCAL_ONLY')!=='1'){
       return await(await import('./hosted-manual-bootstrap.ts')).hostedManualBootstrap(request);
@@ -249,7 +254,7 @@ async function ingestShortcut(request: Request, admin: any, origin: string): Pro
   return json((receipt.rejected as unknown[]).length ? 207 : 200, receipt, origin);
 }
 
-async function shortcutRecordToMutation(record: Json, userId: string): Promise<Json> {
+export async function shortcutRecordToMutation(record: Json, userId: string): Promise<Json> {
   const domain = String(record.domain ?? "");
   const unit = String(record.unit ?? "");
   if (!DOMAINS.has(domain)) throw failure("UNSUPPORTED_DOMAIN", 400);
@@ -622,7 +627,7 @@ export async function verifyWebIdentity(token: string): Promise<{ subject: strin
   return { subject, email };
 }
 
-function validateMutation(mutation: Json, userId: string): Json {
+export function validateMutation(mutation: Json, userId: string): Json {
   if (mutation.canonical_user_id !== userId) throw failure("CROSS_USER_UPLOAD", 403);
   if (!["android", "ios"].includes(String(mutation.platform))) throw failure("PLATFORM_MISMATCH", 400);
   if (!DOMAINS.has(String(mutation.domain))) throw failure("UNSUPPORTED_DOMAIN", 400);
@@ -647,7 +652,7 @@ function validateRecord(record: Json, userId: string): void {
   if (typeof record.value !== "number" || !Number.isFinite(record.value)) throw failure("MALFORMED_VALUE", 400);
 }
 
-async function readJson(request: Request): Promise<Json> {
+export async function readJson(request: Request): Promise<Json> {
   const content = await request.text();
   if (encoder.encode(content).byteLength > MAX_BODY_BYTES) throw failure("BODY_TOO_LARGE", 413);
   try { return JSON.parse(content || "{}") as Json; } catch { throw failure("MALFORMED_JSON", 400); }
