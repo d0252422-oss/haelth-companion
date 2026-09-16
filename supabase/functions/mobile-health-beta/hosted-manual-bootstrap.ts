@@ -2,6 +2,9 @@
 import postgres from 'npm:postgres@3.4.8';
 import {LocalEngineRuntime} from './local-engine-runtime.ts';
 import {verifyWebIdentity} from './index.ts';
+import {scopedManualSql} from './manual-sql-context.ts';
+import {HOSTED_DATABASE_CA} from './hosted-database-ca.ts';
+export {scopedManualSql} from './manual-sql-context.ts';
 type Env=(name:string)=>string|undefined;
 export function validateHostedManualConfig(env:Env){
   if(env('HEALTH_MANUAL_SQL_HOSTED_ENABLED')!=='1')return null;
@@ -21,29 +24,6 @@ export function validateHostedManualConfig(env:Env){
   return {url:db!.href,origin:origin!,release:release as 'A'|'AB',project:project!,host:host!,login:'health_manual_api',verifier:verifier!.href};
 }
 
-// Every RPC/read/engine query, not just mutations, gets transaction-local role and limits.
-// service_role execution is privileged; explicit canonical authorization remains necessary.
-export function scopedManualSql(raw:any,expectedLogin='health_manual_api'){
-  const begin=(optionsOrWork:string|((tx:any)=>Promise<any>),callback?:(tx:any)=>Promise<any>)=>{
-   const options=typeof optionsOrWork==='string'?optionsOrWork:undefined,work=callback??optionsOrWork;
-   if(typeof work!=='function'||(options&&options!=='isolation level repeatable read read only'))throw Error('UNSUPPORTED_MANUAL_TRANSACTION_OPTIONS');
-   const run=async(tx:any)=>{
-    await tx`select set_config('lock_timeout','2000',true),set_config('statement_timeout','10000',true),set_config('transaction_timeout','15000',true)`;
-    const [role]=await tx`select session_user::text as login,rolsuper,rolbypassrls,rolinherit,
-      pg_has_role(session_user,'service_role','SET') as can_set,
-      pg_has_role(session_user,'service_role','USAGE') as inherits_privileges from pg_roles where rolname=session_user`;
-    if(!role||role.login!==expectedLogin||role.rolsuper||role.rolbypassrls||role.rolinherit||role.inherits_privileges||!role.can_set)throw Error('MANUAL_DATABASE_ROLE_REJECTED');
-    await tx.unsafe('set local role service_role');
-    await tx`select set_config('health.engine.experimental','on',true),set_config('lock_timeout','2000',true),
-      set_config('statement_timeout','10000',true),set_config('idle_in_transaction_session_timeout','10000',true),set_config('transaction_timeout','15000',true)`;
-    return work(tx);
-   };return options?raw.begin(options,run):raw.begin(run);
-  };
-  const sql:any=(...args:any[])=>begin(tx=>tx(...args));
-  sql.begin=begin;sql.unsafe=(...args:any[])=>begin(tx=>tx.unsafe(...args));
-  sql.json=(value:any)=>raw.json(value);sql.end=()=>raw.end();
-  return sql;
-}
 export async function createHostedManualRuntime(raw:any,release:'A'|'AB',verify:typeof verifyWebIdentity){
   const sql=scopedManualSql(raw);
   try{
@@ -57,7 +37,7 @@ async function configuredRuntime(config:NonNullable<ReturnType<typeof validateHo
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(config))))).map(v=>v.toString(16).padStart(2,'0')).join('');
   if(fingerprint&&fingerprint!==hash)throw Error('MANUAL_PROVIDER_ENVIRONMENT_CHANGED');
   fingerprint=hash;
-  cached??=createHostedManualRuntime(postgres(config.url,{prepare:false,max:2,connect_timeout:5,idle_timeout:20,ssl:{rejectUnauthorized:true}}),config.release,verifyWebIdentity).catch(error=>{cached=undefined;throw error;});
+  cached??=createHostedManualRuntime(postgres(config.url,{prepare:false,max:2,connect_timeout:5,idle_timeout:20,ssl:{rejectUnauthorized:true,ca:HOSTED_DATABASE_CA}}),config.release,verifyWebIdentity).catch(error=>{cached=undefined;throw error;});
   return await cached;
 }
 // Internal only: index.ts verifies worker secret/native session before claiming.

@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';import postgres from 'npm:postgres@3.4.8';
+import {createHostedManualRuntime,scopedManualSql} from '../supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts';
+import {createSyntheticAuthority} from './local-engine-auth.ts';
+import subjects from '../fixtures/engine-local-identities.json' with {type:'json'};
+const config=JSON.parse(await Deno.readTextFile(Deno.args[0])),output=Deno.args[1];
+if(config.host!=='127.0.0.1'||config.port!==57485||!/^health_engine_[a-f0-9]{32}$/.test(config.database))throw Error('UNSAFE_TEST_TARGET');
+const admin=postgres({...config,username:'engine_owner',max:1}),raw=postgres({...config,username:'health_manual_api',max:1,prepare:false});
+const sql=scopedManualSql(raw),report:any={started:new Date().toISOString(),scope:'REAL_PG17_LOW_PRIVILEGE_HOSTED_FACTORY_SYNTHETIC_AUTH_NOT_EDGE',gates:[]};
+const sha=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(v=>v.toString(16).padStart(2,'0')).join('');
+const ctx:any={},authority=await createSyntheticAuthority(),tokens:any={};let runtime:any;
+async function gate(name:string,fn:()=>Promise<void>){try{await fn();report.gates.push({name,status:'PASS'});}catch(e){report.gates.push({name,status:'FAIL',error:String(e)});}}
+const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei'}).format(new Date());
+async function api(user:string,action:string,payload:any={}){const response=await runtime.handle(new Request('http://127.0.0.1/v1/engine/web',{method:'POST',headers:{authorization:'Bearer '+(tokens[user]||user),'x-health-session-kind':'web','content-type':'application/json'},body:JSON.stringify({action,payload})}));return{http:response.status,...await response.json()};}
+async function good(user:string,action:string,payload:any={}){const r=await api(user,action,payload);assert.equal(r.ok,true,JSON.stringify(r));return r.data;}
+try{
+ for(const name of ['A','B'] as const){ctx[name]={webSubjectHash:await sha('web-session-'+subjects[name].auth),emailHash:await sha(name.toLowerCase()+'@example.invalid')};tokens[name]=await authority.issue(name);await admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${ctx[name].webSubjectHash},${ctx[name].emailHash},${subjects[name].canonical})`;}
+ runtime=await createHostedManualRuntime(raw,'AB',async(token:string)=>{const u=await authority.verify(token);return{subject:'web-session-'+u.id,email:u.email};});
+ await gate('role_is_not_owner_elevated_or_member',async()=>{report.role=(await raw`select current_user,session_user,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolreplication,rolinherit from pg_roles where rolname=current_user`)[0];assert.equal(report.role.current_user,'health_manual_api');for(const k of ['rolsuper','rolbypassrls','rolcreatedb','rolcreaterole','rolreplication','rolinherit'])assert.equal(report.role[k],false);await assert.rejects(()=>raw.unsafe('set role service_role'));report.definers=await admin`select n.nspname,p.proname,p.prosecdef,p.proconfig,has_function_privilege('health_manual_api',p.oid,'EXECUTE') as callable from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef`;assert.equal(report.definers.filter((r:any)=>r.callable).length,0);});
+ await gate('auth_fail_closed_and_canonical_mapping',async()=>{assert.equal((await good('A','getManualProviderIdentity')).canonicalUserId,subjects.A.canonical);for(const t of ['invalid','',await authority.issue('A',true)])assert.equal((await api(t,'getBodyRecords')).ok,false);assert.equal((await api('A','getBodyRecords',{user_id:subjects.B.canonical})).error,'CLIENT_IDENTITY_FORBIDDEN');});
+ await gate('body_crud_and_recompute',async()=>{const input={date,weight:80,bodyFat:20,clientRequestId:crypto.randomUUID()};const a=await good('A','upsertBodyRecord',input);assert.equal((await good('A','upsertBodyRecord',input)).replayed,true);assert.equal((await good('B','getBodyRecords',{date})).length,0);const b=await good('A','upsertBodyRecord',{...input,weight:81,recordId:a.recordId,revision:1,clientRequestId:crypto.randomUUID()});assert.equal(b.record.weight,81);assert.ok(['INSUFFICIENT_DATA','COMPUTED'].includes(b.analysisStatus),JSON.stringify(b));await good('A','deleteBodyRecord',{recordId:a.recordId,revision:2,clientRequestId:crypto.randomUUID()});assert.equal((await good('A','getBodyRecords',{date})).length,0);});
+ await gate('nutrition_decimal_incomplete_crud',async()=>{const input={date,time:'12:00',mealType:'lunch',foodName:'SYNTHETIC',clientRequestId:crypto.randomUUID()};const a=await good('A','upsertMealRecord',input);assert.equal((await good('B','getNutritionRecords',{date})).length,0);assert.equal((await good('A','upsertMealRecord',input)).replayed,true);await good('A','deleteMealRecord',{mealRecordId:a.recordId,revision:1,clientRequestId:crypto.randomUUID()});});
+ await gate('pool_A_B_anonymous_failed_transaction_context',async()=>{for(const who of ['A','B','B','A']){await sql.withWeb(ctx[who],async()=>{const rows=await sql`select id from public.users`;assert.deepEqual(rows.map((r:any)=>r.id),[subjects[who as 'A'].canonical]);});assert.equal((await sql`select id from public.users`).length,0);}await assert.rejects(()=>sql.withWeb(ctx.A,()=>sql.begin(async(tx:any)=>{await tx`select 1`;throw Error('ROLLBACK_PROBE');})),/ROLLBACK_PROBE/);assert.equal((await sql`select id from public.users`).length,0);assert.throws(()=>sql.withWeb({webSubjectHash:'invalid',emailHash:'bad'},async()=>{}),/INVALID_WEB/);await Promise.all(['A','B'].map(w=>sql.withWeb(ctx[w],async()=>assert.equal((await sql`select id from public.users`)[0].id,subjects[w as 'A'].canonical))));});
+ await gate('direct_RLS_owner_write_cross_tenant_and_immutable_history',async()=>{await sql.withWeb(ctx.A,async()=>{await assert.rejects(()=>sql`insert into private.engine_mutation_receipts values(${subjects.B.canonical},${crypto.randomUUID()},'synthetic','{}')`);await assert.rejects(()=>sql`update public.users set status='INACTIVE'`);await assert.rejects(()=>sql`delete from public.engine_manual_body_records`);await assert.rejects(()=>sql`insert into private.beta_web_identity_aliases values('x','y',${subjects.A.canonical})`);});});
+ await gate('every_manual_domain_and_derived_table_nonvacuous_RLS_matrix',async()=>{
+  await good('B','upsertBodyRecord',{date,weight:77,clientRequestId:crypto.randomUUID()});
+  await good('B','upsertMealRecord',{date,time:'12:00',foodName:'SYNTHETIC B',protein:12.5,clientRequestId:crypto.randomUUID()});
+  for(const [domain,value]of [['sleep',420],['steps',6000],['total_energy',1800]] as const)await good('B','upsertManualObservation',{domain,date,timezone:'Asia/Taipei',value,coverage:domain==='sleep'?'SESSION':'FULL_DAY',clientRequestId:crypto.randomUUID()});
+  const exercise=await good('B','manageExercise',{operation:'create',name:'SYNTHETIC B isolation',muscleGroup:'腿',clientRequestId:crypto.randomUUID()});
+  await good('B','addWorkoutRecord',{date,startTime:date+'T01:00:00Z',endTime:date+'T01:20:00Z',exercises:[{exerciseId:exercise.exerciseId,sets:[{weight:0,reps:10}]}],clientRequestId:crypto.randomUUID()});
+  const tables=['public.engine_meals','public.engine_manual_body_records','public.engine_manual_observations','public.engine_output_history','public.engine_output_heads','public.beta_health_scores','private.beta_score_recompute_queue','private.engine_mutation_receipts','private.engine_body_mutation_receipts','private.engine_observation_receipts','public.manual_exercise_preferences','public.manual_workout_sets','private.manual_training_receipts','public.manual_exercise_catalog'];
+  report.rls_matrix=[];
+  for(const table of tables){
+   const column=table.endsWith('manual_exercise_catalog')?'owner_user_id':'canonical_user_id';
+   const count=Number((await admin.unsafe(`select count(*) as n from ${table} where ${column}=$1`,[subjects.B.canonical]))[0].n);assert.ok(count>0,table+' must contain B fixture');
+   await sql.withWeb(ctx.A,async()=>assert.equal((await sql.unsafe(`select * from ${table} where ${column}=$1`,[subjects.B.canonical])).length,0,table));
+   assert.equal((await sql.unsafe(`select * from ${table} where ${column}=$1`,[subjects.B.canonical])).length,0,table+' missing context');
+   await sql.withWeb({webSubjectHash:'0'.repeat(64),emailHash:'0'.repeat(64)},async()=>assert.equal((await sql.unsafe(`select * from ${table} where ${column}=$1`,[subjects.B.canonical])).length,0,table+' invalid context'));
+   report.rls_matrix.push({table,B_fixture_rows:count,A_sees_B:0,missing_context_sees_B:0,invalid_context_sees_B:0});
+  }
+  await sql.withWeb(ctx.A,async()=>{
+   assert.equal((await sql`update public.engine_manual_observations set revision=revision where canonical_user_id=${subjects.B.canonical}`).count,0);
+   assert.equal((await sql`update public.manual_exercise_catalog set exercise_name=exercise_name where owner_user_id=${subjects.B.canonical}`).count,0);
+   assert.equal((await sql`delete from public.manual_exercise_catalog where owner_user_id=${subjects.B.canonical}`).count,0);
+   await assert.rejects(()=>sql`update public.engine_output_history set score=0`);
+  });
+ });
+}catch(e){report.gates.push({name:'bootstrap',status:'FAIL',error:String(e),stack:(e as Error).stack});}
+finally{await raw.end();await admin.end();report.ended=new Date().toISOString();report.status=report.gates.every((g:any)=>g.status==='PASS')?'PASS':'FAIL';await Deno.writeTextFile(output,JSON.stringify(report,null,2));console.log(JSON.stringify(report));if(report.status!=='PASS')Deno.exitCode=1;}

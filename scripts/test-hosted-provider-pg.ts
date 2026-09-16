@@ -20,7 +20,7 @@ async function good(token:string,action:string,payload:any={}){const r=await api
 async function gate(name:string,work:()=>Promise<void>){const started=new Date().toISOString();try{await work();report.gates.push({name,status:'PASS',started_at:started,ended_at:new Date().toISOString()});}catch(e){report.gates.push({name,status:'FAIL',started_at:started,ended_at:new Date().toISOString(),error:String(e),stack:(e as Error).stack});}}
 try{
  report.database=(await admin`select version(),current_database(),inet_server_addr()::text`)[0];
- await admin.unsafe('create role health_manual_api login noinherit nosuperuser nobypassrls;grant service_role to health_manual_api with inherit false,set true');
+ await admin.unsafe('alter role health_manual_api login');
  for(const name of ['A','B'] as const)await admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${await sha('web-session-'+subjects[name].auth)},${await sha(name.toLowerCase()+'@example.invalid')},${subjects[name].canonical})`;
  const aliasesBefore=await admin`select * from private.beta_web_identity_aliases order by web_subject_hash`;
  const raw=postgres({...config,username:'health_manual_api',max:2,prepare:false,connect_timeout:5});
@@ -32,7 +32,7 @@ try{
   report.roles=await admin`select rolname,rolsuper,rolbypassrls,rolinherit from pg_roles where rolname in ('health_manual_api','service_role','authenticated','anon') order by rolname`;
   report.membership=await admin`select roleid::regrole::text,member::regrole::text,inherit_option,set_option from pg_auth_members where member='health_manual_api'::regrole`;
   const used=await runtime.sql`select session_user::text as login,current_user::text as effective,current_setting('lock_timeout') as lock,current_setting('health.engine.experimental') as experimental`;
-  assert.equal(used[0].login,'health_manual_api');assert.equal(used[0].effective,'service_role');assert.equal(used[0].lock,'2s');report.transaction_role=used[0];
+  assert.equal(used[0].login,'health_manual_api');assert.equal(used[0].effective,'health_manual_api');assert.equal(report.membership.length,0);assert.equal(used[0].lock,'2s');report.transaction_role=used[0];
   const reset=await raw`select current_user::text as effective,current_setting('health.engine.experimental',true) as experimental`;assert.equal(reset[0].effective,'health_manual_api');assert.notEqual(reset[0].experimental,'on');
   const wrong=postgres({...config,username:'service_role',max:1});try{await assert.rejects(()=>scopedManualSql(wrong).unsafe('select 1'),/MANUAL_DATABASE_ROLE_REJECTED/);}finally{await wrong.end();}
   for(const action of ['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus'])assert.equal((await api(a,action)).error,'EXERCISE_MANAGEMENT_DISABLED');
@@ -59,7 +59,7 @@ try{
    const state=(await admin`select rolinherit,pg_has_role('health_manual_api','service_role','USAGE') as effective_inherit from pg_roles where rolname='health_manual_api'`)[0];
    report.membership_negative=state;assert.equal(state.rolinherit,false);assert.equal(state.effective_inherit,true);
    await assert.rejects(()=>scopedManualSql(raw).unsafe('select 1'),/MANUAL_DATABASE_ROLE_REJECTED/);
-  }finally{await admin.unsafe('grant service_role to health_manual_api with inherit false,set true');}
+  }finally{await admin.unsafe('revoke service_role from health_manual_api');}
  });
  await gate('hosted_A_body_meal_SQL_receipts_revisions_recompute_delete',async()=>{
   const bodyInput={date:day,weight:80,bodyFat:0,clientRequestId:crypto.randomUUID()},body=await good(a,'upsertBodyRecord',bodyInput);
@@ -91,7 +91,7 @@ try{
   const input={date:'2026-09-11',weight:82,clientRequestId:crypto.randomUUID()};await ready;
   try{const start=performance.now(),r=await api(a,'upsertBodyRecord',input);report.lock_duration_ms=performance.now()-start;assert.equal(r.error,'DB_TIMEOUT_RETRYABLE');assert.equal(r.http_status,503);assert.ok(report.lock_duration_ms<6000);}finally{release();await holding;}
   assert.equal((await good(a,'getBodyWriteStatus',{clientRequestId:input.clientRequestId})).exists,false);await good(a,'upsertBodyRecord',input);
-  const pending=crypto.randomUUID();await assert.rejects(()=>runtime.sql.begin(async(tx:any)=>{await tx`insert into private.engine_mutation_receipts(canonical_user_id,request_id,input_hash,response) values(${subjects.A.canonical},${pending},'synthetic',${tx.json({probe:true})})`;throw Error('SYNTHETIC_ROLLBACK');}),/SYNTHETIC_ROLLBACK/);
+  const pending=crypto.randomUUID(),context={webSubjectHash:await sha('web-session-'+subjects.A.auth),emailHash:await sha('a@example.invalid')};await assert.rejects(()=>runtime.sql.withWeb(context,()=>runtime.sql.begin(async(tx:any)=>{await tx`insert into private.engine_mutation_receipts(canonical_user_id,request_id,input_hash,response) values(${subjects.A.canonical},${pending},'synthetic',${tx.json({probe:true})})`;throw Error('SYNTHETIC_ROLLBACK');})),/SYNTHETIC_ROLLBACK/);
   assert.equal((await admin`select * from private.engine_mutation_receipts where request_id=${pending}`).length,0);
  });
  await gate('snapshot_real_read_write_barrier_never_mixes_input_and_score_revisions',async()=>{
@@ -117,8 +117,8 @@ try{
   }});
   let pending:Promise<any>|undefined;
   try{
-   const reading=Promise.resolve(runtime.snapshot(identity,{date}));pending=reading;void reading.catch(()=>{});await bounded(entered);
-   await runtime.mutate(identity,{...input,mealRecordId:saved.recordId,revision:saved.record.revision,weightGrams:300,clientRequestId:crypto.randomUUID()});
+   const reading=Promise.resolve(runtime.sql.withWeb(identity,()=>runtime.snapshot(identity,{date})));pending=reading;void reading.catch(()=>{});await bounded(entered);
+   await runtime.sql.withWeb(identity,()=>runtime.mutate(identity,{...input,mealRecordId:saved.recordId,revision:saved.record.revision,weightGrams:300,clientRequestId:crypto.randomUUID()}));
    events.push({event:'REAL_MUTATION_COMMITTED_WITH_DIRTY_QUEUE'});release();const snapshot=await pending;
    report.snapshot_barrier={events,returned_revision:snapshot.meals[0]?.revision,expected_old_revision:saved.record.revision};
    assert.equal(snapshot.meals[0].revision,saved.record.revision,'one snapshot must not attach an old valid score to a new meal revision');

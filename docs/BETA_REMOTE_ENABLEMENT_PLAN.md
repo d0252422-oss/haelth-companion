@@ -1,5 +1,64 @@
 # Beta remote platform preparation — not deployment approval
 
+## 2026-09-17 non-privileged continuation (current, supersedes role/TLS claims below)
+
+Run `health-nonprivileged-20260916-224316`, base d037387. REMOTE_MUTATIONS_PERFORMED = NO.
+The normal manual adapter no longer executes SET LOCAL ROLE service_role. It checks
+the actual login/effective role and rejects every membership/elevated flag. Verified
+Web subject/email hashes are transaction-local; the new invoker/RLS successor is
+`20260916144345_manual_runtime_least_privilege.sql`. The original8 files remain
+unchanged. The ordered proposal now contains9 migrations, the new one local-only;
+old remote snapshot classifications must not be presented as fresh remote evidence.
+
+Fresh native PG17 Release A6 gates and the separate7-gate low-privilege probe pass,
+including a nonvacuous14-table isolation matrix, forced pooled reuse, snapshot
+barrier, CRUD/recompute, auth, rollback and timeout retry. Actual nonprivileged
+official Edge + PG17.11 + existing Web E2E passes all27 gates in `edge5/manual-sql-e2e-
+d7334f81-ee08-459b-a432-ad3961fa67a3/report.json` under this run's evidence root.
+Runtime source hashes stayed unchanged; no Edge CPU/memory termination was reported.
+Earlier HTTP/browser failures remain preserved, not rewritten as passing attempts.
+This is a manual SQL-first local rehearsal, NOT whole-site/CLI/remote acceptance.
+
+`release/summary.json` completed exit0: critical Node87, Python74, policy19,
+frontend package contracts2, separate legacy Deno/PG/browser27 gates, lint/typecheck,
+actionlint/zizmor, OSV/Trivy and SBOM passed. Additional scoped Node25 and Deno14
+passed. Do not sum repeat FAST runs or nested vectors as new tests. SQLFluff's
+new successor109 cosmetic findings have parser0/blocking0/unknown-rule-review0;
+retain the raw warning, no historical migration rewrite or blanket rule disable.
+OSV/Trivy/SBOM are allowlisted/offline PARTIAL_COVERAGE, not a whole-system security
+certification. AI_POOL_V2_SECURITY_GATE=PASS_WITH_NON_BLOCKING_FINDINGS.
+
+Hosted pool5432/6543 strict TLS chain+hostname probes PASS with the official public
+Supabase CA; [TLS and credential contract](BETA_HOSTED_POOL_TLS_CONTRACT.md) records
+the source/hash. No DB authentication/role probe occurred without credentials.
+The original six setting names remain unchanged; public CA is not a seventh secret.
+
+CLI2.115.0 reused: config/services parse and version work, migration list local
+fails ECONNREFUSED57922 and local serve reports no running stack. CLI still selects
+PG17.6.1.166; the project's approved compatibility baseline is17.11+. Upstream
+postgres PR2155 was freshly checked open/unmerged. No unsafe older instance,
+new image pull, global upgrade or current shared-stack mutation performed.
+
+Remaining release blockers are independent: CLI platform, dedicated Beta role/login
+and credential approval, real A/B session acceptance, complete deployed rollback
+artifact, native scheduled-worker identity separation, and whole-site SQL scope.
+The scheduled native worker has no verified Web context and cannot borrow this
+manual credential; it must fail closed, not fall back to an elevated adapter.
+
+The current static51-action inventory is26 SQL_READY,4 PARTIAL,15 NOT_IMPLEMENTED,
+6 explicit legacy/auth. SQL_READY means route coverage, not remote acceptance.
+`getUserProfile`, `getNutritionTargets`, `healthCheck` and legacy `addMealRecord`
+are declared API facade entries, not proven active UI flows. Weekly report/check-in
+do have UI callers and remain unsupported by SQL; photo analysis is also not ready.
+Do not invent those results or silently route them to Sheets. A full-site switch
+remains blocked; a supported-manual-only release needs explicit unavailable-feature
+presentation and its own accepted scope before authorization.
+
+See [adapter trace](HOSTED_ADAPTER_TRACE.md), [context contract](AUTH_TO_DB_CONTEXT_CONTRACT.md),
+[definer containment](SECURITY_DEFINER_REVIEW.md), [Edge rollback gap](BETA_EDGE_ROLLBACK.md),
+and [A/B login plan](BETA_AB_TEST_LOGIN_PLAN.md). The old role/secret SQL below is
+historical, NOT an executable approval request. PENDING_EXPLICIT_BETA_AUTHORIZATION.
+
 ## 2026-09-16 authoritative continuation (supersedes conflicting older proposals)
 
 Run: `health-beta-cutover-prep-20260916-192251`, base `a37c7ec`.

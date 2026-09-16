@@ -7,7 +7,7 @@ import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 const image='public.ecr.aws/supabase/edge-runtime@sha256:c52405002a890ca9fcf77978671c57f3a988e03174afb277f84ac65bc917013c';
 const docker=(args)=>execFileSync('docker',['--context','desktop-linux',...args],{encoding:'utf8',windowsHide:true,timeout:60000});
-export async function prepareEdgeTest(evidence,privateDir,config,exercise){
+export async function prepareEdgeTest(evidence,privateDir,config,exercise,nonprivileged=false){
  assert.equal(config.host,'127.0.0.1');assert.equal(config.port,57485);assert.match(config.database,/^health_engine_[a-f0-9]{32}$/);
  const endpoint=JSON.parse(docker(['context','inspect','desktop-linux','--format','{{json .Endpoints.docker}}']));
  assert.equal(endpoint.Host,'npipe:////./pipe/dockerDesktopLinuxEngine');
@@ -26,10 +26,10 @@ export async function prepareEdgeTest(evidence,privateDir,config,exercise){
  openssl(['verify','-CAfile',ca,'-purpose','sslserver','-verify_hostname','host.docker.internal',cert]);
  const tlsConfig=path.join(privateDir,'tls-config.json');await writeFile(tlsConfig,JSON.stringify({cert,key}));
  await writeFile(path.join(root,'cert.pem'),await readFile(ca)); // Public local CA only
- const sql={host:'host.docker.internal',port:config.port,database:config.database,username:'service_role'};
+ const sql={host:'host.docker.internal',port:config.port,database:config.database,username:nonprivileged?'health_manual_api':'service_role'};
  const source=path.join(root,'source');await mkdir(source,{recursive:true});const sourceHashes={};
  const files=execFileSync('git',['--no-optional-locks','ls-files','supabase/functions/mobile-health-beta'],{encoding:'utf8',windowsHide:true}).trim().split(/\r?\n/).concat(['config/engine-local.deno.json','config/engine-local.deno.lock','fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js']);
- for(const file of files){const bytes=await readFile(file);const target=path.join(source,file);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,bytes);sourceHashes[file]=createHash('sha256').update(bytes).digest('hex');}
+ for(const file of new Set([...files,'supabase/functions/mobile-health-beta/manual-sql-context.ts','supabase/functions/mobile-health-beta/hosted-database-ca.ts'])){const bytes=await readFile(file);const target=path.join(source,file);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,bytes);sourceHashes[file]=createHash('sha256').update(bytes).digest('hex');}
  await writeFile(path.join(root,'source-hashes.json'),JSON.stringify(sourceHashes,null,2));
  const importMap=JSON.parse(await readFile('config/engine-local.deno.json','utf8'));
  await writeFile(path.join(root,'import-map.json'),JSON.stringify({imports:importMap.imports}));

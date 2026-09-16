@@ -2,7 +2,7 @@
 import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';
 export const target={projectRef:'uavimjgccigpbwqmfkhh',projectName:'health-companion-beta',organization:'pcfenospezigjlgwcbtg',region:'ap-southeast-1',databaseHost:'db.uavimjgccigpbwqmfkhh.supabase.co',poolHost:'aws-0-ap-southeast-1.pooler.supabase.com',function:'mobile-health-beta',frontend:'https://d0252422-oss.github.io/health-companion-beta/',productionRef:'vptqedxdxfoohbqctujf'};
 export const requiredGates=['ACTIVE_GIT_WRITE_SAFETY','AI_POOL_V2_SECURITY_GATE','ACTUAL_CLI_EDGE','ACTUAL_EDGE_RUNTIME','EDGE_SQL_INTEGRATION','POSTGRESQL_MIGRATION_REHEARSAL','RLS','AUTH_SESSION_MAPPING','USER_ISOLATION','MANUAL_BODY_SQL_E2E','MANUAL_NUTRITION_SQL_E2E','MANUAL_TRAINING_SQL_E2E','MANUAL_SLEEP_SQL_E2E','MANUAL_STEPS_SQL_E2E','MANUAL_TOTAL_ENERGY_SQL_E2E','EXERCISE_MANAGEMENT','SQL_READ_AFTER_WRITE','IDEMPOTENCY','UPDATE_DELETE','CACHE_ISOLATION','WEB_BROWSER_E2E','HEALTH_SCORE_REGRESSION','FRONTEND_BUILD','CRITICAL_REGRESSION'];
-export const migrationOrder=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152'];
+export const migrationOrder=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152','20260916144345'];
 export function evaluateCutover(input,now=Date.now()){
  const blockers=[];
  for(const [key,value]of Object.entries(target))if(input.target?.[key]!==value)blockers.push('TARGET_MISMATCH:'+key);
@@ -11,7 +11,7 @@ export function evaluateCutover(input,now=Date.now()){
  const role=input.runtimeRole;
  if(!role||role.name!=='health_manual_api'||role.effectiveRole!=='health_manual_api'||['superuser','createdb','createrole','bypassrls'].some(k=>role[k]!==false)||role.canSetElevatedRole!==false)blockers.push('RUNTIME_ROLE_NOT_LEAST_PRIVILEGE');
  for(const name of ['tlsVerified','rollbackVerified','fullSiteContract','realTestIdentity'])if(input[name]!==true)blockers.push('PREREQUISITE:'+name);
- if(!Array.isArray(input.migrations)||input.migrations.length!==8||input.migrations.some((m,i)=>m.version!==migrationOrder[i]||!/^[a-f0-9]{64}$/.test(m.sha256)||m.destructive!==false||m.rehearsal!=='PASS'||input.authorization?.migrationHashes?.[m.version]!==m.sha256))blockers.push('MIGRATION_PLAN_UNVERIFIED');
+ if(!Array.isArray(input.migrations)||input.migrations.length!==migrationOrder.length||input.migrations.some((m,i)=>m.version!==migrationOrder[i]||!/^[a-f0-9]{64}$/.test(m.sha256)||m.destructive!==false||m.rehearsal!=='PASS'||input.authorization?.migrationHashes?.[m.version]!==m.sha256))blockers.push('MIGRATION_PLAN_UNVERIFIED');
  const auth=input.authorization;
  if(auth?.projectRef!==target.projectRef||auth?.explicitOwnerApproval!==true||auth?.sourceRevision!==input.sourceRevision||!/^([a-f0-9]{40})$/.test(input.sourceRevision||''))blockers.push('PENDING_EXPLICIT_BETA_AUTHORIZATION');
  const approval=Date.parse(auth?.approvedAt);if(!Number.isFinite(approval)||approval>now||now-approval>86400000)blockers.push('AUTHORIZATION_STALE');

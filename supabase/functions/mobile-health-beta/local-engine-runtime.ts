@@ -637,6 +637,7 @@ export class LocalEngineRuntime {
         identity = await this.identity(request);
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw Error("INVALID_PAYLOAD");
       rejectClientIdentity(payload);
+      const dispatch=async()=>{
       let data: any;
       if (["getExerciseDatabase", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
         if (!this.exerciseEnabled) throw Error("EXERCISE_MANAGEMENT_DISABLED");
@@ -678,11 +679,11 @@ export class LocalEngineRuntime {
         }
       } else if (action === "getManualProviderIdentity") {
         data={canonicalUserId:identity.canonical,provider:'postgresql-manual-v1',release:this.exerciseEnabled?'AB':'A',schemaVersion:'manual-sql-v1'};
-      } else if (action === "getCurrentUser" && !this.hosted) {
+      } else if (action === "getCurrentUser") {
         data = {
           user: {
             userId: identity.canonical,
-            name: "Local synthetic " + (identity.kind==='web'?'Web session':identity.auth.slice(-1)),
+            ...(!this.hosted?{name:"Local synthetic " + (identity.kind==='web'?'Web session':identity.auth.slice(-1))}:{}),
           },
         };
       } else if (action === "localEngineSnapshot") {
@@ -723,6 +724,8 @@ export class LocalEngineRuntime {
       return Response.json({ ok: true, data }, {
         headers: { "cache-control": "no-store" },
       });
+      };
+      return this.sql.withWeb?await this.sql.withWeb(identity,dispatch):await dispatch();
     } catch (error) {
       const sqlCode = String((error as Json)?.code || "");
       const message = error instanceof Error ? error.message : "";

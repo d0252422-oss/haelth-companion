@@ -11,6 +11,16 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Current non-privileged continuation `health-nonprivileged-20260916-224316` adds
+transaction-local verified Web identity, a restrictive manual runtime role/RLS
+successor, pooled-context isolation tests and strict official hosted CA validation.
+These strengthen already-credited local leaves; they do not satisfy the unchanged
+CLI-platform, complete hosted SQL/auth, or remote Beta acceptance conditions.
+The25 original leaves/weights remain unchanged: engineering +0.0pp, ledger
+correction +0.0pp, known scope32.0%, whole-project UNKNOWN. See this run's external
+REPORT/manifest for fresh execution; migration preparation/TLS transport alone do
+not prove remote DB authentication or deployment readiness.
+
 AI Pool v2 toolchain run `ai-pool-v2-20260914-094638` adds dev-only tooling, D-scoped
 installs/cache and repeatable scans, not product features or weighted acceptance units.
 Existing local regression remains accepted; no scope/denominator/weight change.

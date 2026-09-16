@@ -18,7 +18,7 @@ export async function runManualObservationPgGates(h) {
   const A = subjects.A.canonical, B = subjects.B.canonical;
   assert.notEqual(A, subjects.A.auth);
   const a = await loginCookie('A'), b = await loginCookie('B');
-  report.manual_observation_evidence = {classification: 'ACTUAL_HTTP_AND_NATIVE_POSTGRES_SYNTHETIC_AUTH_NOT_EDGE_OR_LIVE_OAUTH', barriers: [], assertions: []};
+  report.manual_observation_evidence = {classification: report.actual_edge?'ACTUAL_EDGE_AND_NATIVE_POSTGRES_SYNTHETIC_AUTH_NOT_LIVE_OAUTH':'ACTUAL_HTTP_AND_NATIVE_POSTGRES_SYNTHETIC_AUTH_NOT_EDGE_OR_LIVE_OAUTH', barriers: [], assertions: []};
   const proof = report.manual_observation_evidence;
   const call = async (cookie, action, payload = {}) => {const response = await http(cookie, action, payload); assert.equal(response.ok, true, JSON.stringify(response)); return response.data;};
   const save = payload => call(a, 'upsertManualObservation', {clientRequestId: randomUUID(), ...payload});

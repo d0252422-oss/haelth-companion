@@ -4,13 +4,16 @@ const sha=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest(
 export async function resolveVerifiedManualWebIdentity(sql:any,verified:{subject:string,email:string}) {
   if(typeof verified.subject!=='string'||!verified.subject||verified.subject.length>256||typeof verified.email!=='string'||!verified.email.trim()||verified.email.length>320)throw Error('INVALID_WEB_SESSION_IDENTITY');
   const identity={kind:'web',webSubjectHash:await sha(verified.subject),emailHash:await sha(verified.email.trim().toLowerCase())};
-  return await sql.begin(async(tx:any)=>{await tx.unsafe('set transaction read only');return await checkManualWebMapping(tx,identity);});
+  const lookup=()=>sql.begin(async(tx:any)=>{await tx.unsafe('set transaction read only');return await checkManualWebMapping(tx,identity);});
+  return sql.withWeb?await sql.withWeb(identity,lookup):await lookup();
 }
 export async function checkManualWebMapping(tx:any,identity:Json,lock=false) {
   const columns=`select a.web_subject_hash,a.verified_email_hash,a.canonical_user_id,a.provider,a.environment,u.status
     from private.beta_web_identity_aliases a join public.users u on u.id=a.canonical_user_id
     where a.web_subject_hash=$1 or a.verified_email_hash=$2 limit 3`;
-  const rows=await tx.unsafe(columns+(lock?' for share of a,u':''),[identity.webSubjectHash,identity.emailHash]);
+  // Non-privileged mapping is read-only: no UPDATE grant solely to obtain row locks.
+  // Authorization uses this transaction snapshot; revocation fences subsequent transactions.
+  const rows=await tx.unsafe(columns+(lock&&!tx.manualNonPrivileged?' for share of a,u':''),[identity.webSubjectHash,identity.emailHash]);
   if(!rows.length)throw Error('WEB_IDENTITY_NOT_LINKED');
   if(rows.length!==1||rows[0].web_subject_hash!==identity.webSubjectHash||rows[0].verified_email_hash!==identity.emailHash||rows[0].provider!=='google'||rows[0].environment!=='beta'||(identity.canonical&&identity.canonical!==rows[0].canonical_user_id))throw Error('WEB_IDENTITY_CONFLICT');
   if(rows[0].status!=='ACTIVE')throw Error('WEB_IDENTITY_INACTIVE');

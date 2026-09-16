@@ -30,7 +30,7 @@ export async function runManualObservationBrowserGates(h) {
   assert.notEqual(A, B);
   const endpoint = base + '/v1/engine/web';
   const proof = report.manual_observation_browser = {
-    classification: 'EXISTING_BROWSER_REAL_HTTP_POSTGRES_SYNTHETIC_AUTH_NOT_EDGE_OR_DEVICE',
+    classification: report.actual_edge?'EXISTING_BROWSER_ACTUAL_EDGE_POSTGRES_SYNTHETIC_AUTH_NOT_DEVICE':'EXISTING_BROWSER_REAL_HTTP_POSTGRES_SYNTHETIC_AUTH_NOT_EDGE_OR_DEVICE',
     dates: {cumulative: shift(-10), duration: shift(-11), timed: shift(-12), timedStart: shift(-13), raceOld: shift(-14), raceNew: shift(-15), responseLoss: shift(-16)},
     mutations: 'ORIGINAL_QUICK_FORM_AND_RECORD_EDIT_DELETE_CONTROLS',
     mocks: {engine: false, persistence: false, authorization: false, response_data: false},
@@ -46,7 +46,8 @@ export async function runManualObservationBrowserGates(h) {
     return result.data;
   };
   const browser = async account => {
-    const entry = await browserContext(account);
+    // These gates intentionally return to A after opening a fresh B context.
+    const entry = await browserContext(account,{preservePrevious:true});
     h.setPage(entry.page);
     return entry;
   };

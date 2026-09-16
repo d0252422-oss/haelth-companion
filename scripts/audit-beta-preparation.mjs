@@ -7,15 +7,15 @@ export const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'
 const read=p=>fs.readFileSync(path.join(repo,p),'utf8');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 export const settings=['HEALTH_MANUAL_SQL_HOSTED_ENABLED','HEALTH_MANUAL_RELEASE','HEALTH_MANUAL_ALLOWED_ORIGIN','HEALTH_MANUAL_EXPECTED_PROJECT_REF','HEALTH_MANUAL_EXPECTED_DB_HOST','HEALTH_MANUAL_DATABASE_URL'];
-const versions=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152'];
-const dependencies=[[],[0],[1],[1],[1,2],[3],[0,1,2],[1,6]];
-const purposes=['versioned output history/heads','meals, identity RLS and bounded queue triggers','manual body and receipts','exercise catalog/preferences/history/receipts','body recompute trigger','exercise category update grant','queue publication generation guard','manual sleep/steps/total energy and overlap publication guard'];
+const versions=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152','20260916144345'];
+const dependencies=[[],[0],[1],[1],[1,2],[3],[0,1,2],[1,6],[0,1,2,4,6,7]];
+const purposes=['versioned output history/heads','meals, identity RLS and bounded queue triggers','manual body and receipts','exercise catalog/preferences/history/receipts','body recompute trigger','exercise category update grant','queue publication generation guard','manual sleep/steps/total energy and overlap publication guard','non-privileged runtime grants, request-context RLS and invoker publication; optional exercise policies'];
 export function audit(){
  const migrationFiles=fs.readdirSync(path.join(repo,'supabase/migrations'));
  const all_migrations=migrationFiles.filter(n=>/^\d{14}_.*\.sql$/.test(n)).sort().map((name,i,names)=>{
   const file='supabase/migrations/'+name,sql=read(file),lines=sql.split(/\r?\n/);
   return {version:name.slice(0,14),file,sha256:hash(fs.readFileSync(path.join(repo,file))),purpose:name.slice(15,-4),
-   chronological_predecessor:i?names[i-1].slice(0,14):null,dependency_scope:'Chronological baseline order; exact eight pending dependencies are in migrations[].depends_on',
+   chronological_predecessor:i?names[i-1].slice(0,14):null,dependency_scope:'Chronological baseline order; original eight plus local successor dependencies in migrations[].depends_on',
    ddl_and_privilege_locations:lines.flatMap((line,n)=>/^\s*(?:create|alter|grant|revoke|drop|truncate|delete|update)\b/i.test(line)?[{line:n+1,statement_start:line.trim()}]:[]),
    object_names:[...new Set([...sql.matchAll(/\b(?:table|function|index|sequence)\s+(?:if\s+not\s+exists\s+)?([a-z_][\w.]*)/gi)].map(m=>m[1]))],
    destructive_review:'Inventory includes function-body DML; not a top-level SQL safety verdict. Historical files must not be reapplied wholesale.',
@@ -26,7 +26,7 @@ export function audit(){
   const file='supabase/migrations/'+names[0],sql=read(file);
   return {version,file,sha256:hash(fs.readFileSync(path.join(repo,file))),purpose:purposes[i],depends_on:dependencies[i].map(j=>versions[j]),
    baseline_dependencies:i===1?['public.users','private.beta_native_auth_identities','auth.uid()','public.beta_health_records','private.beta_score_recompute_queue']:i===0?['public.users','authenticated','service_role']:[],
-   reviewed_remote_state:'MISSING_AT_2026_09_14_METADATA_SNAPSHOT',
+   reviewed_remote_state:i===8?'LOCAL_SUCCESSOR_NOT_REMOTE_CHECKED':'MISSING_AT_2026_09_14_METADATA_SNAPSHOT',
    ddl_and_privilege_locations:sql.split(/\r?\n/).flatMap((line,n)=>/^\s*(CREATE|ALTER|GRANT|REVOKE)\b/i.test(line)?[{line:n+1,statement_start:line.trim()}]:[]),
    destructive_review:'MANUAL_REVIEW_NO_TOP_LEVEL_DROP_TRUNCATE_DELETE_OR_BULK_UPDATE; function bodies/locks still require rehearsal',
    recovery:'Retain additive schema and new rows; disable provider/restore code; forward-fix changed functions. No automatic down migration.'};
@@ -51,7 +51,7 @@ export function audit(){
    edge_handler:enabled?{file:backend,line:offset<0?null:server.slice(0,offset).split('\n').length,function:'LocalEngineRuntime.handle'}:null,
    sql:!enabled?'NONE_IN_HOSTED_DATA_PATH':body?'engine_manual_body_records; engine_body_mutation_receipts':obs?'engine_manual_observations; engine_observation_receipts; daily reconciliation':training?'manual_exercise_catalog; manual_exercise_preferences; manual_workout_sets; manual_training_receipts':nutrition?'engine_meals; engine_mutation_receipts; engine_output_heads/history':'canonical identity; published daily score/queue/output queries (inspect handler per action)',
    auth:auth?'Existing Apps Script verified session bridge; account-link mutations require separate authorization':enabled?'verifyWebIdentity -> resolveVerifiedManualWebIdentity -> checkManualWebMapping; rechecked within write transaction':'HOSTED_MANUAL_ACTION_NOT_SUPPORTED; no implicit Sheets fallback',
-   tenant:enabled?'Canonical user predicates/transaction checks; hosted effective service_role BYPASSRLS; authenticated read policies separate':'NOT_APPLICABLE',
+   tenant:enabled?'Verified session hashes -> transaction-local context; effective health_manual_api NO BYPASSRLS/NO memberships; owner RLS and server predicates':'NOT_APPLICABLE',
    return_schema:enabled?'Action-specific existing handle response in {ok,data}; frontend assertManualResponseShape; this inventory does not infer missing fields':'Legacy response or explicit unsupported error',
    error_contract:enabled?'Origin403/method405/config503; typed {ok:false,error}; transient DB errors retryable; no-store':'Unsupported hosted data action fails closed; legacy auth errors remain visible',
    cache:enabled?'localSessionEpoch + user/environment + read serials; pending idempotency envelope retained until reconciled':'Unsupported actions need explicit NOT_AVAILABLE UI before full-site cutover',

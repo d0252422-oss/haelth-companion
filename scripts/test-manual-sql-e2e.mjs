@@ -18,6 +18,8 @@ const runId = randomUUID(), evidence = path.join(phase, 'manual-sql-e2e-' + runI
 const releaseExercise = process.argv.includes('--release-exercise');
 const releaseA=process.argv.includes('--release-a');
 const actualEdge=process.argv.includes('--edge-container');
+const nonprivileged=process.argv.includes('--nonprivileged');
+assert.ok(!nonprivileged||actualEdge&&releaseExercise,'Nonprivileged mode requires actual Edge and AB contracts');
 assert.ok(!(releaseA&&releaseExercise),'Choose independent Release A or full AB');
 const privateTraceRoot = process.env.MANUAL_SQL_PRIVATE_TRACE_DIR;
 assert.ok(privateTraceRoot && path.isAbsolute(privateTraceRoot), 'Explicit private trace retention root required');
@@ -58,27 +60,52 @@ async function gate(name, fn) {
   const started = now();
   try { await fn(); report.gates.push({ name, status: 'PASS', started_at: started, ended_at: now() }); }
   catch (error) { report.gates.push({ name, status: 'FAIL', started_at: started, ended_at: now(), error: redact(error.stack || error.message) }); report.errors.push(name); console.error('FAIL ' + name + ': ' + error.message); if (page && !page.isClosed()) await page.screenshot({ path: path.join(evidence, name + '-failure.png'), fullPage: true }).catch(() => {}); }
+  await writeFile(path.join(evidence,'checkpoint-report.json'),redact(JSON.stringify(report,null,2)));
+  // Each gate starts fresh contexts. Retain traces, then release their renderer
+  // memory rather than accumulating every full application until the suite ends.
+  for(const entry of contexts)await retainContext(entry);
 }
 async function portFree(port) { await new Promise((resolve, reject) => { const probe = net.createServer(); probe.once('error', () => reject(Error('PORT_ALREADY_IN_USE_' + port))); probe.listen(port, '127.0.0.1', () => probe.close(resolve)); }); }
 async function until(fn, description, timeout = 20000) { const deadline = Date.now() + timeout; let value; while (Date.now() < deadline) { value = await fn(); if (value) return value; await sleep(100); } throw Error('BOUNDED_WAIT_FAILED_' + description); }
 let pg, child, browser, page, context, edge;
 const contexts = [], responsePromises = new Set(); let stdout = '', stderr = '';
+async function retainContext(entry){
+  if(entry.retained)return;entry.retained=true;
+  try{
+    const raw=path.join(privateDir,entry.name+'-raw.zip');await entry.context.tracing.stop({path:raw});
+    const zip=await JSZip.loadAsync(await readFile(raw));
+    for(const [name,member]of Object.entries(zip.files))if(!member.dir&&/\.(trace|network|json)$/.test(name))zip.file(name,redact(await member.async('string')));
+    await writeFile(path.join(evidence,entry.name+'-trace.zip'),await zip.generateAsync({type:'nodebuffer'}));
+  }catch(error){report.errors.push('TRACE_RETAIN_OR_REDACT_FAILED: '+error.message);}
+  finally{await entry.context.close().catch(()=>{});}
+}
 const http = async (cookie, action, payload = {}) => {
   const start = now(), response = await fetch(base + '/v1/engine/web', { method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: JSON.stringify({ action, payload }), signal: AbortSignal.timeout(30000) });
   const body = await response.json(); report.http.push({ transport: 'DIRECT_HTTP_TEST', action, payload, http_status: response.status, response: body, started_at: start, ended_at: now() }); return { http_status: response.status, ...body };
 };
-async function loginCookie(account, extra = {}) { const res = await fetch(base + '/local-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ account, ...extra }), signal: AbortSignal.timeout(10000) }); assert.equal(res.status, 200); return res.headers.get('set-cookie').split(';')[0]; }
+async function loginCookie(account, extra = {}) { const res = await fetch(base + '/local-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ account,...(nonprivileged?{kind:'web'}:{}), ...extra }), signal: AbortSignal.timeout(10000) }); assert.equal(res.status, 200); return res.headers.get('set-cookie').split(';')[0]; }
 async function bodyRows() { return await pg.admin`select canonical_user_id,record_id,revision,local_date,deleted,body from public.engine_manual_body_records order by local_date,record_id`; }
 async function meals() { return await pg.admin`select canonical_user_id,meal_id,revision,deleted,local_date,body from public.engine_meals order by meal_id`; }
 async function nutritionHead(date, user = subjects.A.canonical) {
   return (await pg.admin`select h.output_kind,h.engine_version,h.score,h.score_status,h.payload,h.input_fingerprint from public.engine_output_heads p join public.engine_output_history h using(canonical_user_id,calculation_date,output_kind,engine_version,input_fingerprint) where h.canonical_user_id=${user} and h.calculation_date=${date} and h.output_kind='nutrition'`)[0];
 }
-async function browserContext(account) {
+async function browserContext(account,{preservePrevious=false}={}) {
+  if(!preservePrevious)for(const entry of contexts)await retainContext(entry);
+  if(nonprivileged&&['A','B'].includes(account))account='WEB_'+account;
   const ctx = await browser.newContext({ viewport: { width: 430, height: 932 }, timezoneId: 'Asia/Taipei', locale: 'zh-TW' });
   const entry = { context: ctx, name: account + '-' + contexts.length }; contexts.push(entry);
+  const registerRoute=ctx.route.bind(ctx);
+  ctx.route=(pattern,handler,options)=>registerRoute(pattern,async(...args)=>{
+    try{return await handler(...args);}catch(error){
+      report.errors.push('ROUTE_ASSERTION: '+redact(error.stack||String(error)));
+      await args[0].abort('failed').catch(()=>{});
+    }
+  },options);
   await ctx.route('**/*', route => { const url = new URL(route.request().url()); if (url.origin === base || ['data:', 'blob:'].includes(url.protocol)) return route.continue(); report.blocked_external_requests.push(url.origin + url.pathname); return route.abort('blockedbyclient'); });
   await ctx.tracing.start({ screenshots: true, snapshots: true, sources: false });
-  const p = await ctx.newPage(); p.setDefaultTimeout(12000);
+  // Matches the existing 30s HTTP deadline plus 2s for rendering. This is a
+  // harness wait, not a relaxed SQL/engine bound or a production latency SLA.
+  const p = await ctx.newPage(); p.setDefaultTimeout(32000);
   p.on('console', msg => report.console.push({ context: entry.name, type: msg.type(), text: redact(msg.text()), at: now() }));
   p.on('pageerror', error => report.page_errors.push({ context: entry.name, error: redact(error.stack || error.message) }));
   p.on('response', response => {
@@ -115,6 +142,9 @@ try {
   await portFree(57841); await portFree(pgPort);
   console.log('START dedicated PostgreSQL initialization ' + now());
   pg = await createLocalPostgres({ port: pgPort,release:releaseA?'A':'AB' }); report.database = pg.evidence;
+  if(nonprivileged){await pg.admin.unsafe('alter role health_manual_api login');report.runtime_role='health_manual_api_NO_MEMBERSHIP_NO_BYPASSRLS';report.command+=' --nonprivileged';
+   for(const name of ['A','B'])await pg.admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${hash('web-session-'+subjects[name].auth)},${hash(name.toLowerCase()+'@example.invalid')},${subjects[name].canonical})`;
+  }
   console.log('READY dedicated PostgreSQL ' + now());
   assert.equal(pg.config.host, '127.0.0.1'); assert.match(pg.config.database, /^health_engine_[a-f0-9]{32}$/);
   const config = path.join(evidence, 'runtime-config.json'); await writeFile(config, JSON.stringify(pg.config));
@@ -123,7 +153,7 @@ try {
   childEnv.HEALTH_MANUAL_WEB_SESSION_LOCAL=(releaseExercise||releaseA)?'1':'0';
   if(actualEdge){
    await portFree(57842);await portFree(57921);
-   edge=await(await import('./local-edge-container.mjs')).prepareEdgeTest(evidence,privateDir,pg.config,releaseExercise);
+   edge=await(await import('./local-edge-container.mjs')).prepareEdgeTest(evidence,privateDir,pg.config,releaseExercise,nonprivileged);
    childEnv.HEALTH_TEST_ACTUAL_EDGE_PROXY=edge.proxy;childEnv.HEALTH_TEST_TLS_CONFIG=edge.tlsConfig;
    report.actual_edge=edge.metadata;
   }
@@ -179,7 +209,8 @@ try {
     const identity = await http(a, 'getCurrentUser'); assert.equal(identity.data.user.userId, subjects.A.canonical); assert.notEqual(subjects.A.auth, subjects.A.canonical);
     for (const weight of [null, '', 'abc', 0, -1, 19.9, 500.1]) assert.equal((await http(a, 'upsertBodyRecord', { date, weight, clientRequestId: randomUUID() })).ok, false);
     assert.equal((await http(a, 'upsertBodyRecord', { date, clientRequestId: randomUUID() })).ok, false);
-    for (const payload of [{ date: '2026-02-30', weight: 70 }, { date: shift(1), weight: 70 }, { date, weight: 70, bodyFat: -1 }, { date, weight: 70, bodyFat: 101 }]) assert.equal((await http(a, 'upsertBodyRecord', { ...payload, clientRequestId: randomUUID() })).ok, false);
+    const tomorrow=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei'}).format(new Date(Date.now()+86400000));
+    for (const payload of [{ date: '2026-02-30', weight: 70 }, { date: tomorrow, weight: 70 }, { date, weight: 70, bodyFat: -1 }, { date, weight: 70, bodyFat: 101 }]) assert.equal((await http(a, 'upsertBodyRecord', { ...payload, clientRequestId: randomUUID() })).ok, false);
     for (const owner of ['user_id', 'userId', 'canonical_user_id', 'canonicalUserId', 'owner_id', 'subject_ref', 'auth_user_id']) assert.equal((await http(a, 'upsertBodyRecord', { date, weight: 70, clientRequestId: randomUUID(), [owner]: subjects.B.canonical })).ok, false);
     const payload = { date, weight: 70, bodyFat: null, clientRequestId: randomUUID() };
     const concurrent = await Promise.all(Array.from({ length: 4 }, () => http(a, 'upsertBodyRecord', payload)));
@@ -354,14 +385,7 @@ try {
 } catch (error) { report.errors.push(redact(error.stack || error.message)); }
 finally {
   await Promise.allSettled([...responsePromises]);
-  for (const entry of contexts) {
-    try {
-      const raw = path.join(privateDir, entry.name + '-raw.zip'); await entry.context.tracing.stop({ path: raw });
-      const zip = await JSZip.loadAsync(await readFile(raw));
-      for (const [name, member] of Object.entries(zip.files)) if (!member.dir && /\.(trace|network|json)$/.test(name)) zip.file(name, redact(await member.async('string')));
-      await writeFile(path.join(evidence, entry.name + '-trace.zip'), await zip.generateAsync({ type: 'nodebuffer' }));
-    } catch (error) { report.errors.push('TRACE_RETAIN_OR_REDACT_FAILED: ' + error.message); }
-  }
+  for (const entry of contexts) await retainContext(entry);
   if (browser) await browser.close();
   if (child && child.exitCode === null) { if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); else child.kill('SIGTERM'); }
   if(edge)try{report.edge_cleanup=await edge.close();if(report.edge_cleanup.resourceErrors.length)report.errors.push('ACTUAL_EDGE_RESOURCE_OR_BOOT_FAILURE');}catch(error){report.errors.push('EDGE_CLEANUP_FAILED: '+error.message);}

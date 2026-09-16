@@ -58,7 +58,11 @@ export class ManualTrainingLocalStore {
   }
   async selected(tx:any,user:string,id:unknown,allowArchived=false) {
     if(typeof id!=='string'||!id||id.length>128)throw Error('INVALID_EXERCISE_ID');
-    const c=(await tx`select * from public.manual_exercise_catalog where exercise_id=${id} and (owner_user_id is null or owner_user_id=${user}) for key share`)[0];
+    let c=(await tx`select * from public.manual_exercise_catalog where exercise_id=${id} and (owner_user_id is null or owner_user_id=${user})`)[0];
+    // Shared catalog is immutable to the runtime role. SELECT FOR KEY SHARE would
+    // apply its owner-only UPDATE policy and hide shared exercises. The FK locks
+    // the referenced key on insertion; retain the explicit lock for owned rows.
+    if(c?.owner_user_id!==null&&c)c=(await tx`select * from public.manual_exercise_catalog where exercise_id=${id} and owner_user_id=${user} for key share`)[0];
     if(!c)throw Error('EXERCISE_NOT_FOUND');
     await tx`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${user},${id}) on conflict do nothing`;
     const p=(await tx`select * from public.manual_exercise_preferences where canonical_user_id=${user} and exercise_id=${id} for update`)[0];

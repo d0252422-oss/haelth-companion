@@ -1,6 +1,8 @@
 // CLI-local Edge rehearsal only; no test issuer, subprocess, remote worker or auth bypass.
 import { LocalEngineRuntime } from './local-engine-runtime.ts';
 import {verifyWebIdentity} from './index.ts';
+import postgres from 'npm:postgres@3.4.8';
+import {createHostedManualRuntime} from './hosted-manual-bootstrap.ts';
 let runtime: Promise<LocalEngineRuntime> | undefined;
 let runtimeFingerprint: string | undefined;
 export async function localManualEnvironmentFingerprint(config: Record<string,any>, env:(name:string)=>string|undefined) {
@@ -13,7 +15,7 @@ export function validateLocalManualConfig(config: Record<string, any>, env: (nam
   if(env('HEALTH_ENGINE_LOCAL_ONLY')!=='1'||env('DENO_DEPLOYMENT_ID')||env('HEALTH_MANUAL_EDGE_REHEARSAL')!=='1'
     ||url.protocol!=='http:'||url.pathname!=='/'||url.username||url.password||url.search||url.hash||!(/^(127\.0\.0\.1|localhost|host\.docker\.internal|supabase_kong_[a-z0-9_-]+)$/.test(url.hostname))
     ||!['127.0.0.1','host.docker.internal'].includes(config.host)||![57483,57484,57485].includes(config.port)
-    ||!/^health_engine_[a-f0-9]{32}$/.test(config.database)||config.username!=='service_role'
+    ||!/^health_engine_[a-f0-9]{32}$/.test(config.database)||!['service_role','health_manual_api'].includes(config.username)
     ||config.path||config.socket||config.ssl||config.password)throw Error('UNSAFE_LOCAL_EDGE_CONFIGURATION');
   return {host:config.host,port:config.port,database:config.database,username:config.username};
 }
@@ -25,7 +27,8 @@ export async function localManualBootstrap(request: Request, admin: any): Promis
   if(runtimeFingerprint!==undefined&&runtimeFingerprint!==fingerprint)throw Error('LOCAL_RUNTIME_ENVIRONMENT_CHANGED');
   runtimeFingerprint=fingerprint;
   // admin client is environment-bound, never user/session-bound. Token verified per request.
-  runtime??=(async()=>{const instance=new LocalEngineRuntime(config,async token=>{
+  runtime??=(async()=>{if(config.username==='health_manual_api')return await createHostedManualRuntime(postgres({...config,max:2,prepare:false,connect_timeout:5,idle_timeout:20}),Deno.env.get('HEALTH_EXERCISE_MANAGEMENT_LOCAL')==='1'?'AB':'A',verifyWebIdentity);
+  const instance=new LocalEngineRuntime(config,async token=>{
     const {data,error}=await admin.auth.getUser(token);
     if(error&&(error.status===0||error.status>=500))throw Error('AUTH_SERVICE_UNAVAILABLE');
     if(error||!data?.user)throw Error('INVALID_SUPABASE_SESSION');

@@ -155,9 +155,11 @@ export async function runExerciseReleaseGates(h){
   });
   await gate('verified_web_session_canonical_mapping_sql_and_browser',async()=>{
     const hash=s=>createHash('sha256').update(s).digest('hex'),webA=await loginCookie('A',{kind:'web'}),webB=await loginCookie('B',{kind:'web'});
+    if(report.runtime_role==='health_manual_api_NO_MEMBERSHIP_NO_BYPASSRLS')await pg.admin`delete from private.beta_web_identity_aliases where web_subject_hash=${hash('web-session-'+subjects.A.auth)}`;
     assert.equal((await http(webA,'getBodyRecords',{date:day})).error,'WEB_IDENTITY_NOT_LINKED');
     const webOnly=randomUUID();await pg.admin`insert into public.users(id,external_subject_hash,timezone) values(${webOnly},${hash('WEB_ONLY_SYNTHETIC')},'Asia/Taipei')`;
-    for(const [name,canonical]of [['A',A],['B',B],['MISSING',webOnly]])await pg.admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${hash('web-session-'+subjects[name].auth)},${hash(name.toLowerCase()+'@example.invalid')},${canonical})`;
+    try{
+    for(const [name,canonical]of [['A',A],['B',B],['MISSING',webOnly]])await pg.admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${hash('web-session-'+subjects[name].auth)},${hash(name.toLowerCase()+'@example.invalid')},${canonical}) on conflict do nothing`;
     const aliases=()=>pg.admin`select * from private.beta_web_identity_aliases order by web_subject_hash`,users=()=>pg.admin`select * from public.users order by id`;
     const beforeAliases=await aliases(),beforeUsers=await users();
     const only=await invoke(await loginCookie('MISSING',{kind:'web'}),'getCurrentUser',{});assert.equal(only.user.userId,webOnly);
@@ -179,6 +181,7 @@ export async function runExerciseReleaseGates(h){
     finally{await pg.admin`update public.users set status='ACTIVE' where id=${A}`;}
     const command=[process.env.DENO_EXECUTABLE||'deno','run','--cached-only','--frozen-lockfile','--node-modules-dir=none','--config','config/engine-local.deno.json','--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1','scripts/check-manual-web-revocation.ts',path.join(evidence,'runtime-config.json')];
     const started=new Date().toISOString();let output='',exit=0;
+    if(report.runtime_role==='health_manual_api_NO_MEMBERSHIP_NO_BYPASSRLS')command.push('--nonprivileged');
     try{output=execFileSync(command[0],command.slice(1),{cwd:process.cwd(),env:{...process.env,HEALTH_ENGINE_LOCAL_ONLY:'1'},windowsHide:true,encoding:'utf8',timeout:45000});}
     catch(error){exit=error.status??-1;output=String(error.stdout||'')+'\n'+String(error.stderr||'');}
     await writeFile(path.join(evidence,'web-revocation.stdout.log'),output);
@@ -194,10 +197,21 @@ export async function runExerciseReleaseGates(h){
     let cookies=await p.context().cookies();assert.equal(cookies.some(c=>c.name==='engine_session'),false);assert.equal(cookies.some(c=>c.name==='engine_web_session'),true);
     let identityResponse=await p.request.post(base+'/v1/engine/web',{data:{action:'getCurrentUser',payload:{}}});assert.equal((await identityResponse.json()).data.user.userId,B);
     await p.request.post(base+'/local-login',{data:{account:'A'}});cookies=await p.context().cookies();assert.equal(cookies.some(c=>c.name==='engine_web_session'),false);
-    identityResponse=await p.request.post(base+'/v1/engine/web',{data:{action:'getCurrentUser',payload:{}}});assert.equal((await identityResponse.json()).data.user.userId,A);
+    identityResponse=await p.request.post(base+'/v1/engine/web',{data:{action:'getCurrentUser',payload:{}}});
+    const nativeResult=await identityResponse.json();
+    if(report.runtime_role==='health_manual_api_NO_MEMBERSHIP_NO_BYPASSRLS'){
+      assert.equal(nativeResult.ok,false,'Web-only hosted adapter must reject native cookies');
+      await p.request.post(base+'/local-login',{data:{account:'A',kind:'web'}});
+      identityResponse=await p.request.post(base+'/v1/engine/web',{data:{action:'getCurrentUser',payload:{}}});assert.equal((await identityResponse.json()).data.user.userId,A);
+    }else assert.equal(nativeResult.data.user.userId,A);
     const updated=(await invoke(webA,'getBodyRecords',{date:shift(-4)}))[0];await invoke(webA,'deleteBodyRecord',{recordId:updated.recordId,revision:updated.revision,clientRequestId:randomUUID()});await invoke(webA,'deleteMealRecord',{mealRecordId:meal.recordId,revision:1,clientRequestId:randomUUID()});
-    report.web_session_authorization={status:'PASS_LOCAL_SYNTHETIC_VERIFIER',native_impersonation:false,role:'service_role BYPASSRLS, explicit verified canonical predicates and transaction recheck; NOT WEB_RLS_PASS',existing_aliases_users_timestamps_unchanged:true,missing_conflict_revoked_fail_closed:true,web_only_without_native_mapping:true,live_apps_script_verifier:'NOT_RUN',live_oauth:'NOT_RUN',identity_migration:'NONE'};
+    report.web_session_authorization={status:'PASS_LOCAL_SYNTHETIC_VERIFIER',native_impersonation:false,role:report.runtime_role||'service_role BYPASSRLS, explicit verified canonical predicates and transaction recheck; NOT WEB_RLS_PASS',existing_aliases_users_timestamps_unchanged:true,missing_conflict_revoked_fail_closed:true,web_only_without_native_mapping:true,live_apps_script_verifier:'NOT_RUN',live_oauth:'NOT_RUN',identity_migration:'NONE'};
     record('Distinct verified Web sessions use read-only existing alias mapping, SQL CRUD/readback/new context/B isolation; no native JWT impersonation or account linking');
+    }finally{
+      // Restore the MISSING fixture's absent-alias state for later denial gates.
+      // This alias was created above in this dedicated synthetic cluster only.
+      await pg.admin`delete from private.beta_web_identity_aliases where canonical_user_id=${webOnly} and web_subject_hash=${hash('web-session-'+subjects.MISSING.auth)}`;
+    }
   });
   await gate('browser_custom_exercise_create_category_duplicate_recovery',async()=>{
     const {context,page:p}=await browserContext('WEB_A');setPage(p);await p.setViewportSize({width:1280,height:900});await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#manage-exercises').click();

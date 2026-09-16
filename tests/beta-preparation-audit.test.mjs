@@ -5,8 +5,8 @@ import path from 'node:path';
 import {audit,settings,repo} from '../scripts/audit-beta-preparation.mjs';
 const result=audit();
 test('all historical migrations are read and hashed without claiming fresh remote equivalence',()=>{const files=fs.readdirSync(path.join(repo,'supabase/migrations')).filter(n=>/^\d{14}_.*\.sql$/.test(n));assert.equal(result.all_migrations.length,files.length);for(const m of result.all_migrations){assert.match(m.sha256,/^[a-f0-9]{64}$/);assert.ok(m.destructive_review.includes('not a top-level'));}});
-test('eight unique migrations form an ordered dependency graph with source hashes',()=>{
- const seen=new Set();for(const m of result.migrations){assert.equal(seen.has(m.version),false);for(const d of m.depends_on)assert.ok(seen.has(d));seen.add(m.version);assert.match(m.sha256,/^[a-f0-9]{64}$/);assert.ok(m.ddl_and_privilege_locations.length);}assert.equal(seen.size,8);
+test('original eight migrations plus least-privilege successor form an ordered dependency graph',()=>{
+ const seen=new Set();for(const m of result.migrations){assert.equal(seen.has(m.version),false);for(const d of m.depends_on)assert.ok(seen.has(d));seen.add(m.version);assert.match(m.sha256,/^[a-f0-9]{64}$/);assert.ok(m.ddl_and_privilege_locations.length);}assert.equal(seen.size,9);assert.equal(result.migrations.at(-1).reviewed_remote_state,'LOCAL_SUCCESSOR_NOT_REMOTE_CHECKED');
 });
 test('six checkpoint settings are real hosted config inputs; only DB URL is secret',()=>{
  const source=fs.readFileSync(path.join(repo,'supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts'),'utf8');assert.equal(settings.length,6);for(const s of settings)assert.ok(source.includes("env('"+s+"')"));
