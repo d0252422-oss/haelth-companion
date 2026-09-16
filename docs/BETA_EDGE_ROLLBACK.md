@@ -1,5 +1,25 @@
 # Beta Edge rollback — PARTIAL, not deploy-ready
 
+## Critical-path revalidation — 2026-09-17
+
+Fresh remote metadata still reports mobile-health-beta v14 ACTIVE and the same
+ezbr digest below. CLI2.117.0 documented `functions download --use-api` was tried
+once in a new D-only root; it again refused the external frozen-fixture path.
+Tagged CLI source confirms the containment check. No alternate extractor, unsafe
+path flag or legacy implementation was used to evade this security refusal.
+
+`D:/Dev/Evidence/beta-edge-rollback/health-critical-20260917-065444/manifest.json`,
+`checksums.txt`, `ROLLBACK.md` record old artifact as null, platform digest separately,
+and a hash-verified forward candidate from d7a00d5. Candidate file hashes do not prove
+old deployed source equivalence. Forward-redeploy strategy is prepared but not
+accepted: it still needs supportedCLI/platform acceptance, secure config before-state,
+and authorized hosted identity/smoke. It cannot repair missing DB grants/credential.
+
+EDGE_ROLLBACK_ARTIFACT=PARTIAL_PLATFORM_LIMITATION_SECURITY_CONTAINMENT
+EDGE_ROLLBACK_READY=BLOCKED
+FORWARD_REDEPLOY_STRATEGY=PREPARED_NOT_REHEARSED
+Do not promote a plan or offline hash check to PASS_WITH_REDEPLOY_STRATEGY.
+
 2026-09-17 continuation: CLI2.117.0 was provenance-verified onD, but this does not
 prove that its safe download can recover the refused previous artifact. No bypass
 extractor, new remote download or deployment was performed. Target worker successor

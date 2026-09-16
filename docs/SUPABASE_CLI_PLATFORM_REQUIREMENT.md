@@ -1,5 +1,11 @@
 # CLI platform requirement — 2026-09-17
 
+Current precision review supersedes the selection/strict-equality explanation below:
+see CLI_PG_VERSION_GATE_DECISION.md. Linked166 comes from a checkout pin; an unlinked
+CLI2.117 config selects167. Supported service overrides exist. The remaining blocker
+is unverified security-patch equivalence plus unexecuted actualCLI/focused parity,
+not the mere inequality17.6 !=17.11. Historical run results below are retained.
+
 REQUIRED_CLI_VERSION = NO_EXPLICIT_REPO_VERSION_PIN
 REQUIRED_POSTGRES_PLATFORM_VERSION = PostgreSQL17.11+ on compatibility track
 REQUIRED_EDGE_RUNTIME_VERSION = compatible actual official runtime; tested v1.74.3

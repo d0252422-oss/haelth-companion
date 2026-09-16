@@ -11,6 +11,11 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Critical-path review `health-critical-20260917-065444` clarified CLI local pin versus
+default and retained the security-patch floor; froze candidate/authorization hashes,
+rechecked old Edge download containment refusal, and finalized credential/OAuth
+instructions. No remote or weighted release leaf closed; known scope32.0%, +0.0pp.
+
 Worker/CLI continuation `health-worker-20260917-055400` adds separate delegated
 ingestion and lease-bound recompute roles, pooled-context/retry rehearsal, SQL
 canonical profile routing and explicit weekly/check-in deferral. CLI2.117 still

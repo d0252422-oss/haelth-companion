@@ -1,5 +1,15 @@
 # Remote enablement package — CONDITIONAL, not deploy-ready
 
+Critical-path precision review: health-critical-20260917-065444.
+CLI_PG_VERSION_GATE_DECISION.md corrects the166 source (checkout pin, not immutable
+CLI default) and distinguishes security equivalence from patch equality. The
+security floor conflict is still unresolved. BETA_REMOTE_CREDENTIAL_REQUIREMENTS.md
+and BETA_AB_OAUTH_OWNER_RUNBOOK.md are ready as specifications; no credential/login
+acceptance implied. Exact d7a00d5 candidate hashes and10 migration versions are now
+frozen in BETA_REMOTE_MUTATION_AUTHORIZATION_REQUEST.md. Safe old source download
+is still refused. REMOTE_ENABLEMENT_PACKAGE=CONDITIONAL_NOT_READY_FOR_OWNER_AUTH.
+No product changes or full manual/background Gate reruns in this precision run.
+
 Run health-worker-20260917-055400. REMOTE_MUTATIONS_PERFORMED=NO.
 This supersedes older privileged-role proposals; no service_role membership,
 BYPASSRLS or SUPERUSER runtime exception is requested.
