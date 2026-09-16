@@ -12,6 +12,15 @@ const dependencies=[[],[0],[1],[1],[1,2],[3],[0,1,2],[1,6]];
 const purposes=['versioned output history/heads','meals, identity RLS and bounded queue triggers','manual body and receipts','exercise catalog/preferences/history/receipts','body recompute trigger','exercise category update grant','queue publication generation guard','manual sleep/steps/total energy and overlap publication guard'];
 export function audit(){
  const migrationFiles=fs.readdirSync(path.join(repo,'supabase/migrations'));
+ const all_migrations=migrationFiles.filter(n=>/^\d{14}_.*\.sql$/.test(n)).sort().map((name,i,names)=>{
+  const file='supabase/migrations/'+name,sql=read(file),lines=sql.split(/\r?\n/);
+  return {version:name.slice(0,14),file,sha256:hash(fs.readFileSync(path.join(repo,file))),purpose:name.slice(15,-4),
+   chronological_predecessor:i?names[i-1].slice(0,14):null,dependency_scope:'Chronological baseline order; exact eight pending dependencies are in migrations[].depends_on',
+   ddl_and_privilege_locations:lines.flatMap((line,n)=>/^\s*(?:create|alter|grant|revoke|drop|truncate|delete|update)\b/i.test(line)?[{line:n+1,statement_start:line.trim()}]:[]),
+   object_names:[...new Set([...sql.matchAll(/\b(?:table|function|index|sequence)\s+(?:if\s+not\s+exists\s+)?([a-z_][\w.]*)/gi)].map(m=>m[1]))],
+   destructive_review:'Inventory includes function-body DML; not a top-level SQL safety verdict. Historical files must not be reapplied wholesale.',
+   recovery:'No automatic reverse migration; preserve rows and hash-verified before-state; reviewed forward fix only.'};
+ });
  const migrations=versions.map((version,i)=>{
   const names=migrationFiles.filter(n=>n.startsWith(version+'_'));if(names.length!==1)throw Error('MIGRATION_NOT_UNIQUE:'+version);
   const file='supabase/migrations/'+names[0],sql=read(file);
@@ -50,7 +59,7 @@ export function audit(){
  });
  const sqlFiles=['manual-body-local.ts','manual-training-local.ts','manual-observations-local.ts','manual-web-identity.ts','local-engine-runtime.ts'].map(n=>'supabase/functions/mobile-health-beta/'+n);
  const sql_locations=sqlFiles.flatMap(file=>read(file).split(/\r?\n/).flatMap((line,n)=>/\b(?:async |function |class |select |insert into |update |delete from )/i.test(line)?[{file,line:n+1,source:line.trim()}]:[]));
- return {schema:'beta-preparation-inventory-v1',source_files:[...new Set(sources.concat(sqlFiles,['supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts']))].map(file=>({file,sha256:hash(fs.readFileSync(path.join(repo,file)))})),settings,migrations,actions:rows,sql_locations,
+ return {schema:'beta-preparation-inventory-v2',all_migrations,source_files:[...new Set(sources.concat(sqlFiles,['supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts']))].map(file=>({file,sha256:hash(fs.readFileSync(path.join(repo,file)))})),settings,migrations,actions:rows,sql_locations,
   limitations:['Literal call/allowlist inventory; dynamic caller reachability requires review, not a runtime test.','SQL_READY is a route implementation label, never a cutover or OAuth PASS.','Dashboard/timeline coverage is partial: profile/targets/check-in/weekly/photo are not implemented in hosted provider.','No remote query, grant, migration, session or data mutation is executed by this script.']};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

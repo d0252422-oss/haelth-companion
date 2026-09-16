@@ -1,5 +1,104 @@
 # Beta remote platform preparation — not deployment approval
 
+## 2026-09-16 authoritative continuation (supersedes conflicting older proposals)
+
+Run: `health-beta-cutover-prep-20260916-192251`, base `a37c7ec`.
+Current phase: BETA_REMOTE_PLATFORM_AUTH_AND_SQL_FIRST_CUTOVER_PREPARATION.
+REMOTE_MUTATIONS_PERFORMED = NO. PENDING_EXPLICIT_BETA_AUTHORIZATION remains separate
+from technical failures. No remote role, secret, migration, deployment or test data action is approved by this plan.
+
+Fresh target/schema/settings/CLI/TLS results: [BETA_REMOTE_INVENTORY.md](BETA_REMOTE_INVENTORY.md).
+The existing 8 migrations remain absent. All 24 source migrations were read/hash-inventoried;
+16 have remote history entries (not proof of byte-identical schema); 8 have missing
+history and absent engine/manual objects. The 51-action inventory remains26 static
+SQL_READY,4 PARTIAL,15 NOT_IMPLEMENTED,6 explicit legacy/auth. No frontend flag changed.
+
+### Normal runtime role requirement — NO elevated exception this run
+
+The older `GRANT service_role` proposal below is **historical and NOT APPROVABLE under
+the current instruction**. `scopedManualSql` currently checks SET membership then
+executes SET LOCAL ROLE service_role. A NOINHERIT/NOBYPASSRLS login alone does not fix
+the effective privilege. Do not provision that old proposal or silently disable RLS.
+
+Desired role design (not executable migration):
+
+| Identity | Design / scope |
+|---|---|
+| migration/admin | Existing authorized operator only; never runtime DB URL |
+| health_manual_api | Dedicated LOGIN after explicit provisioning; NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOBYPASSRLS, NOREPLICATION; cannot SET any elevated role |
+| health_beta_inspector | Optional NOLOGIN role; catalog-only/read-only; unnecessary health grants omitted |
+| verified user context | Existing opaque Web session verifier and exact active canonical alias; not auth.uid equality, body user_id, email similarity or test issuer |
+
+Safe role skeleton proposal, **not run**, and not yet a usable runtime:
+
+```sql
+CREATE ROLE health_manual_api NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+GRANT CONNECT ON DATABASE postgres TO health_manual_api;
+-- No elevated membership, schema CREATE, table ownership, ALL, TRUNCATE or default grants.
+-- LOGIN/password and exact per-object permissions only after adapter/RLS rehearsal and approval.
+```
+
+Required permission inventory: SELECT on users/active alias mapping; SELECT/INSERT
+on receipts/history; SELECT/INSERT/UPDATE on body/meals/observations/output heads and
+bounded queue; catalog/preferences/workout column-limited writes and unreferenced
+catalog DELETE only. No workout/health-history DELETE, no cascade. UUID IDs require
+no new sequence access. Private schema USAGE and exact helper EXECUTE need caller
+review; do not expose private functions to PUBLIC.
+
+Implementation gap: existing migrations grant writes to service_role and native
+authenticated SELECT policies resolve native auth.uid(), not the opaque Web session.
+A least-privilege successor must establish backend-only transaction context from a
+fresh verified Web mapping, add owner-scoped USING/WITH CHECK policies, remove the
+SET service_role requirement, and pass read/write/RLS/replay/concurrency tests with
+the actual low-privilege login. Queue/system aggregate access needs separate narrow
+privileges, not a blanket health-table grant. That adapter/policy work is **NOT
+implemented or rehearsed by this preparation**; credentials alone cannot close it.
+
+### Current pre-cutover decision and exact authorization boundary
+
+`scripts/beta-cutover-preflight.mjs <absolute non-secret attestation.json>` is an
+offline fail-closed decision helper, **not a deployment or cleanup executor**. It
+checks the target, 24 required gates, effective role, TLS/rollback/site readiness,
+ordered approved migration hashes and separately dated operation approvals. Its
+positive fixture proves only guard logic. Current attestation returns STOP_REMOTE_MUTATION.
+Synthetic scope guard refuses foreign account/record/run, production and >24 raw
+rows or >80 mutation requests. Existing local synthetic E2E must not be repointed
+to Beta; actual remote browser/mutation executor is still NOT_IMPLEMENTED/NOT_RUN.
+
+The minimum future authorization remains Beta ref `uavimjgccigpbwqmfkhh` only:
+
+1. Provision the above non-elevated runtime identity and its **new reviewed/rehearsed**
+   per-object grants, not the old service_role membership. Metadata writes; recovery
+   is disable dedicated login/revoke dedicated grants, preserving rows. Exact policy
+   successor/hash is pending; do not approve unspecified future SQL today.
+2. Set the six named settings in the matrix below and supply the DB URL through secure
+   local/platform settings, never chat. Configuration-only; restore captured config
+   or provider OFF. No OAuth scope change, shared credential rotation or global CA install.
+3. Apply the exact8 migration hashes in `sql-contract-inventory.json` only after a fresh
+   rehearsal and approved least-privilege successor. Additive schema writes; preserve
+   data and forward-fix. Any destructive successor requires new review.
+4. Deploy only `mobile-health-beta`, then the verified Beta Pages target/main:/;
+   backend failure stops frontend switch. Requires complete recoverable previous
+   artifacts first. Rollback code/config via a new commit, never force push or data reversal.
+5. Two dedicated A/B accounts only: <=24 raw synthetic rows, <=80 mutation requests,
+   <=500 derived/queue/receipt rows, two declared dates and bounded following27 days.
+   Stop on overrun or uncertain ownership. Cleanup only manifest-listed same-run IDs
+   verified again against the live row/account; no deletion by broad date/email.
+
+Owner prerequisites that cannot be automated: designate two dedicated non-admin Beta
+accounts and complete their first existing Google consent if required; provide the
+official **public** project CA through a file/approved dashboard route (no secrets in
+chat). Runtime credential provisioning is requested only after the low-privilege
+adapter and platform gates pass. Do not ask Owner to authorize production or a
+service_role exception to compensate for these technical blockers.
+
+Remaining engineering/platform work: approved compatible CLI PG17.11+ stack, strict
+hosted CA validation, non-elevated adapter/RLS, explicit unavailable UI for noncore
+weekly/check-in/photo paths (or actual SQL implementation), complete rollback and
+remote authenticated browser harness. This is not READY_FOR_REMOTE_ENABLEMENT.
+No new inert frontend package was produced this turn. Prior local PASS stays prior;
+no full-suite rerun or new runtime/remote PASS is claimed.
+
 Run `health-beta-preparation-20260914-092035`, 2026-09-14; audited product revision
 `29346ace9842d9bbde221d0fcf4026a52ad3b80c`. Canonical workspace remains
 `D:/Dev/Projects/health-companion-canonical-20260913-020110`.

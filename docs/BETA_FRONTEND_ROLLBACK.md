@@ -1,5 +1,23 @@
 # Beta frontend rollback point — source verified, live artifact partial
 
+## 2026-09-16 revalidation
+
+Current Pages metadata and last successful build are unchanged. The immutable Git
+tree/index were fetched again via existing read-only GitHub API access; the saved
+source remains .nojekyll + index.html at53736e644aaa79163d521daa44c7e87c82ad3126.
+Fresh hashes/bytes are in the new run's `frontend-source-rollback.json`. Public live
+URL retrieval did not succeed; no alternate transport was used to bypass the earlier
+access rejection. Source recovery remains verified; live CDN/deployed rollback is not.
+
+Old Edge rollback source retrieval was attempted using the CLI's documented
+`functions download --use-api` into a unique D evidence directory. It returned
+`UnsafeFunctionDownloadPathError` for the frozen scoring fixture outside its accepted
+function extraction subtree. No force/manual extraction bypass was attempted. Version14
+metadata/digest remain known but a complete deployable old source bundle is still
+NOT_VERIFIED. This blocks replacement; do not equate a version number with recovery.
+
+New evidence: D:/Dev/Evidence/health-beta-cutover-prep-20260916-192251.
+
 Run `health-beta-preparation-20260914-092035`; preparation only. No Pages/Git writes.
 Evidence: `D:/Dev/Evidence/health-beta-preparation-20260914-092035`.
 
