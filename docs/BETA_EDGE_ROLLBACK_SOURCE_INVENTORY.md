@@ -1,5 +1,11 @@
 # Beta Edge rollback provenance — not yet trusted for redeploy
 
+Superseded by health-external-20260917-081934: the official platform connector
+returned all deployed v14 source files and each exactly matches a69cb33. Current
+status is PASS_EXACT_OR_REPRODUCIBLE; see BETA_EDGE_PROVENANCE_UPDATE.md. The content
+below is retained as the honest pre-export investigation and must not be read as the
+current decision.
+
 Run health-security-20260917-075734. EDGE_ROLLBACK_READY=BLOCKED_NO_TRUSTED_SOURCE.
 ROLLBACK_MODE=UNRESOLVED. ROLLBACK_OFFLINE_REHEARSAL=NOT_RUN_UNTRUSTED_SOURCE.
 ROLLBACK_DATA_POLICY=CODE_ONLY_NO_DATA_DESTRUCTION.

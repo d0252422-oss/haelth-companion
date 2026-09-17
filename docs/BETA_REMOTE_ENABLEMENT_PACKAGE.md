@@ -1,6 +1,15 @@
 # Remote enablement package — CONDITIONAL, not deploy-ready
 
-Latest decision: health-security-20260917-075734.
+Latest decision: health-external-20260917-081934.
+EDGE_ROLLBACK_READY=PASS_EXACT_OR_REPRODUCIBLE through official v14 source export
+and exact all-file match to a69cb33. PG_SECURITY_PLATFORM_GATE is now
+READY_FOR_UPGRADE_AUTHORIZATION: the Free project has an official managed path, but
+the Owner must verify the offered target is17.11+ and authorize downtime. Therefore
+REMOTE_ENABLEMENT_PACKAGE=READY_FOR_OWNER_PG_UPGRADE_AUTHORIZATION, while
+READY_FOR_REMOTE_ENABLEMENT=NO until upgrade/security acceptance passes. OAuth,
+credentials, schema and cutover mutations remain inactive.
+
+Previous decision: health-security-20260917-075734.
 PG_SECURITY_PLATFORM_GATE=BLOCKED_INSUFFICIENT_OFFICIAL_EVIDENCE.
 EDGE_ROLLBACK_READY=BLOCKED_NO_TRUSTED_SOURCE.
 REMOTE_ENABLEMENT_PACKAGE=CONDITIONAL_NOT_READY.

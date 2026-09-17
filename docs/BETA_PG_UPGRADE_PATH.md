@@ -1,8 +1,17 @@
 # Beta PostgreSQL upgrade feasibility — no operation authorized
 
+Update health-external-20260917-081934:
+BETA_PG_UPGRADE_AVAILABLE=YES_SUPPORTED_FREE_PLAN_PATH_CONDITIONAL_TARGET.
+Fresh organization metadata confirms plan=free. Official hosted guidance says Free
+pause/restore moves projects to the latest minor; managed in-place upgrade also has a
+Dashboard eligibility flow. The exact offered target is still not readable through
+the current API, so Owner must record it without confirming. Proceed only for17.11+
+or an officially attested equivalent. See BETA_PG_VENDOR_EVIDENCE_UPDATE.md and
+PG_SECURITY_EXTERNAL_ACTION.md. No pause, restore, upgrade or cost was initiated.
+
 Target health-companion-beta / uavimjgccigpbwqmfkhh only.
 Observed platform17.6.1.166 and server17.6 on2026-09-17.
-BETA_PG_UPGRADE_AVAILABLE=UNKNOWN_TARGET_ELIGIBILITY.
+BETA_PG_UPGRADE_AVAILABLE=HISTORICAL_UNKNOWN_BEFORE_FREE_PLAN_CONFIRMATION.
 BETA_PG_UPGRADE_OWNER_ACTION=OFFICIAL_BUILD_ATTESTATION_OR_ELIGIBLE_TARGET_REVIEW.
 BETA_PG_UPGRADE_COST=UNKNOWN; no paid action or upgrade performed.
 

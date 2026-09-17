@@ -1,5 +1,11 @@
 # Beta Edge deployed state — readonly snapshot
 
+Update health-external-20260917-081934: official `get_edge_function` returned the v14
+source set. All four exported files match Git revision
+a69cb3322f0cfc09a9d2c720e85aff92ec84bcfb. The older limitation statements below
+describe the earlier metadata-only snapshot and are superseded by
+BETA_EDGE_PROVENANCE_UPDATE.md for provenance decisions.
+
 Run health-security-20260917-075734,2026-09-17. Remote mutation count0.
 Project uavimjgccigpbwqmfkhh / health-companion-beta; organization
 pcfenospezigjlgwcbtg; region ap-southeast-1; ACTIVE_HEALTHY.

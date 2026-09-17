@@ -1,8 +1,17 @@
 # Beta Edge rollback — PARTIAL, not deploy-ready
 
+## Exact-source resolution — health-external-20260917-081934
+
+Current authoritative status: EDGE_ROLLBACK_READY=PASS_EXACT_OR_REPRODUCIBLE.
+The official readonly platform connector exported deployed v14 metadata and all four
+source files; every file exactly matches Git revision a69cb3322f0cfc09a9d2c720e85aff92ec84bcfb.
+See BETA_EDGE_PROVENANCE_UPDATE.md and BETA_EDGE_REDEPLOY_ROLLBACK.md. This supersedes
+the older BLOCKED status below, which remains as historical evidence. No CLI safety
+bypass, remote deploy, secret read or data mutation occurred.
+
 ## Security/provenance decision — health-security-20260917-075734
 
-Current authoritative status: EDGE_ROLLBACK_READY=BLOCKED_NO_TRUSTED_SOURCE.
+Historical status at that run: EDGE_ROLLBACK_READY=BLOCKED_NO_TRUSTED_SOURCE.
 Fresh v14 metadata matches the prior digest. Independent Git/CI inventory found a
 probable Sep3 source revision but no binding to deployed bytes; no Edge CI artifact.
 See BETA_EDGE_DEPLOYED_STATE.md and BETA_EDGE_ROLLBACK_SOURCE_INVENTORY.md.

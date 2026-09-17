@@ -11,6 +11,13 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+External-evidence continuation `health-external-20260917-081934` found an official
+v14 source export and exact four-file match to a69cb33, closing rollback provenance,
+and confirmed the Beta organization is Free with a documented managed minor-upgrade
+path. The target version/downtime still require Owner review and the remote database
+remains17.6, so no remote/release weighted leaf closes. New unweighted evidence only;
+scope/weights unchanged:32.0%, +0.0pp, overallUNKNOWN.
+
 Security/provenance review `health-security-20260917-075734` mapped official PG17.7–
 17.11 advisories and refreshed Beta metadata/Git/CI rollback provenance. Vendor
 security-equivalence evidence and trusted old rollback source remain absent.
