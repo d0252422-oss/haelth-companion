@@ -1,5 +1,15 @@
 # Remote enablement package — CONDITIONAL, not deploy-ready
 
+Latest decision: health-security-20260917-075734.
+PG_SECURITY_PLATFORM_GATE=BLOCKED_INSUFFICIENT_OFFICIAL_EVIDENCE.
+EDGE_ROLLBACK_READY=BLOCKED_NO_TRUSTED_SOURCE.
+REMOTE_ENABLEMENT_PACKAGE=CONDITIONAL_NOT_READY.
+See PG17_SECURITY_BASELINE_ORIGIN.md, PG17_6_TO_17_11_SECURITY_MATRIX.md and
+BETA_EDGE_ROLLBACK_SOURCE_INVENTORY.md. Credential/role separation, four-step OAuth
+runbook and conditional authorization draft are unchanged and consistency-reviewed.
+Do not activate Owner OAuth/credential provisioning until both technical Gates pass.
+This run made only documentation/evidence changes; previous local PASS remains valid.
+
 Critical-path precision review: health-critical-20260917-065444.
 CLI_PG_VERSION_GATE_DECISION.md corrects the166 source (checkout pin, not immutable
 CLI default) and distinguishes security equivalence from patch equality. The

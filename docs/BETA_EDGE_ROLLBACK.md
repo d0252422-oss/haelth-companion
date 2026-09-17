@@ -1,5 +1,15 @@
 # Beta Edge rollback — PARTIAL, not deploy-ready
 
+## Security/provenance decision — health-security-20260917-075734
+
+Current authoritative status: EDGE_ROLLBACK_READY=BLOCKED_NO_TRUSTED_SOURCE.
+Fresh v14 metadata matches the prior digest. Independent Git/CI inventory found a
+probable Sep3 source revision but no binding to deployed bytes; no Edge CI artifact.
+See BETA_EDGE_DEPLOYED_STATE.md and BETA_EDGE_ROLLBACK_SOURCE_INVENTORY.md.
+ROLLBACK_MODE=UNRESOLVED; OFFLINE_REHEARSAL=NOT_RUN_UNTRUSTED_SOURCE.
+The older statuses below are historical, not concurrent PASS claims. No download
+security bypass, normalized artifact, remote deployment or database change occurred.
+
 ## Critical-path revalidation — 2026-09-17
 
 Fresh remote metadata still reports mobile-health-beta v14 ACTIVE and the same

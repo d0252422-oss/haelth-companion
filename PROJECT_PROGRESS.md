@@ -11,6 +11,13 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Security/provenance review `health-security-20260917-075734` mapped official PG17.7–
+17.11 advisories and refreshed Beta metadata/Git/CI rollback provenance. Vendor
+security-equivalence evidence and trusted old rollback source remain absent.
+No weighted leaf closed, no prior local acceptance withdrawn;32.0%, +0.0pp.
+New unweighted deliverables: advisory applicability matrix, baseline origin,
+upgrade feasibility and rollback source inventory. No scope/weight changes.
+
 Critical-path review `health-critical-20260917-065444` clarified CLI local pin versus
 default and retained the security-patch floor; froze candidate/authorization hashes,
 rechecked old Edge download containment refusal, and finalized credential/OAuth
