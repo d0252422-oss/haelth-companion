@@ -137,6 +137,17 @@ credits merely from a cached report. Incomplete scope is never rounded to100%.
 
 Required first-line reporting is now saved in effective root `AGENTS.md`.
 
+## 2026-09-18 hosted PostgreSQL target discovery — unchanged denominator
+
+Run `health-pg-target-20260918-125833` obtained new project-specific, read-only
+Supabase Management API evidence. The Beta project is not eligible for an in-place
+upgrade: current and latest are both `supabase-postgres-17.6.1.166`, with no offered
+target. Free pause/restore still has no externally exposed project-specific target.
+This closes the discovery question but does not close any weighted product leaf;
+remote Beta remains blocked by the PostgreSQL 17.11 security floor. Overall remains
+UNKNOWN and provisional known scope remains 32.0% (+0.0pp). No product code, remote
+state, production state, OAuth state, or device state changed.
+
 ## Conditional Beta SQL-first continuation — same denominator
 
 Run `health-beta-sql-first-20260914` exposed a real shared-worker counterexample to

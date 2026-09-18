@@ -38,3 +38,19 @@ metadata/RLS/Edge checks. No production target is included.
 PAID_COST_REQUIRED=NO_FOR_DOCUMENTED_FREE_PAUSE_RESTORE; other paths UNKNOWN.
 An upgrade changes hosted data/runtime availability and needs explicit authorization.
 This readiness decision is not an upgrade PASS and does not make Beta cutover ready.
+
+## 2026-09-18 project-specific target discovery
+
+Run `health-pg-target-20260918-125833` used the official read-only Management API
+eligibility endpoint. It returned current and latest app version
+`supabase-postgres-17.6.1.166`, `eligible=false`, and an empty target list. This is
+new project-specific evidence: the supported in-place path currently offers no target
+at all, and therefore no 17.11+ target. The prior conditional
+`READY_FOR_UPGRADE_AUTHORIZATION` decision is superseded by
+`BLOCKED_TARGET_BELOW_SECURITY_BASELINE`.
+
+The official Free pause/restore guide says "latest minor", but neither the pause nor
+restore request accepts a target. The restore-version GET rejected this active project
+with HTTP 400 (`This project is not in a paused state.`), so its exact pause/restore
+target remains unknown. No mutation was used to discover it. Vendor confirmation is
+now the safe next action; see `SUPABASE_SUPPORT_PG_TARGET_QUESTION.md`.
