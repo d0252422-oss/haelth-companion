@@ -13,6 +13,24 @@ function harness(fetch){
 const identity={ok:true,data:{canonicalUserId:'10000000-0000-4000-8000-000000000001',provider:'postgresql-manual-v1',release:'A',schemaVersion:'manual-sql-v1'}};
 const response=data=>({ok:true,status:200,headers:new Headers(),json:async()=>data,text:async()=>JSON.stringify(data)});
 
+test('SQL-first AB never sends any current data-write action to Sheets, including failures',async()=>{
+ // Discover the frontend write inventory so newly added writes are not silently omitted.
+ const actions=[...new Set([...html.matchAll(/(?:sessionPost|apiPost)\(['"]([^'"]+)['"]/g)].map(m=>m[1]))]
+  .filter(a=>/^(add|upsert|delete|update|manage|save|confirm|reject|create|refresh)/.test(a));
+ assert.ok(actions.includes('addWorkoutRecord'));assert.ok(actions.includes('upsertBodyRecord'));
+ for(const failure of ['SQL_ERROR','NETWORK_TIMEOUT'])for(const action of actions){
+  const calls=[],ctx=harness(async(url,init)=>{
+   calls.push(url);const req=JSON.parse(init.body);
+   if(req.action==='getManualProviderIdentity')return response({...identity,data:{...identity.data,release:'AB'}});
+   if(failure==='NETWORK_TIMEOUT')throw Object.assign(Error('synthetic timeout'),{name:'TimeoutError'});
+   return response({ok:false,error:'DB_UNAVAILABLE',retryable:false});
+  });
+  ctx.window.HEALTH_MANUAL_SQL_CONFIG.release='AB';
+  await assert.rejects(()=>ctx.sessionPost(action,{clientRequestId:require('node:crypto').randomUUID()}));
+  assert.ok(calls.every(url=>url===endpoint),action+' '+failure+' must not fall back');
+ }
+});
+
 test('hosted first login retains Google entry; only isolated local mode shows synthetic accounts',()=>{
  for(const local of [false,true]){
   const ctx=harness(()=>{throw Error('LOGIN_MUST_NOT_FETCH_DATA')});let synthetic=0,googleRendered=0;

@@ -6,6 +6,7 @@ export const probeTarget={...target,projectRef:'dsdfacbjaicdcwayhhil',projectNam
 export const targets=Object.freeze(Object.assign(Object.create(null),{[target.projectRef]:target,[probeTarget.projectRef]:probeTarget}));
 export const requiredGates=['ACTIVE_GIT_WRITE_SAFETY','AI_POOL_V2_SECURITY_GATE','ACTUAL_CLI_EDGE','ACTUAL_EDGE_RUNTIME','EDGE_SQL_INTEGRATION','POSTGRESQL_MIGRATION_REHEARSAL','RLS','AUTH_SESSION_MAPPING','USER_ISOLATION','MANUAL_BODY_SQL_E2E','MANUAL_NUTRITION_SQL_E2E','MANUAL_TRAINING_SQL_E2E','MANUAL_SLEEP_SQL_E2E','MANUAL_STEPS_SQL_E2E','MANUAL_TOTAL_ENERGY_SQL_E2E','EXERCISE_MANAGEMENT','SQL_READ_AFTER_WRITE','IDEMPOTENCY','UPDATE_DELETE','CACHE_ISOLATION','WEB_BROWSER_E2E','HEALTH_SCORE_REGRESSION','FRONTEND_BUILD','CRITICAL_REGRESSION'];
 requiredGates.push('PG_SECURITY_PLATFORM_GATE','EDGE_ROLLBACK_READY');
+requiredGates.push('NON_PRIVILEGED_ADAPTER','POOL_CONTEXT_ISOLATION','NO_DESTRUCTIVE_OPERATION','PRODUCTION_TARGET_DIFFERENT');
 export const migrationOrder=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152','20260916144345','20260916215632'];
 export const freshMigrationOrder=['20260827010000','20260827015836','20260827023849','20260829045359','20260829082547','20260829083522','20260829090000','20260829090500','20260829091747','20260829135430','20260830141842','20260831000913','20260902150738','20260903021109','20260903062110','20260903130618',...migrationOrder];
 export function evaluateCutover(input,now=Date.now()){
@@ -19,6 +20,7 @@ export function evaluateCutover(input,now=Date.now()){
  const role=input.runtimeRole;
  if(!role||role.name!=='health_manual_api'||role.effectiveRole!=='health_manual_api'||['superuser','createdb','createrole','bypassrls'].some(k=>role[k]!==false)||role.canSetElevatedRole!==false)blockers.push('RUNTIME_ROLE_NOT_LEAST_PRIVILEGE');
  for(const name of ['tlsVerified','rollbackVerified','fullSiteContract','realTestIdentity'])if(input[name]!==true)blockers.push('PREREQUISITE:'+name);
+ if(input.paidCostRequired!==false)blockers.push('NO_COST_NOT_CONFIRMED');
  const fresh=selected===probeTarget,order=fresh?freshMigrationOrder:migrationOrder;
  if(fresh&&(input.migrationMode!=='fresh'||input.gates?.FRESH_PROJECT_MIGRATION_REHEARSAL?.status!=='PASS'||!input.gates?.FRESH_PROJECT_MIGRATION_REHEARSAL?.evidence))blockers.push('FRESH_PROJECT_REHEARSAL_REQUIRED');
  if(!Array.isArray(input.migrations)||input.migrations.length!==order.length||input.migrations.some((m,i)=>m.version!==order[i]||!/^[a-f0-9]{64}$/.test(m.sha256)||m.destructive!==false||m.rehearsal!=='PASS'||input.authorization?.migrationHashes?.[m.version]!==m.sha256))blockers.push('MIGRATION_PLAN_UNVERIFIED');

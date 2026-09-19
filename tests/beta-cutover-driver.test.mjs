@@ -34,10 +34,12 @@ test('actual package dryrun/resume revalidates bytes; remote modes and concurren
  const input={projectRef:ref,packageDirectory:pkg,output};
  assert.equal((await runDriver(input)).status,'PASS_OFFLINE_VALIDATION');
  await assert.rejects(runDriver(input),/RESUME_REQUIRED/);
- assert.equal((await runDriver({...input,resume:true})).checks.length,4);
- assert.equal((await runDriver({...input,resume:true,mode:'full'})).status,'BLOCKED_CURRENT_RUN_REMOTE_MUTATION_FORBIDDEN');
+ assert.equal((await runDriver({...input,resume:true})).checks.length,5);
+ assert.equal((await runDriver({...input,resume:true,mode:'full'})).status,'BLOCKED_PRECONDITIONS');
  let state=JSON.parse(fs.readFileSync(path.join(output,'checkpoint.json')));assert.equal(state.stages.length,3);
  assert.equal(state.stages.at(-1).remote_mutations,0);
+ const preflight=await runDriver({...input,resume:true,mode:'preflight'});assert.equal(preflight.status,'BLOCKED_PRECONDITIONS');assert.ok(preflight.precheck.blockers.includes('PG17_SECURITY_VERSION_NOT_ACCEPTED'));
+ assert.equal((await runDriver({...input,resume:true,mode:'migrate'})).remote_mutations,0);
  fs.writeFileSync(path.join(output,'driver.lock'),'owned test lock');await assert.rejects(runDriver({...input,resume:true}),/EEXIST/);
  fs.unlinkSync(path.join(output,'driver.lock')); // exact owned test lock, no user data
  fs.appendFileSync(path.join(pkg,'manual-sql-config.PROPOSED.js'),'// tamper test');

@@ -2,6 +2,21 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "vendor_wait_contract_closure": {
+    "run_id": "health-vendor-wait-closure-20260920",
+    "evidence_root": "D:/Dev/Evidence/health-vendor-wait-closure-20260920",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "newly_completed_unweighted_deliverables": [
+      "Fail-closed preflight and migrate mode with explicit no-cost evidence",
+      "Eleven setting-name source checks and all current frontend data-write fallback tests",
+      "Seven-domain receipt-linked E2E scenario compiler with bounded cleanup assertions",
+      "Accepted-remote-only measurement queue and vendor-response routing"
+    ],
+    "remote_acceptance": "NOT_RUN_WAITING_VENDOR_RESPONSE",
+    "live_mutation_and_crud_executor": "INCOMPLETE",
+    "live_web_rollback": "PARTIAL_NOT_REHEARSED"
+  },
   "vendor_wait_driver_continuation": {
     "run_id": "health-vendor-wait-finalize-20260920",
     "evidence_root": "D:/Dev/Evidence/health-vendor-wait-finalize-20260920",

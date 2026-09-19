@@ -11,6 +11,16 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Vendor-wait contract closure `health-vendor-wait-closure-20260920` connects offline
+preflight to missing-gate/cost checks, validates 11 Edge setting names, compiles
+receipt-bound seven-domain E2E scenarios, tests SQL-write fallback denial and adds
+reviewed-remote-acceptance-only workout measurement queue/vendor response routing.
+No vendor query, remote operation, device test or product runtime change occurred.
+Live mutation/CRUD executors and live Web rollback remain incomplete; preparation
+must not be reported as remote readiness. Existing Android changes are preserved.
+No weighted leaf closes: known scope32.0%, +0.0pp; overallUNKNOWN. Evidence:
+`D:/Dev/Evidence/health-vendor-wait-closure-20260920`.
+
 Vendor-wait finalization `health-vendor-wait-finalize-20260920` adds target-bound
 resumable offline driver/checkpoints, static seven-domain E2E/cleanup validation,
 consolidated rollback/auth/device runbooks and eight local viewport/theme cases.

@@ -15,10 +15,16 @@ Use the canonical D repository; commit reviewed source, then build a new package
 ./scripts/beta-cutover.ps1 -Mode preflight -Resume -ProjectRef dsdfacbjaicdcwayhhil -PackageDirectory D:/Dev/Evidence/<new-package> -EvidenceDirectory D:/Dev/Evidence/<new-run>
 ```
 
-Modes: preflight/dryrun/deploy-edge/deploy-web/e2e/rollback/full. The last five
-currently return BLOCKED_CURRENT_RUN_REMOTE_MUTATION_FORBIDDEN, exit2, with a
-checkpoint; **they are not implemented live executors**. There is no bypass flag.
-Preflight/dryrun exit0 means local bytes/contracts verified, NOT release approval.
+Modes: preflight/dryrun/migrate/deploy-edge/deploy-web/e2e/rollback/full (`-Mode` is
+the PowerShell equivalent of individual switches). `dryrun` exit0 means local
+bytes/contracts verified, NOT release approval. `preflight` now evaluates the
+package's NOT_ATTESTED template, or an explicit non-secret D `-AttestationFile`.
+Missing/failed PG, migration, non-privileged adapter, pool, RLS, security, rollback,
+non-destructive/production separation or no-cost proof returns BLOCKED_PRECONDITIONS,
+exit2. Exact source, target and migration hashes must bind the package.
+Mutation modes also return exit2 even if offline attestations pass:
+**they are not implemented live executors**. There is no bypass flag. A future real executor
+must revalidate evidence at its mutation boundary; editing JSON is never authority.
 Invalid evidence exits1. Concurrent invocations lock the run directory; a crash
 lock needs manual read-only ownership review, never automatic stale-lock deletion.
 Resume binds exact HEAD, plan hash and project; changed inputs need a new run.
@@ -55,7 +61,19 @@ or credentials into a new target. Missing settings block their dependent stage.
 The current driver verifies packages and persists safe decisions; live deploy/Web
 publication orchestration and full browser CRUD execution are still unimplemented.
 beta-remote-e2e.ps1 validates the executable static test plan and cleanup preconditions,
-not response data. beta-remote-read-smoke.mjs is the separate normal-session read
+not response data. Optional `-SyntheticDate YYYY-MM-DD` compiles exact seven-domain
+payloads, receipt references, same-ID replays, revision updates and bounded deletes.
+Example (no remote operation):
+
+```powershell
+./scripts/beta-remote-e2e.ps1 -ProjectRef dsdfacbjaicdcwayhhil -SyntheticDate 2026-09-12 -OutputFile D:/Dev/Evidence/<existing-run>/scenarios.json
+```
+
+Choose and confirm empty dates only for dedicated test identities before future
+execution; never reuse the example date blindly against existing account data.
+Referenced exercises remain retained even after soft-deleting their training sets;
+safe-delete tests therefore create a separate unreferenced synthetic exercise.
+`beta-remote-read-smoke.mjs` is the separate normal-session read
 adapter. These limits must remain visible until a future authorized implementation
 is rehearsed. Vendor response alone does not magically make these steps PASS.
 
@@ -69,3 +87,34 @@ Only after `BETA_SQL_FIRST_CUTOVER = PASS`, automatically activate
 Measure the accepted SQL path before any optimization. Until then keep it
 DEFERRED_UNTIL_SQL_FIRST; it does not block vendor/PG security/cutover and does not
 authorize current legacy Sheets refactoring or a new background automation.
+
+The generated plan now includes `post_cutover.command` invoking
+`scripts/beta-next-gate.mjs --acceptance <D-report.json> --output <D-queue-dir>`.
+The accepted report schema is `beta-remote-acceptance-v1`, execution ACTUAL_REMOTE,
+accepted true, exact allowlisted projectRef/sourceRevision, and PASS for SQL-first,
+PG, migration, Edge, remote CRUD and user isolation. Every gate references a D
+evidence path and SHA256. Only reviewed final remote acceptance may supply this
+report; hashes prove bytes, not semantics. The queue is idempotent and activates
+measurement, not automatic code changes. Unit-test queue files are synthetic and
+must never be promoted to acceptance. No task is activated this phase.
+
+## Vendor response routing (no new research)
+
+`vendorResponseDecision` in beta-next-gate.mjs returns WAITING_VENDOR_RESPONSE with
+no work when no reply is supplied. A new official supported PG17.11+ path routes
+to GPT-5.6 preflight/recovery/authorization checks; it does not execute upgrade.
+Official backport mapping routes to GPT-6 security-equivalence review first.
+Neither available routes to SUPABASE_PLATFORM_LIMITATION and an alternate-provider
+decision package only, never an automatic switch. URL allowlisting is not vendor
+authentication; retain and review the actual official reply evidence.
+
+## Configuration and Sheets guards
+
+beta-config-wiring.mjs checks all 11 setting names against actual Edge sources and
+the three separate runtime identities. HEALTH_MANUAL_EXPECTED_DB_HOST means the
+transaction pool hostname (port6543), not the direct database hostname. Migration
+admin is not an Edge environment secret; Test A/B use normal sessions, not database
+passwords. This source check never reads secret values or establishes live validity.
+The expanded hosted-manual-ui unit guard discovers current frontend write actions
+and tests SQL errors/timeouts cannot reach Sheets. Explicit legacy authentication
+authority (logout/identity linking) is not a data-write fallback.

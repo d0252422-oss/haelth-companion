@@ -4,12 +4,13 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {targets,freshMigrationOrder,migrationOrder} from './beta-cutover-preflight.mjs';
+import {targets,freshMigrationOrder,migrationOrder,evaluateCutover} from './beta-cutover-preflight.mjs';
+import {validateConfigWiring} from './beta-config-wiring.mjs';
 import {verifyArtifact} from './verify-beta-review-artifact.mjs';
 import {createE2ePlan,validateE2ePlan} from './beta-remote-e2e-plan.mjs';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const digest=b=>createHash('sha256').update(b).digest('hex');
-export const modes=['preflight','dryrun','deploy-edge','deploy-web','e2e','rollback','full'];
+export const modes=['preflight','dryrun','migrate','deploy-edge','deploy-web','e2e','rollback','full'];
 export function assertDDirectory(value,{create=false}={}){
  if(!value||!path.isAbsolute(value))throw Error('ABSOLUTE_D_EVIDENCE_DIRECTORY_REQUIRED');
  const root=fs.realpathSync('D:/Dev/Evidence');
@@ -34,7 +35,7 @@ export function validatePlan(plan){
  // Never execute arbitrary commands or settings supplied in this JSON.
  return target;
 }
-export async function runDriver({mode='dryrun',projectRef,packageDirectory,output,resume=false}){
+export async function runDriver({mode='dryrun',projectRef,packageDirectory,output,resume=false,attestationFile}){
  if(!modes.includes(mode))throw Error('MODE_DENIED');
  if(!targets[projectRef])throw Error('TARGET_DENIED');
  const pkg=assertDDirectory(packageDirectory),out=assertDDirectory(output,{create:true});
@@ -72,8 +73,17 @@ export async function runDriver({mode='dryrun',projectRef,packageDirectory,outpu
   persist();
   validateE2ePlan(createE2ePlan(projectRef));checks.push({name:'synthetic_plan',status:'PASS_STATIC'});
   persist();
+  validateConfigWiring(plan);checks.push({name:'config_secret_names',status:'PASS_SOURCE_WIRING_ONLY'});persist();
+  // Default template is intentionally NOT_ATTESTED. Never infer gate PASS from package integrity.
+  let attestation=JSON.parse(fs.readFileSync(path.join(pkg,'attestation.TEMPLATE.json')));
+  if(attestationFile){assertDDirectory(path.dirname(attestationFile));if(!path.isAbsolute(attestationFile)||fs.lstatSync(attestationFile).isSymbolicLink()||fs.statSync(attestationFile).size>262144)throw Error('NON_SECRET_D_ATTESTATION_REQUIRED');attestation=JSON.parse(fs.readFileSync(attestationFile));}
+  const decision=evaluateCutover(attestation);
+  if(attestation.target?.projectRef!==projectRef||attestation.sourceRevision!==head)decision.blockers.push('ATTESTATION_PACKAGE_BINDING_MISMATCH');
+  if(JSON.stringify(attestation.migrations?.map(({version,sha256})=>({version,sha256})))!==JSON.stringify(plan.migrations.map(({version,sha256})=>({version,sha256}))))decision.blockers.push('ATTESTATION_MIGRATION_HASH_MISMATCH');
+  if(decision.blockers.length)decision.status='STOP_REMOTE_MUTATION';
   const mutatingMode=!['preflight','dryrun'].includes(mode);
-  const result={mode,status:mutatingMode?'BLOCKED_CURRENT_RUN_REMOTE_MUTATION_FORBIDDEN':'PASS_OFFLINE_VALIDATION',projectRef,sourceRevision:head,checks,
+  const status=mode==='dryrun'?'PASS_OFFLINE_VALIDATION':decision.blockers.length?'BLOCKED_PRECONDITIONS':mutatingMode?'BLOCKED_CURRENT_RUN_REMOTE_MUTATION_FORBIDDEN':'PASS_OFFLINE_PRECONDITIONS_NOT_REMOTE_APPROVAL';
+  const result={mode,status,precheck:decision,projectRef,sourceRevision:head,checks,
    pg_requirement:'17.x >=17.11; fresh hosted proof required',pg_gate:'WAITING_VENDOR_RESPONSE',paid_operations:'DENIED',destructive_operations:'DENIED',
    rollback:{edge:'PRIOR_EXACT_SOURCE_ACCEPTED_NOT_REEXPORTED',web:plan.rollback.frontend_gate,data:plan.rollback.data_policy},
    deployment_ready:false,remote_mutations:0,limitations:['No live executor activated in vendor-wait phase.','Migration rehearsal, actual grants, private settings validity and live Web recovery are not established by offline inspection.']};
@@ -83,7 +93,7 @@ export async function runDriver({mode='dryrun',projectRef,packageDirectory,outpu
  }finally{fs.closeSync(fd);fs.unlinkSync(lock);}
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- try{const args=process.argv.slice(2),options={};for(let i=0;i<args.length;i++){const key=args[i];if(key==='--resume'){options.resume=true;continue;}if(!['--mode','--projectRef','--packageDirectory','--output'].includes(key)||!args[i+1]||args[i+1].startsWith('--'))throw Error('INVALID_ARGUMENT');options[key.slice(2)]=args[++i];}
+ try{const args=process.argv.slice(2),options={};for(let i=0;i<args.length;i++){const key=args[i];if(key==='--resume'){options.resume=true;continue;}if(!['--mode','--projectRef','--packageDirectory','--output','--attestationFile'].includes(key)||!args[i+1]||args[i+1].startsWith('--'))throw Error('INVALID_ARGUMENT');options[key.slice(2)]=args[++i];}
  const result=await runDriver(options);console.log(JSON.stringify(result,null,2));process.exitCode=result.status.startsWith('BLOCKED')?2:0;
  }catch(error){console.error(error.message);process.exitCode=1;}
 }
