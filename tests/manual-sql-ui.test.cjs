@@ -107,6 +107,42 @@ test('weight hydration rejects older dates/accounts and exposes persistent retry
  const switched=ctx.loadWeightFormDate('2026-09-13');ctx.currentUser={userId:'B'};pending[3].resolve([{recordId:'secret-A',date:'2026-09-13',weight:80}]);await switched;assert.notEqual(ctx.document.getElementById('weight-record-id').value,'secret-A');
 });
 
+test('blank/future/invalid date invalidates previous body record and prevents deletion',async()=>{
+ const ctx=harness(()=>{});let deletes=0,reads=0;ctx.apiService={getBodyRecords:async()=>{reads++;return [{recordId:'previous-record',date:'2026-09-12',weight:70}];},deleteBodyRecord:async()=>deletes++};ctx.setValue=(id,v)=>ctx.document.getElementById(id).textContent=v;ctx.recordDateLabel=x=>x;ctx.readableError=e=>e.message;ctx.toast=()=>{};ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>{};ctx.refreshInBackground=()=>{};
+ vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('async function loadWeightFormDate(')),ctx);
+ vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('weight-delete").onclick=')),ctx);
+ for(const date of ['', '2026-09-14', '2026-02-30', 'invalid']){
+  ctx.document.getElementById('weight-date').value='2026-09-12';await ctx.loadWeightFormDate('2026-09-12');
+  assert.equal(ctx.document.getElementById('weight-delete').disabled,false);
+  ctx.document.getElementById('weight-date').value=date;await ctx.loadWeightFormDate(date);await ctx.document.getElementById('weight-delete').onclick();
+  assert.equal(ctx.loadWeightFormDate.binding,null);assert.equal(ctx.document.getElementById('weight-record-id').value,'');assert.equal(ctx.document.getElementById('weight-delete').disabled,true);assert.equal(deletes,0);
+ }
+ assert.equal(reads,4);
+ ctx.document.getElementById('weight-date').value='2026-09-12';await ctx.loadWeightFormDate('2026-09-12');ctx.currentUser={userId:'other'};await ctx.document.getElementById('weight-delete').onclick();assert.equal(deletes,0);
+});
+
+test('late body save/delete invalidates same-account cache without touching another editor or account',async()=>{
+ for(const operation of ['save','delete'])for(const outcome of ['resolve','reject','account-switch','epoch-switch']){
+  const ctx=harness(()=>{});let finish,closed=0,toasts=0,cacheClears=0,submit;
+  const request=()=>new Promise((resolve,reject)=>{finish=()=>outcome==='reject'?reject(Error('old request failed')):resolve({});});
+  ctx.apiService={deleteBodyRecord:request,upsertBodyRecord:request};
+  ctx.sectionLoadKeys=new Map([['body','cached-range']]);ctx.clearDashboardCache=()=>cacheClears++;
+  ctx.num=value=>value===''?null:Number(value);
+  ctx.document.getElementById('weight-form').addEventListener=(event,handler)=>submit=handler;
+  ctx.loadWeightFormDate={binding:{user:ctx.currentUser,date:'2026-09-12',recordId:'old'}};
+  ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.toast=()=>toasts++;ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>closed++;ctx.refreshInBackground=()=>{};ctx.readableError=e=>e.message;
+  ctx.document.getElementById('weight-date').value='2026-09-12';ctx.document.getElementById('weight-record-id').value='old';
+  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes(operation==='delete'?'weight-delete").onclick=':'weight-form").addEventListener("submit"')),ctx);
+  const pending=operation==='delete'?ctx.document.getElementById('weight-delete').onclick():submit({preventDefault(){}});
+  ctx.openSheet.serial=2;ctx.loadWeightFormDate.binding=null;ctx.document.getElementById('weight-date').disabled=false;ctx.document.getElementById('weight-save').disabled=true;
+  if(outcome==='account-switch')ctx.currentUser={userId:'B'};
+  if(outcome==='epoch-switch')vm.runInContext('localSessionEpoch++',ctx);
+  finish();await pending;assert.equal(closed,0);assert.equal(toasts,0);assert.equal(ctx.document.getElementById('weight-save').disabled,true);assert.equal(ctx.document.getElementById('weight-date').disabled,false);
+  assert.equal(cacheClears,outcome==='resolve'?1:0,`${operation}/${outcome}`);
+  assert.equal(ctx.sectionLoadKeys.has('body'),outcome!=='resolve',`${operation}/${outcome}`);
+ }
+});
+
 test('daily SQL read validates shape, preserves measured zero and marks unavailable projections',async()=>{
  const row={date:'2026-09-13',dataStatus:'CURRENT',steps:0,activeMinutes:null,activeCalories:null,totalCalories:null};
  const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data:[row]})}));

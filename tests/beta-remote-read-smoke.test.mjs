@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {assertSessionTarget,assertReadShape,readCases,runReadSmoke} from '../scripts/beta-remote-read-smoke.mjs';
+import {probeTarget,target} from '../scripts/beta-cutover-preflight.mjs';
+const ref=probeTarget.projectRef;
+const valid=()=>({pageUrl:probeTarget.frontend,config:{enabled:true,release:'AB',schemaVersion:'manual-sql-v1',projectRef:ref,endpoint:`https://${ref}.supabase.co/functions/v1/mobile-health-beta/v1/engine/web`}});
+test('remote read smoke accepts only the exact Beta page and configured SQL endpoint',()=>{assert.doesNotThrow(()=>assertSessionTarget(valid(),ref));for(const pageUrl of ['https://example.invalid/','https://d0252422-oss.github.io/','https://d0252422-oss.github.io/health-companion-beta-evil/'])assert.throws(()=>assertSessionTarget({...valid(),pageUrl},ref));for(const projectRef of [target.productionRef,'toString'])assert.throws(()=>assertSessionTarget(valid(),projectRef));const v=valid();v.config.endpoint=`https://${target.projectRef}.supabase.co/functions/v1/mobile-health-beta/v1/engine/web`;assert.throws(()=>assertSessionTarget(v,ref));});
+test('HTTP/shape success cannot be inferred from empty error envelopes',()=>{assert.deepEqual(assertReadShape({ok:true,data:[]},'array'),[]);for(const data of [null,{},false])assert.throws(()=>assertReadShape({ok:true,data},'array'));assert.throws(()=>assertReadShape({ok:false,data:[]},'array'));assert.equal(readCases.length,12);assert.ok(readCases.every(([name])=>!/upsert|delete|manage|addWorkout/.test(name)));});
+test('missing browser sessions stop before any request',async()=>{await assert.rejects(()=>runReadSmoke({pages:{},projectRef:ref,date:'2026-09-19'}),/TWO_NORMAL_BETA_CONTEXTS_REQUIRED/);});

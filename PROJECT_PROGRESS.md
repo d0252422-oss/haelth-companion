@@ -11,6 +11,16 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Vendor-wait run `health-vendor-wait-20260920-000238` adds offline cutover packaging,
+fresh/incremental target guards, normal-session read-smoke preparation, connector
+endpoint/logging checks, body editor race/cache fixes and scoped modal keyboard tests.
+No hosted operation, vendor search, device run or complete product suite was repeated.
+These are unweighted preparation or improvements to already-credited local behavior;
+they do not close remote OAuth/release/device leaves. Known scope32.0%, +0.0pp;
+overallUNKNOWN. Evidence: `D:/Dev/Evidence/health-vendor-wait-20260920-000238`.
+Live cutover execution, exact fresh Supabase rehearsal and full remote CRUD/cleanup
+remain unaccepted; the one-command package is offline preparation, not remote-ready.
+
 Empty-probe run `health-beta-probe-20260919-223821` created one explicitly authorized
 Free Beta project (`dsdfacbjaicdcwayhhil`), then confirmed hosted build17.6.1.166 and
 SQL17.6 /170006. The version gate failed; no migration/deployment/test-data write

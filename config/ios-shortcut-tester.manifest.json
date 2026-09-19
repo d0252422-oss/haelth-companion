@@ -2,6 +2,7 @@
   "schema_version": "ios-shortcut-tester.v1",
   "name": "健康資料同步",
   "environment": "beta",
+  "project_ref": "uavimjgccigpbwqmfkhh",
   "ingestion_base_url": "https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta",
   "session_exchange_path": "/v1/connectors/ios-shortcut/session",
   "ingestion_path": "/v1/connectors/ios-shortcut/ingest",

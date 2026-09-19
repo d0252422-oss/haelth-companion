@@ -44,7 +44,8 @@ $report = [ordered]@{
     checkpoint='UNKNOWN'; ingestion='UNVERIFIED'; domain_recompute='UNVERIFIED'
     score_update='UNVERIFIED'; samples=@()
     scope_hash=$ScopeHash
-    request_count_semantics='COMPLETED_BATCH_PROGRESS_MAY_RESET_NOT_HTTP_ATTEMPTS'
+    request_count_semantics='MIXED_WORKMANAGER_ATTEMPT_OR_COMPLETED_BATCH_PROGRESS_NOT_HTTP_COUNT'
+    retry_evidence='REQUIRES_CORRELATED_WORKINFO_AND_PER_REQUEST_RECEIPTS; COUNTER_ALONE_IS_NOT_RETRY_PROOF'
     acceptance='METADATA_ONLY_NEVER_END_TO_END_PASS'
     command_timeout_seconds=$CommandTimeoutSeconds
 }

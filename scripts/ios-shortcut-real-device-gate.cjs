@@ -4,7 +4,7 @@ const {buildSpec}=require('./ios-shortcut-build-spec.cjs');
 function prepareGate(at){
  const spec=buildSpec(at);
  return {schema_version:'IOS_SHORTCUT_REAL_DEVICE_GATE_PREPARATION_V1',status:'PENDING_OWNER_DEVICE',template_only:true,
-  device_execution:'NOT_RUN',network_operations:0,production_writes:0,windows:spec.windows,
+  device_execution:'NOT_RUN',network_operations:0,production_writes:0,windows:spec.windows,target:spec.target,
   prerequisites:['Inspect actual Shortcut actions/version/hash','Authorized dedicated Beta account and exact target','Existing user-scoped setup/session flow; no credentials in evidence'],
   cases:spec.windows.map(w=>({domain:w.domain,status:'NOT_RUN',required_evidence:['actual Health query field/unit/window mapping','permission/error/empty distinction','stable record IDs and exact retry bytes','bounded HTTP and user-scoped receipt','SQL row and fresh Web read-back','analysis state separate from ingestion']})),
   cross_domain_cases:['invalid/expired session rejected','A/B tenant isolation','partial acceptance and unchanged-batch retry','duplicate/stale/tombstone behavior','no unexpected health upload destination'],

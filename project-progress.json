@@ -2,6 +2,23 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "vendor_wait_continuation": {
+    "run_id": "health-vendor-wait-20260920-000238",
+    "evidence_root": "D:/Dev/Evidence/health-vendor-wait-20260920-000238",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "newly_completed_unweighted_deliverables": [
+      "Offline single-command cutover source package and fail-closed fresh/incremental preflight",
+      "Dedicated-session read-smoke adapter preparation; no remote acceptance claimed",
+      "Android retry evidence semantics and iOS endpoint/ref isolation checks",
+      "Body editor binding/late-completion/cache race fixes and modal keyboard regression"
+    ],
+    "remaining_acceptance": [
+      "Hosted platform security floor and exact fresh Supabase migration rehearsal",
+      "Live executor/frontend rollback verification and remote CRUD receipt-backed cleanup",
+      "Real A/B OAuth, remote acceptance and deferred device gates"
+    ]
+  },
   "beta_probe_continuation": {
     "run_id": "health-beta-probe-20260919-223821",
     "evidence_root": "D:/Dev/Evidence/health-beta-probe-20260919-223821",

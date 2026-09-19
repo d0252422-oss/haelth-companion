@@ -41,6 +41,7 @@ function validateManifest(manifest) {
   invariant(JSON.stringify(manifest.ingestion_auth_headers) === JSON.stringify(['Authorization: Bearer <session access token>', 'x-shortcut-session-id: <session id>']), 'RUNTIME_HEADER_PLACEHOLDERS_REQUIRED');
   const endpoint = new URL(manifest.ingestion_base_url);
   invariant(endpoint.protocol === 'https:' && !endpoint.username && !endpoint.password && !endpoint.search && !endpoint.hash && endpoint.pathname === '/functions/v1/mobile-health-beta', 'INVALID_ENDPOINT_CONFIGURATION');
+  invariant(manifest.project_ref === 'uavimjgccigpbwqmfkhh' && endpoint.hostname === `${manifest.project_ref}.supabase.co` && !endpoint.port, 'UNAPPROVED_CONNECTOR_TARGET');
   invariant(manifest.max_records_per_batch === MAX_BATCH, 'INVALID_BATCH_LIMIT');
   const spec = manifest.build_spec;
   invariant(spec?.version === VERSION && spec.status === 'OFFLINE_SPEC_ONLY_NOT_IMPORTABLE_SHORTCUT', 'INVALID_BUILD_SPEC');
@@ -64,6 +65,7 @@ function buildSpec(frozenEnd, manifest = readManifest()) {
     status: 'OFFLINE_SPEC_ONLY_NOT_IMPORTABLE_SHORTCUT',
     network_operations: 0,
     device_execution: 'NOT_RUN',
+    target: { project_ref: manifest.project_ref, endpoint: manifest.ingestion_base_url, platform_gate: 'NOT_REVALIDATED', activation: 'DEFERRED' },
     authentication: 'REUSE_EXISTING_CLAIM_AND_USER_SCOPED_SESSION_NO_NEW_AUTH',
     windows: DEFINITIONS.map(definition => ({
       ...definition,

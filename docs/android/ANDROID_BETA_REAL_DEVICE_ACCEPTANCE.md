@@ -1,5 +1,14 @@
 # Android Beta real-device acceptance
 
+## Current preparation boundary — 2026-09-20
+
+REAL_DEVICE_GATE=DEFERRED. Historical results below apply only to their recorded
+APK/device; they do not grant acceptance to the current dirty beta12 work. Before
+a future device run, record actual installed version, APK hash, exact Beta endpoint,
+account ScopeHash and correlated WorkInfo/request receipts. The collector's request
+counter has mixed attempt/batch semantics and cannot establish HTTP retry counts.
+No device, ADB or installation was performed during vendor-wait preparation.
+
 ## Verified runtime evidence — 2026-09-03
 
 - APK: `0.1.0-beta.6-debug` (`a96b5eff16a287027e287680cf5530497b03fe4730e9805cd88bb83344fc4da0`).
