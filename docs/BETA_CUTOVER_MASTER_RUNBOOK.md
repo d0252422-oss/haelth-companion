@@ -61,3 +61,11 @@ is rehearsed. Vendor response alone does not magically make these steps PASS.
 
 No vendor searches, probes, OAuth, ADB, remote mutations or production operations
 are performed by this runbook's local commands.
+
+## Post-cutover engineering queue (not a prerequisite)
+
+Only after `BETA_SQL_FIRST_CUTOVER = PASS`, automatically activate
+`WORKOUT_SAVE_LATENCY_POST_SQL_FIRST` in [the product hardening backlog](PRODUCT_HARDENING_BACKLOG.md).
+Measure the accepted SQL path before any optimization. Until then keep it
+DEFERRED_UNTIL_SQL_FIRST; it does not block vendor/PG security/cutover and does not
+authorize current legacy Sheets refactoring or a new background automation.
