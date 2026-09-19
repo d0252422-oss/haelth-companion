@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {targets} from './beta-cutover-preflight.mjs';
 import {assertDDirectory} from './beta-cutover-driver.mjs';
-export const acceptanceGates=['BETA_SQL_FIRST_CUTOVER','PG_SECURITY_PLATFORM_GATE','BETA_MIGRATION','BETA_EDGE_DEPLOY','REMOTE_CRUD','REMOTE_USER_ISOLATION'];
+export const acceptanceGates=['BETA_SQL_FIRST_CUTOVER','INTERNAL_BETA_SECURITY_GATE','BETA_MIGRATION','BETA_EDGE_DEPLOY','REMOTE_CRUD','REMOTE_USER_ISOLATION'];
 export function postSqlFirstDecision(report){
  const blocked=acceptanceGates.filter(name=>report?.gates?.[name]?.status!=='PASS'||!report.gates[name].evidence);
  if(!targets[report?.projectRef]||report?.schema!=='beta-remote-acceptance-v1'||report?.execution!=='ACTUAL_REMOTE'||report?.accepted!==true||!/^([a-f0-9]{40})$/.test(report?.sourceRevision||''))blocked.push('ACCEPTED_REMOTE_EVIDENCE_REQUIRED');

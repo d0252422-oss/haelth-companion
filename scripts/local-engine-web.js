@@ -2,7 +2,7 @@
 function hostedManualEnabled(){return typeof HOSTED_MANUAL_SQL_ENABLED!=='undefined'&&HOSTED_MANUAL_SQL_ENABLED;}
 function manualSqlEnabled(){return LOCAL_ENGINE_ENABLED||hostedManualEnabled();}
 let hostedManualBinding=null,hostedManualConfigFingerprint=null,hostedIdentityPending=null;
-const hostedManualActions=new Set(['getCurrentUser','getUserProfile','getManualProviderIdentity','getManualObservations','getManualObservationDaily','upsertManualObservation','deleteManualObservation','getObservationWriteStatus','getBodyRecords','addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus','getNutritionRecords','getSleepRecords','getActivityRecords','upsertMealRecord','deleteMealRecord','getMealWriteStatus','localEngineSnapshot','getDashboardData','getTodaySummary','getHealthTimeline','refreshDailyNutrition','refreshDerivedData','getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
+const hostedManualActions=new Set(['getAccessState','getCurrentUser','getUserProfile','getManualProviderIdentity','getManualObservations','getManualObservationDaily','upsertManualObservation','deleteManualObservation','getObservationWriteStatus','getBodyRecords','addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus','getNutritionRecords','getSleepRecords','getActivityRecords','upsertMealRecord','deleteMealRecord','getMealWriteStatus','localEngineSnapshot','getDashboardData','getTodaySummary','getHealthTimeline','refreshDailyNutrition','refreshDerivedData','getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
 const hostedTrainingActions=new Set(['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus']);
 function hostedManualConfig(){
   const raw=window.HEALTH_MANUAL_SQL_CONFIG||{};
@@ -34,7 +34,7 @@ async function ensureHostedManualIdentity(){
   if(epoch!==localSessionEpoch||token!==sessionToken)throw Error('IDENTITY_CHANGED');
   if(!body.ok)throw Object.assign(Error(body.error||'INVALID_WEB_SESSION'),{code:body.error||'INVALID_WEB_SESSION'});
   if(!/^[a-f0-9-]{36}$/.test(body.data?.canonicalUserId||'')||body.data.provider!=='postgresql-manual-v1'||body.data.release!==config.release||body.data.schemaVersion!==config.schemaVersion)throw Error('MANUAL_PROVIDER_CONTRACT_MISMATCH');
-  hostedManualBinding={token,canonical:body.data.canonicalUserId};
+  hostedManualBinding={token,canonical:body.data.canonicalUserId,access:body.data.access};
   document.getElementById('health-connector-panel')?.style?.setProperty('display','none');
   document.getElementById('chatgpt-meal-box')?.style?.setProperty('display','none');
   if(config.release==='AB')setupLocalExerciseManagement();

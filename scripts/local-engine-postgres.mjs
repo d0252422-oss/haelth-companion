@@ -56,6 +56,7 @@ export async function createLocalPostgres({port=57483,release=process.env.LOCAL_
       if(user.canonical){
         await admin`insert into public.users(id,external_subject_hash,timezone) values(${user.canonical},${createHash('sha256').update(name).digest('hex')},'Asia/Taipei')`;
         await admin`insert into private.beta_native_auth_identities(auth_user_id,canonical_user_id,provider) values(${user.auth},${user.canonical},'google')`;
+        await admin`insert into private.user_entitlements(user_id,access_status,source,metadata) values(${user.canonical},'BETA','MANUAL_BETA',${admin.json({synthetic:true,fixture:name})})`;
       }
     }
     evidence.server=(await admin`select version(),inet_server_addr()::text as address,current_database() as database`)[0];

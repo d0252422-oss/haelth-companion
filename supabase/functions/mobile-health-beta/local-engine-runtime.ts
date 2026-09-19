@@ -11,6 +11,7 @@ import {readManualRequest} from './manual-request-body.ts';
 import {readPublishedDaily,readPublishedDailySnapshot,projectPublishedDaily} from './manual-daily-read.ts';
 import {ManualObservationsLocalStore} from './manual-observations-local.ts';
 import {observationEngineProjection,projectManualObservationDay} from './manual-observation-projection.ts';
+import {readUserEntitlement} from './entitlement.ts';
 
 type Json = Record<string, any>;
 // Presentation completeness is not confirmation, a new engine rule, or a
@@ -638,8 +639,12 @@ export class LocalEngineRuntime {
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw Error("INVALID_PAYLOAD");
       rejectClientIdentity(payload);
       const dispatch=async()=>{
+      const access=this.hosted?await readUserEntitlement(this.sql):{status:'LOCAL_SYNTHETIC',plan:null,isAllowed:true,reason:'ACCESS_GRANTED',expiresAt:null,graceUntil:null,capabilities:{can_view_dashboard:true,can_add_health_data:true,can_use_nutrition:true,can_use_training:true,can_use_analysis:true}};
+      const accessBootstrap=new Set(['getAccessState','getCurrentUser','getManualProviderIdentity']);
+      if(!accessBootstrap.has(action)&&!access.isAllowed)throw Error(access.reason);
       let data: any;
-      if (["getExerciseDatabase", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
+      if(action==='getAccessState')data=access;
+      else if (["getExerciseDatabase", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
         if (!this.exerciseEnabled) throw Error("EXERCISE_MANAGEMENT_DISABLED");
         if (action === "getExerciseDatabase") data = await this.manualTraining.catalog(identity);
         else if (action === "getWorkoutRecords") data = await this.manualTraining.workouts(identity, payload);
@@ -678,13 +683,13 @@ export class LocalEngineRuntime {
           data = { ...data, status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
         }
       } else if (action === "getManualProviderIdentity") {
-        data={canonicalUserId:identity.canonical,provider:'postgresql-manual-v1',release:this.exerciseEnabled?'AB':'A',schemaVersion:'manual-sql-v1'};
+        data={canonicalUserId:identity.canonical,provider:'postgresql-manual-v1',release:this.exerciseEnabled?'AB':'A',schemaVersion:'manual-sql-v1',access};
       } else if (action === "getCurrentUser") {
         data = {
           user: {
             userId: identity.canonical,
             ...(!this.hosted?{name:"Local synthetic " + (identity.kind==='web'?'Web session':identity.auth.slice(-1))}:{}),
-          },
+          },access,
         };
       } else if (action === 'getUserProfile') {
         data=await manualPrivilegedRead(this.sql,identity,async(tx:any)=>{
@@ -741,7 +746,7 @@ export class LocalEngineRuntime {
         ? message
         : "ENGINE_REQUEST_FAILED";
       return Response.json({ ok: false, error: code, retryable }, {
-        status: retryable ? 503 : /IDENTITY|SESSION|AUTH|TOKEN/.test(code)
+        status: retryable ? 503 : /^ACCESS_/.test(code) ? 403 : /IDENTITY|SESSION|AUTH|TOKEN/.test(code)
           ? 401
           : 400,
         headers: { "cache-control": "no-store" },

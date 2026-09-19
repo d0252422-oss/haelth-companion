@@ -5,18 +5,20 @@ export const target={projectRef:'uavimjgccigpbwqmfkhh',projectName:'health-compa
 export const probeTarget={...target,projectRef:'dsdfacbjaicdcwayhhil',projectName:'health-companion-beta-v2',databaseHost:'db.dsdfacbjaicdcwayhhil.supabase.co'};
 export const targets=Object.freeze(Object.assign(Object.create(null),{[target.projectRef]:target,[probeTarget.projectRef]:probeTarget}));
 export const requiredGates=['ACTIVE_GIT_WRITE_SAFETY','AI_POOL_V2_SECURITY_GATE','ACTUAL_CLI_EDGE','ACTUAL_EDGE_RUNTIME','EDGE_SQL_INTEGRATION','POSTGRESQL_MIGRATION_REHEARSAL','RLS','AUTH_SESSION_MAPPING','USER_ISOLATION','MANUAL_BODY_SQL_E2E','MANUAL_NUTRITION_SQL_E2E','MANUAL_TRAINING_SQL_E2E','MANUAL_SLEEP_SQL_E2E','MANUAL_STEPS_SQL_E2E','MANUAL_TOTAL_ENERGY_SQL_E2E','EXERCISE_MANAGEMENT','SQL_READ_AFTER_WRITE','IDEMPOTENCY','UPDATE_DELETE','CACHE_ISOLATION','WEB_BROWSER_E2E','HEALTH_SCORE_REGRESSION','FRONTEND_BUILD','CRITICAL_REGRESSION'];
-requiredGates.push('PG_SECURITY_PLATFORM_GATE','EDGE_ROLLBACK_READY');
+requiredGates.push('INTERNAL_BETA_SECURITY_GATE','EDGE_ROLLBACK_READY');
 requiredGates.push('NON_PRIVILEGED_ADAPTER','POOL_CONTEXT_ISOLATION','NO_DESTRUCTIVE_OPERATION','PRODUCTION_TARGET_DIFFERENT');
-export const migrationOrder=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152','20260916144345','20260916215632'];
+export const migrationOrder=['20260912032458','20260912041126','20260912182042','20260913041844','20260913164024','20260913164026','20260913180000','20260913190152','20260916144345','20260916215632','20260920193000','20260920204500'];
 export const freshMigrationOrder=['20260827010000','20260827015836','20260827023849','20260829045359','20260829082547','20260829083522','20260829090000','20260829090500','20260829091747','20260829135430','20260830141842','20260831000913','20260902150738','20260903021109','20260903062110','20260903130618',...migrationOrder];
 export function evaluateCutover(input,now=Date.now()){
  const blockers=[];
  const selected=targets[input.target?.projectRef];
  if(!selected)blockers.push('TARGET_NOT_ALLOWLISTED');
  for(const [key,value]of Object.entries(selected||target))if(input.target?.[key]!==value)blockers.push('TARGET_MISMATCH:'+key);
- if(!Number.isSafeInteger(input.platform?.serverVersionNum)||input.platform.serverVersionNum<170011||input.platform.serverVersionNum>=180000)blockers.push('PG17_SECURITY_VERSION_NOT_ACCEPTED');
+ if(!Number.isSafeInteger(input.platform?.serverVersionNum)||input.platform.serverVersionNum<170000||input.platform.serverVersionNum>=180000)blockers.push('PG17_MAJOR_NOT_ACCEPTED');
  const checked=Date.parse(input.target?.verifiedAt);if(!Number.isFinite(checked)||checked>now||now-checked>86400000)blockers.push('TARGET_ATTESTATION_STALE');
- for(const name of requiredGates){const g=input.gates?.[name];const accepted=g?.status==='PASS'||name==='AI_POOL_V2_SECURITY_GATE'&&g?.status==='PASS_WITH_NON_BLOCKING_FINDINGS';if(!accepted||!g?.evidence)blockers.push('GATE_NOT_ACCEPTED:'+name);}
+ for(const name of requiredGates){const g=input.gates?.[name];const accepted=g?.status==='PASS'||name==='AI_POOL_V2_SECURITY_GATE'&&g?.status==='PASS_WITH_NON_BLOCKING_FINDINGS'||name==='INTERNAL_BETA_SECURITY_GATE'&&g?.status==='CONDITIONAL_PASS';if(!accepted||!g?.evidence)blockers.push('GATE_NOT_ACCEPTED:'+name);}
+ const risk=input.internalBetaRisk;
+ if(!risk||risk.directDbUserAccess!==false||risk.frontendHighPrivilegeSecret!==false||risk.arbitrarySqlExposure!==false||risk.tls!==true||risk.confirmedReachableCritical!==false||risk.rollback!==true)blockers.push('INTERNAL_BETA_SECURITY_RISK_NOT_ACCEPTED');
  const role=input.runtimeRole;
  if(!role||role.name!=='health_manual_api'||role.effectiveRole!=='health_manual_api'||['superuser','createdb','createrole','bypassrls'].some(k=>role[k]!==false)||role.canSetElevatedRole!==false)blockers.push('RUNTIME_ROLE_NOT_LEAST_PRIVILEGE');
  for(const name of ['tlsVerified','rollbackVerified','fullSiteContract','realTestIdentity'])if(input[name]!==true)blockers.push('PREREQUISITE:'+name);

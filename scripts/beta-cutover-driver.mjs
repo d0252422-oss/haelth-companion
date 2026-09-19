@@ -84,7 +84,7 @@ export async function runDriver({mode='dryrun',projectRef,packageDirectory,outpu
   const mutatingMode=!['preflight','dryrun'].includes(mode);
   const status=mode==='dryrun'?'PASS_OFFLINE_VALIDATION':decision.blockers.length?'BLOCKED_PRECONDITIONS':mutatingMode?'BLOCKED_CURRENT_RUN_REMOTE_MUTATION_FORBIDDEN':'PASS_OFFLINE_PRECONDITIONS_NOT_REMOTE_APPROVAL';
   const result={mode,status,precheck:decision,projectRef,sourceRevision:head,checks,
-   pg_requirement:'17.x >=17.11; fresh hosted proof required',pg_gate:'WAITING_VENDOR_RESPONSE',paid_operations:'DENIED',destructive_operations:'DENIED',
+   pg_requirement:'PostgreSQL 17.x plus explicit risk-based Internal Beta acceptance; production remains separately blocked',pg_gate:'RISK_BASED_INTERNAL_BETA',paid_operations:'DENIED',destructive_operations:'DENIED',
    rollback:{edge:'PRIOR_EXACT_SOURCE_ACCEPTED_NOT_REEXPORTED',web:plan.rollback.frontend_gate,data:plan.rollback.data_policy},
    deployment_ready:false,remote_mutations:0,limitations:['No live executor activated in vendor-wait phase.','Migration rehearsal, actual grants, private settings validity and live Web recovery are not established by offline inspection.']};
   Object.assign(active,result);persist();

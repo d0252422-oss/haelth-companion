@@ -3,10 +3,10 @@ import {validatePlan,runDriver,assertDDirectory} from '../scripts/beta-cutover-d
 import {buildPlan} from '../scripts/beta-cutover-package.mjs';import {audit} from '../scripts/audit-beta-preparation.mjs';
 import {preparePackage} from '../scripts/beta-cutover-package.mjs';
 import {createE2ePlan,validateE2ePlan,assertCleanupReceipt} from '../scripts/beta-remote-e2e-plan.mjs';
-const ref='dsdfacbjaicdcwayhhil',plan=()=>buildPlan(ref,audit(),'f'.repeat(40));
+const ref='uavimjgccigpbwqmfkhh',plan=()=>buildPlan(ref,audit(),'f'.repeat(40));
 test('only exact Beta identity and fresh reviewed migration order are accepted',()=>{
  assert.equal(validatePlan(plan()).projectRef,ref);
- for(const mutate of [p=>p.target={...p.target,projectRef:'vptqedxdxfoohbqctujf'},p=>p.target={...p.target,region:'wrong'},p=>p.migrations.reverse(),p=>p.migration_mode='incremental',p=>p.roles.push('postgres'),p=>p.remote_mutations=1,p=>p.commands.edge_deploy.push('--prune'),p=>p.rollback.data_policy='DELETE_ALL']){const p=structuredClone(plan());mutate(p);assert.throws(()=>validatePlan(p));}
+ for(const mutate of [p=>p.target={...p.target,projectRef:'vptqedxdxfoohbqctujf'},p=>p.target={...p.target,region:'wrong'},p=>p.migrations.reverse(),p=>p.migration_mode='fresh',p=>p.roles.push('postgres'),p=>p.remote_mutations=1,p=>p.commands.edge_deploy.push('--prune'),p=>p.rollback.data_policy='DELETE_ALL']){const p=structuredClone(plan());mutate(p);assert.throws(()=>validatePlan(p));}
 });
 test('D evidence containment and unknown target fail before command execution',async()=>{
  assert.throws(()=>assertDDirectory('C:/Users'),/OUTSIDE/);assert.throws(()=>assertDDirectory('relative'),/ABSOLUTE/);
@@ -38,7 +38,7 @@ test('actual package dryrun/resume revalidates bytes; remote modes and concurren
  assert.equal((await runDriver({...input,resume:true,mode:'full'})).status,'BLOCKED_PRECONDITIONS');
  let state=JSON.parse(fs.readFileSync(path.join(output,'checkpoint.json')));assert.equal(state.stages.length,3);
  assert.equal(state.stages.at(-1).remote_mutations,0);
- const preflight=await runDriver({...input,resume:true,mode:'preflight'});assert.equal(preflight.status,'BLOCKED_PRECONDITIONS');assert.ok(preflight.precheck.blockers.includes('PG17_SECURITY_VERSION_NOT_ACCEPTED'));
+ const preflight=await runDriver({...input,resume:true,mode:'preflight'});assert.equal(preflight.status,'BLOCKED_PRECONDITIONS');assert.ok(preflight.precheck.blockers.includes('INTERNAL_BETA_SECURITY_RISK_NOT_ACCEPTED'));
  assert.equal((await runDriver({...input,resume:true,mode:'migrate'})).remote_mutations,0);
  fs.writeFileSync(path.join(output,'driver.lock'),'owned test lock');await assert.rejects(runDriver({...input,resume:true}),/EEXIST/);
  fs.unlinkSync(path.join(output,'driver.lock')); // exact owned test lock, no user data
