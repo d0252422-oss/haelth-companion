@@ -12,7 +12,7 @@ PostgreSQL `17.6.1.166` is a known outdated minor and is not declared security-e
 
 - Server reports PostgreSQL `17.6`, `password_encryption=scram-sha-256`.
 - Client-to-Supavisor connection verified TLS 1.3 with hostname verification and the official public CA. `pg_stat_ssl=false` behind the pooler reflects TLS termination and is not used as the client TLS assertion.
-- `health_manual_api`, `health_native_ingest`, and `health_recompute_worker` are `NOLOGIN`, `NOINHERIT`, non-superuser, no `BYPASSRLS`, `CREATEDB`, `CREATEROLE`, or replication. A dedicated LOGIN credential is still required before SQL-first can activate.
+- `health_manual_api` is a dedicated `LOGIN`, `NOINHERIT` runtime role; `health_native_ingest` and `health_recompute_worker` remain `NOLOGIN`. All three are non-superuser with no `BYPASSRLS`, `CREATEDB`, `CREATEROLE`, or replication. The runtime credential was generated out of band, installed through a bounded service-only bootstrap, and was not stored in migration history or evidence.
 - App tables have RLS enabled; the most sensitive manual/entitlement tables force RLS. The entitlement table grants normal runtime only the self-scoped columns needed by the resolver and grants no mutation.
 - SECURITY DEFINER functions have fixed empty `search_path`; none are executable by `public` or `anon`. The entitlement administrator function is restricted to the existing trusted `service_role` administrative path and is not used by normal runtime.
 - Frontend/source inspection found no database password, service-role secret, or arbitrary SQL route. Request ingress is capped at 1 MiB; native batches are capped at 250; field/range validation and parameterized SQL are used.
@@ -42,5 +42,6 @@ No confirmed high/critical vulnerability is reachable through the reviewed norma
 - Controlled Beta only; no public self-signup, broad invitation, or commercial use.
 - No entitlement means deny. Valid `BETA` is the only currently enabled full-access state.
 - Production remains blocked until a current secure minor or vendor-confirmed backports plus full production regression.
-- SQL-first remains inactive until a dedicated `health_manual_api` LOGIN password is created without storing it in migration history, and the matching Beta Edge secret is set. The current CLI temporary role cannot alter the custom role. Do not substitute `service_role` or the project `postgres` credential as runtime.
+- Beta SQL-first is active with the dedicated `health_manual_api` runtime and matching Beta Edge secret. The temporary credential and synthetic-test bootstrap RPCs were removed after verification. Neither `service_role` nor the project `postgres` credential is used by the normal manual Web data path.
+- Full authenticated domain CRUD and real A/B isolation remain pending normal Test A/Test B OAuth login and explicit entitlement grants to their server-resolved canonical identities. Do not guess user identifiers or request tokens/passwords.
 - Edge/code rollback remains code/config only; valid SQL data is preserved.
