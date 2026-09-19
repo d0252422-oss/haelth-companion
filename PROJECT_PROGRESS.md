@@ -148,6 +148,18 @@ remote Beta remains blocked by the PostgreSQL 17.11 security floor. Overall rema
 UNKNOWN and provisional known scope remains 32.0% (+0.0pp). No product code, remote
 state, production state, OAuth state, or device state changed.
 
+## 2026-09-19 vendor security resolution — unchanged denominator
+
+Run `health-vendor-security-20260919-221146` canonically separated the required
+PostgreSQL core security fixes from a version-label preference. Official Supabase
+source maps build `17.6.1.166` to upstream PostgreSQL17.6 and supplies no required-fix
+backport attestation. The current project still has no upgrade target. A Free project
+slot appears available, but the new-project API does not expose a patch selector and
+no official source guarantees a 17.11+ default, so replacement is not yet a safe
+platform path. This is new unweighted evidence only: no remote mutation, weighted
+leaf closure, denominator or weight change. Overall remains UNKNOWN; provisional
+known scope remains32.0% (+0.0pp).
+
 ## Conditional Beta SQL-first continuation — same denominator
 
 Run `health-beta-sql-first-20260914` exposed a real shared-worker counterexample to

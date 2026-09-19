@@ -17,6 +17,14 @@ managed target containing the fixes. SAFE_ALTERNATIVE=managed Free pause/restore
 after target confirmation; no self-hosted image substitution. NEXT_GATE=fresh build/
 extension metadata plus impacted RLS, Edge and pool acceptance after upgrade.
 
+2026-09-19 update: the official source tag now provides a precise source mapping
+(upstream PostgreSQL17.6 plus Supabase packaging/extensions), but no required-fix
+backport attestation. A second active Free-project slot appears available; however,
+the official create-project contract exposes no patch selector and the default hosted
+patch remains undocumented. Do not create a discovery project or pause the existing
+Beta. The next action is vendor confirmation of either build166 coverage, an offered
+17.11+ upgrade target, or a guaranteed 17.11+ new-project target.
+
 ## Support question template — do not send automatically
 
 Project ref uavimjgccigpbwqmfkhh reports PostgreSQL17.6 and platform build
@@ -26,3 +34,8 @@ CVE-2026-14666, and provide an official build/patch reference. If it does not,
 which supported managed upgrade for this Free project reaches PostgreSQL17.11 or an
 officially equivalent patched build, what target will the Dashboard choose, what
 downtime/preconditions apply, and what recovery path exists if the upgrade fails?
+
+If the current project cannot upgrade, does a newly created Free project in
+`ap-southeast-1` receive PostgreSQL17.11 or later, and is there an official way to
+select or verify that target before project creation? Please cite the hosted build or
+release metadata; no credentials are needed.

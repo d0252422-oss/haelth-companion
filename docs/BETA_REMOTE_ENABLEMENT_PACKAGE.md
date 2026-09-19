@@ -1,5 +1,16 @@
 # Remote enablement package — CONDITIONAL, not deploy-ready
 
+Latest decision: `health-vendor-security-20260919-221146`.
+The official build source maps `17.6.1.166` to unmodified upstream PostgreSQL17.6;
+no official security-backport mapping was found. The existing project offers no
+upgrade target. A Free replacement slot appears available, but neither the official
+creation contract nor public documentation exposes or guarantees a 17.11+ target.
+Therefore `PG_SECURITY_PLATFORM_GATE=BLOCKED_VENDOR_SECURITY_EVIDENCE` and
+`REMOTE_ENABLEMENT_PACKAGE=CONDITIONAL_NOT_READY`. No role, secret, migration,
+deployment, OAuth or test-data mutation is permitted until a safe hosted target is
+officially established. See `PG_SECURITY_REQUIREMENT_CANONICAL.md` and
+`BETA_SAFE_PLATFORM_OPTIONS.md`.
+
 Latest decision: health-external-20260917-081934.
 EDGE_ROLLBACK_READY=PASS_EXACT_OR_REPRODUCIBLE through official v14 source export
 and exact all-file match to a69cb33. PG_SECURITY_PLATFORM_GATE is now

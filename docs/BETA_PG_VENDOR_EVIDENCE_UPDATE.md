@@ -54,3 +54,29 @@ restore request accepts a target. The restore-version GET rejected this active p
 with HTTP 400 (`This project is not in a paused state.`), so its exact pause/restore
 target remains unknown. No mutation was used to discover it. Vendor confirmation is
 now the safe next action; see `SUPABASE_SUPPORT_PG_TARGET_QUESTION.md`.
+
+## 2026-09-19 bounded vendor-source decision
+
+Run `health-vendor-security-20260919-221146` found no build-level backport
+attestation. It did confirm from the official `17.6.1.166` tag that the Nix source
+input is upstream PostgreSQL `17.6`, while the AMI/package label is independently
+`17.6.1.166`. The official repository describes the core as unmodified upstream
+PostgreSQL. This strengthens the version mapping but does not prove a hosted binary
+exploit or replace a vendor attestation.
+
+Official billing docs and fresh read-only inventory show one active project in a
+Free account that permits two active projects. A replacement slot therefore appears
+available, but the official create-project contract has no PostgreSQL patch selector
+and no official source found here guarantees that a new project lands on 17.11+.
+The paid physical clone path is excluded; logical restore is supported but cannot
+solve an unknown target version.
+
+Final bounded decision:
+
+- `OFFICIAL_BACKPORT_EVIDENCE=NOT_FOUND`
+- `FREE_PROJECT_SLOT_AVAILABLE=YES_BY_CURRENT_ACTIVE_COUNT`
+- `NEW_PROJECT_DEFAULT_PG_VERSION=UNKNOWN_NOT_EXPOSED`
+- `SAFE_PLATFORM_REPLACEMENT_AVAILABLE=NO_TARGET_NOT_PROVEN`
+- `PG_SECURITY_PLATFORM_GATE=BLOCKED_VENDOR_SECURITY_EVIDENCE`
+
+See `PG_SECURITY_REQUIREMENT_CANONICAL.md` and `BETA_SAFE_PLATFORM_OPTIONS.md`.

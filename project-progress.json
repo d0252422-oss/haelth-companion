@@ -2,6 +2,23 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "vendor_security_continuation": {
+    "run_id": "health-vendor-security-20260919-221146",
+    "source_baseline": "5395f10bc300ad413dd6a040fde02a6e488cb580",
+    "evidence_root": "D:/Dev/Evidence/health-vendor-security-20260919-221146",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "ledger_correction_pp": 0,
+    "ledger_omission": "NONE_CONFIRMED",
+    "unmet_leaves": ["edge_execution", "remote_beta_oauth", "authorized_release"],
+    "unmet_reason": "Hosted build 17.6.1.166 has no official required-fix backport mapping; existing upgrade target is absent and new-project 17.11+ target is not exposed",
+    "newly_completed_unweighted_deliverables": [
+      "Canonical hosted PostgreSQL security-fix requirement separated from version-label preference",
+      "Official Supabase tag-to-upstream 17.6 source mapping for build 17.6.1.166",
+      "Bounded free replacement-project feasibility and target-selection review",
+      "Updated minimal vendor action and remote enablement stop package"
+    ]
+  },
   "beta_preparation_continuation": {
     "run_id": "health-beta-preparation-20260914-092035",
     "source_baseline": "29346ace9842d9bbde221d0fcf4026a52ad3b80c",
