@@ -4,6 +4,13 @@ No secret, credential, health data, or production identifier is included.
 
 Project ref: `uavimjgccigpbwqmfkhh`
 
+New empty Free probe ref: `dsdfacbjaicdcwayhhil` (`health-companion-beta-v2`).
+Created on2026-09-19 in the same region; actual project build17.6.1.166 and SQL
+server_version17.6 / server_version_num170006. No application migration or deployment
+was applied. This confirms that the observed new-project path also provisions17.6.
+New-project upgrade eligibility has not been retrieved; the following eligibility
+fields belong only to the original Beta.
+
 Current project metadata:
 
 - Plan: Free

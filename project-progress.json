@@ -2,6 +2,20 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "beta_probe_continuation": {
+    "run_id": "health-beta-probe-20260919-223821",
+    "evidence_root": "D:/Dev/Evidence/health-beta-probe-20260919-223821",
+    "new_beta_ref": "dsdfacbjaicdcwayhhil",
+    "observed_postgres_build": "17.6.1.166",
+    "observed_server_version_num": 170006,
+    "platform_gate": "FAIL_VERSION_BELOW_SECURITY_BASELINE",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "newly_completed_unweighted_deliverables": [
+      "Official zero-cost empty probe creation and actual hosted PostgreSQL version evidence",
+      "Confirmed downstream stop and preservation of old Beta, production and empty probe"
+    ]
+  },
   "vendor_security_continuation": {
     "run_id": "health-vendor-security-20260919-221146",
     "source_baseline": "5395f10bc300ad413dd6a040fde02a6e488cb580",

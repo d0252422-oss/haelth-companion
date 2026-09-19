@@ -1,6 +1,16 @@
 # Remote enablement package — CONDITIONAL, not deploy-ready
 
-Latest decision: `health-vendor-security-20260919-221146`.
+Current decision: `health-beta-probe-20260919-223821` supersedes target-unknown
+replacement feasibility below. Owner-authorized Free empty probe
+`dsdfacbjaicdcwayhhil` was created for USD0/month in ap-southeast-1. Official project
+metadata reports build17.6.1.166; SQL reports17.6 /170006.
+`NEW_BETA_PLATFORM_GATE=FAIL_VERSION_BELOW_SECURITY_BASELINE`.
+The probe is retained EMPTY_PROBE_ONLY (zero public tables, migrations and Edge
+functions). No downstream mutation is permitted under this run. Old Beta remains
+intact. `REMOTE_ENABLEMENT_PACKAGE=CONDITIONAL_NOT_READY`.
+See `BETA_V2_PROBE_RESULT.md` and `SUPABASE_SUPPORT_PG_TARGET_QUESTION.md`.
+
+Historical decision: `health-vendor-security-20260919-221146`.
 The official build source maps `17.6.1.166` to unmodified upstream PostgreSQL17.6;
 no official security-backport mapping was found. The existing project offers no
 upgrade target. A Free replacement slot appears available, but neither the official
@@ -11,7 +21,7 @@ deployment, OAuth or test-data mutation is permitted until a safe hosted target 
 officially established. See `PG_SECURITY_REQUIREMENT_CANONICAL.md` and
 `BETA_SAFE_PLATFORM_OPTIONS.md`.
 
-Latest decision: health-external-20260917-081934.
+Historical decision: health-external-20260917-081934.
 EDGE_ROLLBACK_READY=PASS_EXACT_OR_REPRODUCIBLE through official v14 source export
 and exact all-file match to a69cb33. PG_SECURITY_PLATFORM_GATE is now
 READY_FOR_UPGRADE_AUTHORIZATION: the Free project has an official managed path, but

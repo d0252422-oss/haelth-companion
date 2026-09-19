@@ -11,6 +11,13 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Empty-probe run `health-beta-probe-20260919-223821` created one explicitly authorized
+Free Beta project (`dsdfacbjaicdcwayhhil`), then confirmed hosted build17.6.1.166 and
+SQL17.6 /170006. The version gate failed; no migration/deployment/test-data write
+followed. This closes the provisioning-target uncertainty, not a release leaf.
+Prior local PASS remains accepted. Fixed known scope32.0%, +0.0pp; overallUNKNOWN.
+New unweighted deliverable: actual new-Free-project version evidence and stop record.
+
 External-evidence continuation `health-external-20260917-081934` found an official
 v14 source export and exact four-file match to a69cb33, closing rollback provenance,
 and confirmed the Beta organization is Free with a documented managed minor-upgrade
