@@ -11,6 +11,16 @@ this2026-09-14 continuation is a comparison, not a scope/weight revision.
 
 ## Scope evidence and missing decision
 
+Vendor-wait finalization `health-vendor-wait-finalize-20260920` adds target-bound
+resumable offline driver/checkpoints, static seven-domain E2E/cleanup validation,
+consolidated rollback/auth/device runbooks and eight local viewport/theme cases.
+Fast/security checks have zero blocking findings; SQL style-only debt remains.
+Docker socket was unavailable during the optional read-only health check; no Docker
+repair was attempted. Previously accepted SQL/RLS evidence remains unchanged.
+Live executors/remote CRUD and per-request Android observability remain incomplete;
+this preparation closes no remote/device/release leaf. Fixed known scope32.0%,
++0.0pp, overallUNKNOWN. Evidence: `D:/Dev/Evidence/health-vendor-wait-finalize-20260920`.
+
 Vendor-wait run `health-vendor-wait-20260920-000238` adds offline cutover packaging,
 fresh/incremental target guards, normal-session read-smoke preparation, connector
 endpoint/logging checks, body editor race/cache fixes and scoped modal keyboard tests.

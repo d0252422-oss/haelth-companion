@@ -2,6 +2,21 @@
   "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
   "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
   "full_scope_confirmed": false,
+  "vendor_wait_driver_continuation": {
+    "run_id": "health-vendor-wait-finalize-20260920",
+    "evidence_root": "D:/Dev/Evidence/health-vendor-wait-finalize-20260920",
+    "scope_or_weight_changed": false,
+    "engineering_increment_pp": 0,
+    "newly_completed_unweighted_deliverables": [
+      "Resumable offline target/byte validation and per-checkpoint cutover driver",
+      "Seven-domain static remote E2E and receipt-scope cleanup validation",
+      "Consolidated rollback/A-B/device runbooks and explicit observability gaps",
+      "Eight viewport/theme local UI-state cases and focused fast/security audit"
+    ],
+    "remote_acceptance": "NOT_RUN_WAITING_VENDOR_RESPONSE",
+    "runtime_execution_driver": "NOT_IMPLEMENTED_LIVE",
+    "android_per_request_observability": "PENDING_DIRTY_WORK_HANDOFF"
+  },
   "vendor_wait_continuation": {
     "run_id": "health-vendor-wait-20260920-000238",
     "evidence_root": "D:/Dev/Evidence/health-vendor-wait-20260920-000238",

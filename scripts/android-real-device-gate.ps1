@@ -48,6 +48,9 @@ $report = [ordered]@{
     retry_evidence='REQUIRES_CORRELATED_WORKINFO_AND_PER_REQUEST_RECEIPTS; COUNTER_ALONE_IS_NOT_RETRY_PROOF'
     acceptance='METADATA_ONLY_NEVER_END_TO_END_PASS'
     command_timeout_seconds=$CommandTimeoutSeconds
+    observability_gaps=@('PER_HTTP_START_END_DURATION','BATCH_INDEX','NEXT_SCHEDULE','ACCOUNT_SCOPED_CHECKPOINT_RECEIPT')
+    canonical_user='NOT_LOGGED_USE_EXPLICIT_SCOPE_HASH'
+    automatic_resume='UNVERIFIED_REQUIRES_NEW_WORKINFO_AND_REQUEST_RECEIPT_AFTER_RESUME'
 }
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $reportStream=[IO.File]::Open((Join-Path $OutputDirectory 'report.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
@@ -68,6 +71,9 @@ if ($ScopeHash -notmatch '^[a-f0-9]{16}$') {
             ForEach-Object {$_.ToString().Trim()})
         if (-not $report.package_version) { $report.status='BLOCKED_BETA_APP_NOT_INSTALLED' }
         else {
+            # Allowlisted device metadata only; never collect a full logcat/bugreport.
+            $report['device_model']=(Invoke-BoundedAdb @('-s',$deviceId,'shell','getprop','ro.product.model')).Trim()
+            $report['android_sdk']=(Invoke-BoundedAdb @('-s',$deviceId,'shell','getprop','ro.build.version.sdk')).Trim()
             if ($StartApp) {
                 Invoke-BoundedAdb @('-s',$deviceId,'shell','am','start','-n',"$Package/app.healthcompanion.sync.MainActivity") | Out-Null
                 $report.trigger='EXPLICIT_STARTUP_REQUEST_NOT_PROOF_OF_NEW_WORK'
