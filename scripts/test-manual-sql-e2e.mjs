@@ -326,7 +326,7 @@ try {
     for(const [name,user]of Object.entries(subjects).filter(([name])=>['A','B'].includes(name)))await pg.admin`insert into private.beta_web_identity_aliases(web_subject_hash,verified_email_hash,canonical_user_id) values(${hash('web-session-'+user.auth)},${hash(name.toLowerCase()+'@example.invalid')},${user.canonical})`;
     const a=await loginCookie('A',{kind:'web'}),b=await loginCookie('B',{kind:'web'}),date=shift(-3);
     const saved=await http(a,'upsertBodyRecord',{date,weight:84,clientRequestId:randomUUID()});assert.equal(saved.ok,true);
-    for(const action of ['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus'])assert.equal((await http(a,action)).error,'EXERCISE_MANAGEMENT_DISABLED');
+    for(const action of ['getExerciseDatabase','getExerciseBodyParts','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus'])assert.equal((await http(a,action)).error,'EXERCISE_MANAGEMENT_DISABLED');
     assert.equal((await http(a,'refreshDerivedData',{recordType:'workout'})).error,'EXERCISE_MANAGEMENT_DISABLED');
     ({context,page}=await browserContext('web_a'));await bodyScreen(page);await weightEditor(page,date);assert.equal(await page.locator('#weight-input').inputValue(),'84');assert.equal(await page.locator('#exercise-management').count(),0);
     assert.equal((await http(b,'getBodyRecords',{date})).data.length,0);

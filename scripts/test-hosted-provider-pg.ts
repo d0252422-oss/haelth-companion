@@ -35,7 +35,7 @@ try{
   assert.equal(used[0].login,'health_manual_api');assert.equal(used[0].effective,'health_manual_api');assert.equal(report.membership.length,0);assert.equal(used[0].lock,'2s');report.transaction_role=used[0];
   const reset=await raw`select current_user::text as effective,current_setting('health.engine.experimental',true) as experimental`;assert.equal(reset[0].effective,'health_manual_api');assert.notEqual(reset[0].experimental,'on');
   const wrong=postgres({...config,username:'service_role',max:1});try{await assert.rejects(()=>scopedManualSql(wrong).unsafe('select 1'),/MANUAL_DATABASE_ROLE_REJECTED/);}finally{await wrong.end();}
-  for(const action of ['getExerciseDatabase','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus'])assert.equal((await api(a,action)).error,'EXERCISE_MANAGEMENT_DISABLED');
+  for(const action of ['getExerciseDatabase','getExerciseBodyParts','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','deleteWorkoutSet','getTrainingWriteStatus'])assert.equal((await api(a,action)).error,'EXERCISE_MANAGEMENT_DISABLED');
   assert.equal((await api(a,'refreshDerivedData',{recordType:'workout'})).error,'EXERCISE_MANAGEMENT_DISABLED');
  });
  await gate('hosted_web_only_auth_canonical_and_tenant_isolation',async()=>{

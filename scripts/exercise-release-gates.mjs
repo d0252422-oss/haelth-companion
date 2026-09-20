@@ -14,7 +14,11 @@ export async function runExerciseReleaseGates(h){
   const catalog=()=>invoke(a,'getExerciseDatabase',{});
   const manage=async(id,operation,extra={})=>{const row=(await catalog()).find(e=>e.exerciseId===id);return invoke(a,'manageExercise',{exerciseId:id,operation,revision:row.revision,clientRequestId:randomUUID(),...extra});};
   const session=(id,date=day)=>({date,startTime:day+'T01:00:00Z',endTime:day+'T01:20:00Z',clientRequestId:randomUUID(),exercises:[{exerciseId:id,sets:[{weight:0,reps:10},{weight:10,reps:5}]}]});
-  await pg.admin`insert into public.manual_exercise_catalog values('custom-A',${A},'SYNTHETIC A 自訂','胸'),('unused-A',${A},'SYNTHETIC A 無引用','胸'),('custom-B',${B},'SYNTHETIC B 私有','背'),('race-A',${A},'SYNTHETIC 併發','腿')`;
+  await pg.admin`insert into public.manual_exercise_catalog(exercise_id,owner_user_id,exercise_name,muscle_group,body_part_id) values
+    ('custom-A',${A},'SYNTHETIC A 自訂','CHEST','system:chest'),
+    ('unused-A',${A},'SYNTHETIC A 無引用','CHEST','system:chest'),
+    ('custom-B',${B},'SYNTHETIC B 私有','BACK','system:back'),
+    ('race-A',${A},'SYNTHETIC 併發','LEGS','system:legs')`;
   await gate('default_handler_cors_auth_and_mapping',async()=>{
     const pre=await fetch(base+'/v1/engine/web',{method:'OPTIONS',headers:{origin:base,'access-control-request-method':'POST','access-control-request-headers':'content-type,authorization'}});
     assert.equal(pre.status,204);assert.equal(pre.headers.get('access-control-allow-origin'),base);assert.equal(pre.headers.get('access-control-allow-methods'),'POST, OPTIONS');
@@ -44,6 +48,15 @@ export async function runExerciseReleaseGates(h){
     let row=(await catalog()).find(e=>e.exerciseId==='custom-A');assert.equal(row.exerciseName,'SYNTHETIC A 新名稱');
     assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'rename',name:'stale',revision:0,clientRequestId:randomUUID()})).error,'STALE_REVISION');
     const records=(await invoke(a,'getWorkoutRecords',{date:day})).records;assert.ok(records.every(r=>r.exerciseName==='SYNTHETIC A 自訂'));assert.equal(records.reduce((s,r)=>s+r.totalVolume,0),50);
+    const legacyRecord=records[0];
+    await pg.admin`update public.manual_workout_sets
+      set body=body-'bodyPartId'-'bodyPartName'-'bodyPartKey'
+      where canonical_user_id=${A} and record_id=${legacyRecord.recordId}`;
+    await manage('custom-A','classify',{bodyPartId:'system:back'});
+    const preserved=(await invoke(a,'getWorkoutRecords',{date:day})).records.find(item=>item.recordId===legacyRecord.recordId);
+    assert.equal(preserved.bodyPartId,'system:chest');assert.equal(preserved.bodyPartName,'胸部');assert.equal(preserved.muscleGroup,'CHEST');
+    assert.equal((await catalog()).find(item=>item.exerciseId==='custom-A').bodyPartId,'system:back');
+    await manage('custom-A','classify',{bodyPartId:'system:chest'});
     await manage('global:barbell-back-squat','rename',{name:'<img src=x onerror=alert(1)> 個人別名'});
     assert.equal((await invoke(b,'getExerciseDatabase',{})).find(e=>e.exerciseId==='global:barbell-back-squat').exerciseName,'槓鈴深蹲');
     await manage('custom-A','archive');assert.equal((await http(a,'addWorkoutRecord',session('custom-A'))).error,'EXERCISE_ARCHIVED');
@@ -66,6 +79,55 @@ export async function runExerciseReleaseGates(h){
     report.exercise_security={read_role:'authenticated; NOSUPERUSER NOBYPASSRLS; not owner',write_role:'service_role BYPASSRLS with separately tested server canonical guard + FK owner trigger',raw_manual_workout_score_adapter:'NOT_CONNECTED_NO_JOB',template_store:'NOT_IMPLEMENTED_NO_EXISTING_REFERENCES'};
     record('Stable IDs, preserved snapshots, system personal alias, RLS/tenant guard, validation, replay and unchanged frozen scores');
   });
+  await gate('exercise_body_part_modes_duplicate_prevention_and_isolation',async()=>{
+    const parts=async cookie=>invoke(cookie,'getExerciseBodyParts',{}),create=async(cookie,name,input)=>invoke(cookie,'manageExercise',{operation:'create',name,clientRequestId:randomUUID(),...input});
+    const beforeCatalog=await catalog(),beforeParts=await parts(a),systemParts=beforeParts.filter(part=>part.source==='SYSTEM');
+    assert.equal(systemParts.length,11);assert.equal(new Set(systemParts.map(part=>part.bodyPartId)).size,11);
+    assert.equal(systemParts.filter(part=>part.displayName==='胸部').length,1);assert.equal(systemParts.filter(part=>part.displayName==='腿部').length,1);
+
+    const chestNames=['槓鈴臥推測試','啞鈴臥推測試','伏地挺身測試','上斜臥推測試','夾胸測試'],chestIds=[];
+    for(const name of chestNames){const result=await create(a,name,{bodyPartId:'system:chest'});chestIds.push(result.exerciseId);assert.equal(result.bodyPartId,'system:chest');}
+    assert.equal((await catalog()).length,beforeCatalog.length+5);
+    assert.equal((await parts(a)).length,beforeParts.length,'Mode A must not create a body-part row');
+
+    const wrist=await create(a,'腕彎舉測試',{newBodyPartName:'前臂'});
+    assert.equal(wrist.bodyPartSource,'USER');assert.equal(wrist.bodyPartReused,false);
+    const reverse=await create(a,'反向腕彎舉測試',{newBodyPartName:'  前臂  '});
+    assert.equal(reverse.bodyPartId,wrist.bodyPartId);assert.equal(reverse.bodyPartReused,true);
+    const calf=await create(a,'小腿訓練測試',{newBodyPartName:'小腿'});
+    assert.notEqual(calf.bodyPartId,'system:legs');
+    const partsAfter=await parts(a);
+    assert.equal(partsAfter.filter(part=>part.displayName==='前臂').length,1);
+    assert.equal(partsAfter.filter(part=>part.displayName==='小腿').length,1);
+    assert.equal(partsAfter.filter(part=>part.displayName==='腿部').length,1);
+    assert.equal((await http(a,'manageExercise',{operation:'create',name:'重複胸部測試',newBodyPartName:'胸部',clientRequestId:randomUUID()})).data?.bodyPartId,'system:chest');
+
+    const bParts=await parts(b);assert.equal(bParts.some(part=>part.bodyPartId===wrist.bodyPartId),false);
+    assert.equal((await http(b,'manageExercise',{operation:'create',name:'跨使用者偽造',bodyPartId:wrist.bodyPartId,clientRequestId:randomUUID()})).error,'BODY_PART_NOT_FOUND');
+    await assert.rejects(()=>pg.admin`insert into public.manual_exercise_body_parts(body_part_id,display_name,source,owner_user_id)
+      values('custom:00000000-0000-0000-0000-000000000002','胸部','USER',${A})`,/BODY_PART_DUPLICATE_VISIBLE_NAME/);
+    await assert.rejects(()=>pg.admin.begin(async tx=>{await tx.unsafe('set local role authenticated');await tx`select set_config('request.jwt.claim.sub',${subjects.A.auth},true)`;await tx`insert into public.manual_exercise_body_parts(body_part_id,display_name,source,owner_user_id) values('custom:00000000-0000-0000-0000-000000000001','偽造部位','USER',${A})`;}),e=>e.code==='42501');
+
+    let chest=(await catalog()).find(row=>row.exerciseId===chestIds[0]);
+    await invoke(a,'manageExercise',{exerciseId:chest.exerciseId,revision:chest.revision,operation:'classify',bodyPartId:wrist.bodyPartId,clientRequestId:randomUUID()});
+    chest=(await catalog()).find(row=>row.exerciseId===chest.exerciseId);assert.equal(chest.bodyPartId,wrist.bodyPartId);
+    assert.equal((await parts(a)).filter(part=>part.bodyPartId===wrist.bodyPartId).length,1);
+    let calfExercise=(await catalog()).find(row=>row.exerciseId===calf.exerciseId);
+    await invoke(a,'manageExercise',{exerciseId:calfExercise.exerciseId,revision:calfExercise.revision,operation:'classify',bodyPartId:'system:legs',clientRequestId:randomUUID()});
+    calfExercise=(await catalog()).find(row=>row.exerciseId===calf.exerciseId);
+    assert.equal(calfExercise.bodyPartId,'system:legs');
+    assert.equal((await parts(a)).some(part=>part.bodyPartId===calf.bodyPartId),false,'classifying the final exercise away removes an unreferenced custom body part');
+
+    const deleteOne=async id=>{const row=(await catalog()).find(item=>item.exerciseId===id);return invoke(a,'manageExercise',{exerciseId:id,revision:row.revision,operation:'delete',clientRequestId:randomUUID()});};
+    await deleteOne(chest.exerciseId);await deleteOne(wrist.exerciseId);
+    assert.equal((await parts(a)).some(part=>part.bodyPartId===wrist.bodyPartId),true,'body part remains while another exercise references it');
+    await deleteOne(reverse.exerciseId);
+    assert.equal((await parts(a)).some(part=>part.bodyPartId===wrist.bodyPartId),false,'unused custom body part is removed transactionally');
+    assert.equal((await pg.admin`select count(*)::int as n from public.manual_exercise_catalog c left join public.manual_exercise_body_parts b using(body_part_id) where b.body_part_id is null`)[0].n,0);
+    assert.equal((await pg.admin`select count(*)::int as n from public.manual_exercise_body_parts b where source='USER' and not exists(select 1 from public.manual_exercise_catalog c where c.body_part_id=b.body_part_id)`)[0].n,0);
+    report.body_part_model={system_count:11,mode_a_existing:'PASS',mode_b_create_or_reuse:'PASS',normalized_duplicate:'PASS',calf_distinct_from_legs:'PASS',cross_user:'PASS',unused_custom_cleanup:'PASS'};
+    record('Stable body-part IDs: existing selection creates no taxonomy row; owner-scoped create/reuse, normalization, A/B denial, reclassification and safe unused cleanup');
+  });
   await gate('exercise_concurrency_lock_rollback_and_delete',async()=>{
     const before=(await invoke(a,'getWorkoutRecords',{})).records.length;
     const bad=session('custom-A');bad.exercises[0].sets.push({weight:0,reps:-1});assert.equal((await http(a,'addWorkoutRecord',bad)).ok,false);assert.equal((await invoke(a,'getWorkoutRecords',{})).records.length,before);assert.equal((await invoke(a,'getTrainingWriteStatus',{clientRequestId:bad.clientRequestId})).exists,false);
@@ -81,7 +143,8 @@ export async function runExerciseReleaseGates(h){
     assert.equal((await pg.admin`select s.record_id from public.manual_workout_sets s left join public.manual_exercise_catalog c using(exercise_id) where c.exercise_id is null`).length,0);
     // Independent direct SQL FK race: holding a committed-reference insertion's key
     // lock blocks delete; after commit delete fails, never cascades to history.
-    await pg.admin`insert into public.manual_exercise_catalog values('fk-race',${A},'SYNTHETIC FK race','腿')`;
+    await pg.admin`insert into public.manual_exercise_catalog(exercise_id,owner_user_id,exercise_name,muscle_group,body_part_id)
+      values('fk-race',${A},'SYNTHETIC FK race','LEGS','system:legs')`;
     await pg.admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},'fk-race')`;
     let inserted,commit;const ready=new Promise(r=>inserted=r),finish=new Promise(r=>commit=r),rid=randomUUID();
     const sid=randomUUID(),validBody={source:'MANUAL_WEB',recordId:rid,sessionId:sid,exerciseId:'fk-race',exerciseName:'SYNTHETIC FK race',muscleGroup:'腿',date:day,weight:0,reps:1,totalSets:1,totalVolume:0,durationMinutes:1,revision:1};
@@ -135,7 +198,7 @@ export async function runExerciseReleaseGates(h){
   await gate('browser_workout_create_zero_response_loss_and_delete',async()=>{
     const {page:p,context}=await browserContext('A');setPage(p);await p.setViewportSize({width:1280,height:900});
     const date=shift(-2);await h.customRange(p,date,date);await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#manage-exercises').click();await p.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
-    await p.locator('#start-workout').click();await p.locator('#muscle-group-select').selectOption('LEGS');await p.locator('#exercise-select').selectOption('global:barbell-back-squat');await p.locator('#add-exercise').click();
+    await p.locator('#start-workout').click();await p.locator('#muscle-group-select').selectOption('system:legs');await p.locator('#exercise-select').selectOption('global:barbell-back-squat');await p.locator('#add-exercise').click();
     await p.locator('#workout-date').fill(date);await p.locator('.exercise-weight').fill('0');await p.locator('.exercise-reps').fill('10');await p.locator('.complete-set').click();let lost=false,receiptLost=false;const submissions=[];
     await context.route(base+'/v1/engine/web',async route=>{const input=route.request().postDataJSON();if(input.action==='addWorkoutRecord'){submissions.push(input);if(!lost){lost=true;const real=await route.fetch();assert.equal((await real.json()).ok,true);await route.abort('failed');return;}}if(lost&&!receiptLost&&input.action==='getTrainingWriteStatus'){receiptLost=true;await route.abort('failed');return;}await route.continue();});
     await p.locator('#finish-workout').click({clickCount:2});await until(async()=>receiptLost&&await p.locator('#finish-workout').isEnabled(),'unresolved-draft-retry');
@@ -216,24 +279,33 @@ export async function runExerciseReleaseGates(h){
   await gate('browser_custom_exercise_create_category_duplicate_recovery',async()=>{
     const {context,page:p}=await browserContext('WEB_A');setPage(p);await p.setViewportSize({width:1280,height:900});await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#manage-exercises').click();
     await p.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
+    const modeAPartsBefore=(await invoke(a,'getExerciseBodyParts',{})).length,modeAName='SYNTHETIC UI 胸部 Mode A';
+    await p.locator('#exercise-create-name').fill(modeAName);await p.locator('#exercise-create-body-part').selectOption('system:chest');await p.locator('#exercise-create-submit').click();
+    const modeARow=await until(async()=>{const row=(await catalog()).find(item=>item.exerciseName===modeAName);return row||false;},'mode-a-ui-create');
+    assert.equal(modeARow.bodyPartId,'system:chest');assert.equal((await invoke(a,'getExerciseBodyParts',{})).length,modeAPartsBefore);
     const name='SYNTHETIC <b>duplicate</b>',created=[];let lost=false;
     await context.route(base+'/v1/engine/web',async route=>{
       const request=route.request().postDataJSON();if(!lost&&request.action==='manageExercise'&&request.payload.operation==='create'){lost=true;const actual=await route.fetch(),body=await actual.json();assert.equal(body.ok,true);created.push(body.data.exerciseId);await route.abort('failed');return;}await route.continue();
     });
-    await p.locator('#exercise-create-name').fill(name);await p.locator('#exercise-create-category').fill('腿');await p.locator('#exercise-create-submit').click({clickCount:2});
+    await p.locator('#exercise-create-name').fill(name);await p.locator('#exercise-create-body-part').selectOption('__create_body_part__');await p.locator('#exercise-create-body-part-name').fill('前臂');await p.locator('#exercise-create-submit').click({clickCount:2});
     await until(async()=>created.length&&await p.locator(`article[data-exercise-id="${created[0]}"]`).count(),'custom-create-recovered');
     assert.equal((await catalog()).filter(r=>r.exerciseName===name).length,1);assert.equal(lost,true);
-    const duplicate=await http(a,'manageExercise',{operation:'create',name:'  synthetic   <b>duplicate</b>  ',muscleGroup:'背',clientRequestId:randomUUID()});
+    const createdRow=(await catalog()).find(r=>r.exerciseId===created[0]);assert.equal(createdRow.bodyPartName,'前臂');
+    await p.locator('#exercise-create-name').fill('SYNTHETIC 前臂第二動作');await p.locator('#exercise-create-body-part').selectOption('__create_body_part__');await p.locator('#exercise-create-body-part-name').fill(' 前臂 ');await p.locator('#exercise-create-submit').click();
+    await p.locator('#exercise-manager-status').filter({hasText:'此訓練部位已存在'}).waitFor();
+    assert.equal((await invoke(a,'getExerciseBodyParts',{})).filter(part=>part.displayName==='前臂').length,1);
+    const duplicate=await http(a,'manageExercise',{operation:'create',name:'  synthetic   <b>duplicate</b>  ',bodyPartId:'system:back',clientRequestId:randomUUID()});
     assert.equal(duplicate.error,'DUPLICATE_CUSTOM_EXERCISE_NAME');assert.equal((await catalog()).filter(r=>r.exerciseName===name).length,1);
-    const entry=p.locator(`article[data-exercise-id="${created[0]}"]`);await entry.locator('.exercise-manage-category').fill('全身');await entry.locator('[data-operation="classify"]').click();
-    await until(async()=>(await catalog()).find(r=>r.exerciseId===created[0]).muscleGroup==='全身','category-sql-readback');
+    const entry=p.locator(`article[data-exercise-id="${created[0]}"]`);await entry.locator('.exercise-manage-category').selectOption('system:full-body');await entry.locator('[data-operation="classify"]').click();
+    await until(async()=>(await catalog()).find(r=>r.exerciseId===created[0]).bodyPartId==='system:full-body','category-sql-readback');
     assert.equal(await p.locator('#exercise-manager-list b').count(),0,'names are literal text, not HTML');
     const {page:fresh}=await browserContext('WEB_A');setPage(fresh);await fresh.setViewportSize({width:1280,height:900});await fresh.locator('.side-btn[data-screen="training-screen"]').click();await fresh.locator('#manage-exercises').click();
     await fresh.locator(`article[data-exercise-id="${created[0]}"] .exercise-manage-category`).filter({visible:true}).waitFor();
-    assert.equal(await fresh.locator(`article[data-exercise-id="${created[0]}"] .exercise-manage-category`).inputValue(),'全身');
+    assert.equal(await fresh.locator(`article[data-exercise-id="${created[0]}"] .exercise-manage-category`).inputValue(),'system:full-body');
+    await fresh.locator('#start-workout').click();const labels=await fresh.locator('#muscle-group-select option').allTextContents();assert.equal(labels.filter(label=>label==='胸部').length,1);assert.equal(labels.filter(label=>label==='腿部').length,1);await fresh.locator('#back-training').click();
     assert.match(await fresh.locator('#technical-provider-name').innerText(),/PostgreSQL/);assert.match(await fresh.locator('#technical-provider-updated').innerText(),/最近請求成功/);
     const {page:other}=await browserContext('WEB_B');setPage(other);await other.setViewportSize({width:1280,height:900});await other.locator('.side-btn[data-screen="training-screen"]').click();await other.locator('#manage-exercises').click();await other.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
-    assert.equal(await other.locator(`article[data-exercise-id="${created[0]}"]`).count(),0);
-    record('Original manager custom create lost-response/double-submit recovery, normalized same-owner duplicate rejection, category SQL read-back and fresh-context A/B isolation');
+    assert.equal(await other.locator(`article[data-exercise-id="${created[0]}"]`).count(),0);assert.equal(await other.locator(`#exercise-create-body-part option[value="${createdRow.bodyPartId}"]`).count(),0);
+    record('Manager Mode A existing selection and Mode B create/lost-response recovery, normalized reuse, stable-ID classify/read-back, unique labels and fresh-context A/B isolation');
   });
 }

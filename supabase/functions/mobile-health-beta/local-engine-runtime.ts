@@ -651,9 +651,10 @@ export class LocalEngineRuntime {
       if(!accessBootstrap.has(action)&&!access.isAllowed)throw Error(access.reason);
       let data: any;
       if(action==='getAccessState')data=access;
-      else if (["getExerciseDatabase", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
+      else if (["getExerciseDatabase", "getExerciseBodyParts", "getWorkoutRecords", "manageExercise", "addWorkoutRecord", "updateWorkoutSet", "deleteWorkoutSet", "getTrainingWriteStatus"].includes(action)) {
         if (!this.exerciseEnabled) throw Error("EXERCISE_MANAGEMENT_DISABLED");
         if (action === "getExerciseDatabase") data = await this.manualTraining.catalog(identity);
+        else if (action === "getExerciseBodyParts") data = await this.manualTraining.bodyParts(identity);
         else if (action === "getWorkoutRecords") data = await this.manualTraining.workouts(identity, payload);
         else if (action === "getTrainingWriteStatus") data = await this.manualTraining.status(identity, payload);
         else data = await this.manualTraining.write(identity, action, payload);

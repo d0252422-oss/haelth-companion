@@ -54,14 +54,16 @@ try{
 
   const customA=randomUUID(),customB=randomUUID();
   await pg.admin.begin(async tx=>{await tx.unsafe('set local role service_role');
-    await tx`insert into public.manual_exercise_catalog values(${customA},${A},'A-private-exercise','OTHER'),(${customB},${B},'A-private-exercise','OTHER')`;
+    await tx`insert into public.manual_exercise_catalog(exercise_id,owner_user_id,exercise_name,muscle_group,body_part_id)
+      values(${customA},${A},'A-private-exercise','OTHER','system:other'),(${customB},${B},'A-private-exercise','OTHER','system:other')`;
     await tx`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},${customA}),(${B},${customB})`;
   });
   const customVisibleA=await visible(subjects.A.auth,A),customVisibleB=await visible(subjects.B.auth,B);
   assert.ok(customVisibleA.some(x=>x.exercise_id===customA));assert.ok(!customVisibleA.some(x=>x.exercise_id===customB));
   assert.ok(customVisibleB.some(x=>x.exercise_id===customB));assert.ok(!customVisibleB.some(x=>x.exercise_id===customA));
   let sameOwnerDuplicateDenied=false,crossOwnerPreferenceDenied=false;
-  try{await pg.admin`insert into public.manual_exercise_catalog values(${randomUUID()},${A},'  a-private-exercise  ','OTHER')`;}catch(error){sameOwnerDuplicateDenied=error.code==='23505';}
+  try{await pg.admin`insert into public.manual_exercise_catalog(exercise_id,owner_user_id,exercise_name,muscle_group,body_part_id)
+    values(${randomUUID()},${A},'  a-private-exercise  ','OTHER','system:other')`;}catch(error){sameOwnerDuplicateDenied=error.code==='23505';}
   try{await pg.admin.begin(async tx=>{await tx.unsafe('set local role service_role');await tx`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${B},${customA})`;});}catch(error){crossOwnerPreferenceDenied=String(error.message).includes('EXERCISE_OWNER_MISMATCH');}
   assert.equal(sameOwnerDuplicateDenied,true);assert.equal(crossOwnerPreferenceDenied,true);
   report.gates.custom_isolation_and_duplicate_policy='PASS';

@@ -36,7 +36,8 @@ for(const isolation of ['read committed','repeatable read','serializable'])for(c
  const events:any[]=[],shared=order.includes('archive'),id=(shared?'global:barrier-':'barrier-')+crypto.randomUUID(),name=order+'_'+isolation.replaceAll(' ','_'),started=new Date().toISOString();
  let one:any,two:any,first:Promise<any>|undefined,second:Promise<any>|undefined;
  try{
-   await admin`insert into public.manual_exercise_catalog values(${id},${shared?null:A},${'SYNTHETIC barrier '+id},${shared?'LEGS':'腿'})`;await admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},${id}),(${shared?B:A},${id}) on conflict do nothing`;
+   await admin`insert into public.manual_exercise_catalog(exercise_id,owner_user_id,exercise_name,muscle_group,body_part_id)
+     values(${id},${shared?null:A},${'SYNTHETIC barrier '+id},'LEGS','system:legs')`;await admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},${id}),(${shared?B:A},${id}) on conflict do nothing`;
    one=await actor(isolation,events,'first',true);two=await actor(isolation,events,'second');
    const renaming=order.includes('rename');
    const renamed='SYNTHETIC new '+id,reference=create(id),management={exerciseId:id,operation:renaming?'rename':shared?'archive':'delete',...(renaming?{name:renamed}:{}),revision:0,clientRequestId:crypto.randomUUID()},refFirst=order.startsWith('reference');
