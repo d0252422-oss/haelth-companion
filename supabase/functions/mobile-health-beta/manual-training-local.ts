@@ -64,7 +64,7 @@ export class ManualTrainingLocalStore {
     const {start,end}=localReadRange(input);
     return await this.sql.begin(async(tx:any)=>{
       await prepareManualRead(tx,identity);
-      const rows=await tx`select s.body,s.revision,snapshot_part.body_part_id,
+      const rows=await tx`select s.body,s.revision,s.local_date::text as local_training_date,snapshot_part.body_part_id,
         snapshot_part.display_name as body_part_display_name,
         snapshot_part.canonical_key as body_part_canonical_key
         from public.manual_workout_sets s
@@ -92,17 +92,18 @@ export class ManualTrainingLocalStore {
         where s.canonical_user_id=${identity.canonical}
         and not deleted and local_date between ${start}::date and ${end}::date order by local_date,record_id limit 5001`;
       if(rows.length>5000)throw Error('READ_BOUND_EXCEEDED');
-      const records=rows.map((r:Json)=>({...r.body,bodyPartId:r.body.bodyPartId??r.body_part_id,
+      const records=rows.map((r:Json)=>({...r.body,date:r.local_training_date,bodyPartId:r.body.bodyPartId??r.body_part_id,
         bodyPartName:r.body.bodyPartName??r.body_part_display_name,
         bodyPartKey:r.body.bodyPartKey??r.body_part_canonical_key??null,revision:Number(r.revision)}));
-      const sessions=new Map<string,number>(),muscles=new Map<string,Json>();
+      const sessions=new Map<string,number>(),trainingDates=new Set<string>(),muscles=new Map<string,Json>();
       for(const r of records){
+        trainingDates.add(r.date);
         sessions.set(r.sessionId,Math.max(sessions.get(r.sessionId)||0,r.durationMinutes));
         const key=r.bodyPartId||r.muscleGroup,current=muscles.get(key);
         muscles.set(key,{bodyPartId:r.bodyPartId,bodyPartName:r.bodyPartName,muscleGroup:r.bodyPartKey??r.muscleGroup,totalSets:(current?.totalSets||0)+1});
       }
       return {records,totalSets:records.length,totalVolume:records.length?records.reduce((n:number,r:Json)=>n+r.totalVolume,0):null,
-        sessionCount:sessions.size,durationMinutes:records.length?[...sessions.values()].reduce((a,b)=>a+b,0):null,
+        trainingDays:trainingDates.size,sessionCount:sessions.size,durationMinutes:records.length?[...sessions.values()].reduce((a,b)=>a+b,0):null,
         muscleDistribution:[...muscles.values()],...analysis};
     });
   }

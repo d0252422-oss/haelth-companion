@@ -47,7 +47,7 @@ export async function runExerciseReleaseGates(h){
     await manage('custom-A','rename',{name:'SYNTHETIC A 新名稱'});
     let row=(await catalog()).find(e=>e.exerciseId==='custom-A');assert.equal(row.exerciseName,'SYNTHETIC A 新名稱');
     assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'rename',name:'stale',revision:0,clientRequestId:randomUUID()})).error,'STALE_REVISION');
-    const records=(await invoke(a,'getWorkoutRecords',{date:day})).records;assert.ok(records.every(r=>r.exerciseName==='SYNTHETIC A 自訂'));assert.equal(records.reduce((s,r)=>s+r.totalVolume,0),50);
+    const sameDay=await invoke(a,'getWorkoutRecords',{date:day}),records=sameDay.records;assert.equal(sameDay.trainingDays,1);assert.ok(records.every(r=>r.exerciseName==='SYNTHETIC A 自訂'));assert.equal(records.reduce((s,r)=>s+r.totalVolume,0),50);
     const legacyRecord=records[0];
     await pg.admin`update public.manual_workout_sets
       set body=body-'bodyPartId'-'bodyPartName'-'bodyPartKey'
@@ -65,7 +65,12 @@ export async function runExerciseReleaseGates(h){
     const old=records[0],updated=await invoke(a,'updateWorkoutSet',{recordId:old.recordId,revision:old.revision,date:shift(-1),exerciseId:'custom-A',weight:15,reps:2,clientRequestId:randomUUID()});
     assert.equal(updated.record.exerciseName,old.exerciseName);assert.equal(updated.record.exerciseId,old.exerciseId);assert.deepEqual(updated.invalidatedDates,[day,shift(-1)]);
     assert.equal((await invoke(a,'getWorkoutRecords',{date:day})).records.length,1);assert.equal((await invoke(a,'getWorkoutRecords',{date:shift(-1)})).records.length,1);
-    const across=await invoke(a,'getWorkoutRecords',{startDate:shift(-1),endDate:day});assert.equal(across.sessionCount,1);assert.equal(across.durationMinutes,20);
+    await pg.admin`update public.manual_workout_sets set body=jsonb_set(body,'{date}',to_jsonb(${day}::text),true)
+      where canonical_user_id=${A} and record_id=${updated.record.recordId}`;
+    const canonicalDateRead=await invoke(a,'getWorkoutRecords',{date:shift(-1)});
+    assert.equal(canonicalDateRead.records.find(item=>item.recordId===updated.record.recordId)?.date,shift(-1));assert.equal(canonicalDateRead.trainingDays,1);
+    assert.equal((await invoke(a,'getWorkoutRecords',{date:day})).records.some(item=>item.recordId===updated.record.recordId),false);
+    const across=await invoke(a,'getWorkoutRecords',{startDate:shift(-1),endDate:day});assert.equal(across.sessionCount,1);assert.equal(across.durationMinutes,20);assert.equal(across.trainingDays,2);
     assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'delete',revision:(await catalog()).find(e=>e.exerciseId==='custom-A').revision,clientRequestId:randomUUID()})).error,'EXERCISE_REFERENCED');
     await manage('custom-A','restore');
     for(const name of ['', '   ', 'x'.repeat(81), 'unsafe\u202ename'])assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'rename',name,revision:(await catalog()).find(e=>e.exerciseId==='custom-A').revision,clientRequestId:randomUUID()})).error,'INVALID_EXERCISE_NAME');

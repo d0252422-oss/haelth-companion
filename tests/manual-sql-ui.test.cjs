@@ -347,6 +347,67 @@ test('split-session local daily totals count duration once, preserve zero and st
   const ctx=harness(()=>{}),rows=ctx.localTrainingDailyRows([{date:'2026-09-13',sessionId:'s',totalSets:1,totalVolume:0,durationMinutes:20},{date:'2026-09-12',sessionId:'s',totalSets:1,totalVolume:10,durationMinutes:20}]);
   assert.deepEqual(plain(rows),[{date:'2026-09-12',trainingSets:1,trainingVolume:10,trainingDuration:20},{date:'2026-09-13',trainingSets:1,trainingVolume:0,trainingDuration:0}]);
 });
+test('training summary counts distinct canonical local dates and averages sets per training day',()=>{
+  const ctx=harness(()=>{}),rows=[];
+  for(const [date,count] of [['2026-09-14',10],['2026-09-16',10],['2026-09-17',10],['2026-09-19',8]]){
+    for(let i=0;i<count;i++)rows.push({date,sessionId:`${date}-${i}`,totalSets:1,totalVolume:10});
+  }
+  assert.deepEqual(plain(ctx.localTrainingSummary(rows)),{totalSets:38,totalVolume:380,trainingDays:4,averageSetsPerTrainingDay:9.5});
+});
+test('training days ignore row, session and timestamp multiplicity on the same canonical date',()=>{
+  const ctx=harness(()=>{}),sameDate=Array.from({length:10},(_,i)=>({date:'2026-09-20',sessionId:`session-${i}`,recordedAt:`2026-09-20T${String(i+8).padStart(2,'0')}:00:00+08:00`,totalSets:1,totalVolume:0}));
+  assert.deepEqual(plain(ctx.localTrainingSummary(sameDate)),{totalSets:10,totalVolume:0,trainingDays:1,averageSetsPerTrainingDay:10});
+  const multipleTimes=[
+    {date:'2026-09-20',recordedAt:'2026-09-20T08:00:00+08:00',totalSets:1},
+    {date:'2026-09-20',recordedAt:'2026-09-20T12:00:00+08:00',totalSets:1},
+    {date:'2026-09-20',recordedAt:'2026-09-20T18:00:00+08:00',totalSets:1},
+  ];
+  assert.equal(ctx.localTrainingSummary(multipleTimes).trainingDays,1);
+  assert.equal(ctx.localTrainingSummary([...multipleTimes,{date:'2026-09-21',recordedAt:'2026-09-20T16:30:00Z',totalSets:1}]).trainingDays,2);
+});
+test('training days use canonical local date instead of UTC timestamp boundaries',()=>{
+  const ctx=harness(()=>{}),sameLocalDate=[
+    {date:'2026-09-20',recordedAt:'2026-09-19T16:30:00Z',totalSets:1},
+    {date:'2026-09-20',recordedAt:'2026-09-20T15:30:00Z',totalSets:1},
+  ];
+  assert.equal(ctx.localTrainingSummary(sameLocalDate).trainingDays,1);
+  const localBoundary=[
+    {date:'2026-09-19',recordedAt:'2026-09-19T15:30:00Z',totalSets:1},
+    {date:'2026-09-20',recordedAt:'2026-09-19T16:30:00Z',totalSets:1},
+  ];
+  assert.equal(ctx.localTrainingSummary(localBoundary).trainingDays,2);
+});
+test('training summary zero state and 7d, 30d and custom responses remain coherent',()=>{
+  const ctx=harness(()=>{}),empty=ctx.localTrainingSummary([]);
+  assert.deepEqual(plain(empty),{totalSets:0,totalVolume:null,trainingDays:0,averageSetsPerTrainingDay:null});
+  const fixtures=[
+    {date:'2026-09-20',totalSets:1,totalVolume:10},
+    {date:'2026-09-14',totalSets:1,totalVolume:20},
+    {date:'2026-09-13',totalSets:1,totalVolume:30},
+    {date:'2026-08-22',totalSets:1,totalVolume:40},
+    {date:'2026-08-21',totalSets:1,totalVolume:50},
+  ];
+  const range=(start,end)=>ctx.localTrainingSummary(fixtures.filter(row=>row.date>=start&&row.date<=end));
+  assert.deepEqual(plain(range('2026-09-14','2026-09-20')),{totalSets:2,totalVolume:30,trainingDays:2,averageSetsPerTrainingDay:1});
+  assert.deepEqual(plain(range('2026-08-22','2026-09-20')),{totalSets:4,totalVolume:100,trainingDays:4,averageSetsPerTrainingDay:1});
+  assert.deepEqual(plain(range('2026-09-13','2026-09-14')),{totalSets:2,totalVolume:50,trainingDays:2,averageSetsPerTrainingDay:1});
+});
+test('training summary cards render new semantics including explicit zero days',()=>{
+  const ctx=harness(()=>{}),values={};
+  Object.assign(ctx,{manualSqlEnabled:()=>true,setValue:(id,value)=>values[id]=value,exerciseCategoryLabel:value=>value,donut(){},dailyTrainingRows:()=>[],renderTrendChart(){},display:value=>String(value),valid:value=>value!==null&&value!==undefined,escapeHtml:value=>String(value)});
+  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function normalizeWorkouts(')),ctx);
+  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function renderTraining(')),ctx);
+  ctx.renderTraining({records:[],totalSets:0,totalVolume:null,trainingDays:0,muscleDistribution:[]});
+  assert.equal(values['training-days'],'0 天');
+  assert.equal(values['training-average-sets'],'—');
+  const cards=html.slice(html.indexOf('<h2>訓練摘要</h2>'),html.indexOf('data-template-id="muscle-distribution-title"'));
+  assert.match(cards,/訓練天數/);assert.match(cards,/平均每日訓練組數/);assert.doesNotMatch(cards,/平均訓練強度|組\/h/);
+});
+test('workout response trainingDays, when present, must match its canonical record dates',()=>{
+  const ctx=harness(()=>{}),record={recordId:randomUUID(),revision:1,date:'2026-09-20'};
+  assert.doesNotThrow(()=>ctx.assertManualResponseShape('getWorkoutRecords',{records:[record],trainingDays:1}));
+  assert.throws(()=>ctx.assertManualResponseShape('getWorkoutRecords',{records:[record],trainingDays:2}),error=>error.code==='MALFORMED_RESPONSE');
+});
 test('dashboard cache isolates actual provider, canonical user and dedicated database namespace',()=>{
   const ctx=harness(()=>{});ctx.location={origin:'http://127.0.0.1:57841'};ctx.window={HEALTH_ENGINE_LOCAL_CONFIG:{databaseNamespace:'db-A'}};ctx.DASHBOARD_CACHE_SCHEMA='test';ctx.CONFIG={API_BASE_URL:'https://example.invalid'};
   for(const name of ['dashboardProviderNamespace','dashboardCacheKey'])vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function '+name+'(')),ctx);

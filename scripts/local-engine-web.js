@@ -90,7 +90,10 @@ function assertManualResponseShape(action,data){
   let valid=true;
   if(action==='getBodyRecords'||action==='getManualObservations')valid=rows(data,'recordId');
   if(action==='getNutritionRecords')valid=rows(data,'mealRecordId');
-  if(action==='getWorkoutRecords')valid=object(data)&&rows(data.records,'recordId');
+  if(action==='getWorkoutRecords'){
+    const dates=Array.isArray(data?.records)?new Set(data.records.map(row=>row.date).filter(date=>/^\d{4}-\d{2}-\d{2}$/.test(date))):new Set();
+    valid=object(data)&&rows(data.records,'recordId')&&(data.trainingDays===undefined||Number.isSafeInteger(data.trainingDays)&&data.trainingDays>=0&&data.trainingDays===dates.size);
+  }
   if(action==='getExerciseDatabase')valid=rows(data,'exerciseId');
   if(action==='getExerciseBodyParts')valid=Array.isArray(data)&&data.every(r=>object(r)&&typeof r.bodyPartId==='string'&&typeof r.displayName==='string'&&['SYSTEM','USER'].includes(r.source));
   if(['getSleepRecords','getActivityRecords'].includes(action)){
@@ -375,4 +378,13 @@ function localTrainingDailyRows(records){
   // A split session counts once, attributed to its earliest retained date in this range.
   for(const session of sessions.values())days.get(session.date).trainingDuration+=session.duration;
   return [...days.values()];
+}
+function localTrainingSummary(records,reportedTotalSets,reportedTotalVolume){
+  const rows=Array.isArray(records)?records:[],trainingDates=new Set(rows.map(row=>row?.date).filter(date=>/^\d{4}-\d{2}-\d{2}$/.test(date)));
+  const fallbackSets=rows.reduce((total,row)=>total+(Number.isFinite(Number(row?.totalSets))?Number(row.totalSets):1),0);
+  const fallbackVolume=rows.length?rows.reduce((total,row)=>total+(Number.isFinite(Number(row?.totalVolume))?Number(row.totalVolume):0),0):null;
+  const totalSets=Number.isFinite(Number(reportedTotalSets))?Number(reportedTotalSets):fallbackSets;
+  const totalVolume=reportedTotalVolume===null?null:Number.isFinite(Number(reportedTotalVolume))?Number(reportedTotalVolume):fallbackVolume;
+  const trainingDays=trainingDates.size;
+  return {totalSets,totalVolume,trainingDays,averageSetsPerTrainingDay:trainingDays>0?totalSets/trainingDays:null};
 }
