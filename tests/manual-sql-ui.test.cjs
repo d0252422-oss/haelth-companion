@@ -101,6 +101,9 @@ test('Quick Add presents eight compact items in canonical mobile order and route
  for(const icon of ['moon','footprints','flame'])assert.match(block,new RegExp(`data-lucide="${icon}"`));
  assert.match(html,/\.quick-options\{[^}]*repeat\(2,minmax\(0,1fr\)\)/);assert.match(html,/\.quick-option\{[^}]*min-height:64px/);assert.match(html,/@media\(max-width:430px\)\{\.quick-option\{[^}]*min-height:52px/);
  assert.match(html,/querySelectorAll\("\.quick-option\[data-action\]"\)/);
+ assert.match(html,/<section id="quick-sheet" data-ui-version="quick-add-v2">/);
+ assert.match(html,/const SHEET_HISTORY_KEY="healthCompanionSheet"/);
+ assert.match(html,/addEventListener\("popstate",\(\)=>\{const backdrop=document\.getElementById\("sheet-backdrop"\);if\(backdrop\.classList\.contains\("show"\)\)closeSheet\(\{fromHistory:true\}\);\}\)/);
 });
 test('records preference keys isolate provider and user without changing date range',()=>{
  const ctx=harness(()=>{}),saved=new Map();let provider='local-A';ctx.dashboardProviderNamespace=()=>provider;ctx.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};ctx.navigate=screen=>ctx.screen=screen;
