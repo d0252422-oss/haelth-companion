@@ -33,13 +33,13 @@ async function api(actor:any,action:string,payload:any={},useB=false){
 }
 const create=(exerciseId:string)=>({date:day,startTime:day+'T01:00:00Z',endTime:day+'T01:20:00Z',clientRequestId:crypto.randomUUID(),exercises:[{exerciseId,sets:[{weight:0,reps:10}]}]});
 for(const isolation of ['read committed','repeatable read','serializable'])for(const order of ['archive_reference','reference_archive','reference_delete','delete_reference','rename_reference','reference_rename']){
- const events:any[]=[],id='barrier-'+crypto.randomUUID(),name=order+'_'+isolation.replaceAll(' ','_'),started=new Date().toISOString();
+ const events:any[]=[],shared=order.includes('archive'),id=(shared?'global:barrier-':'barrier-')+crypto.randomUUID(),name=order+'_'+isolation.replaceAll(' ','_'),started=new Date().toISOString();
  let one:any,two:any,first:Promise<any>|undefined,second:Promise<any>|undefined;
  try{
-   const shared=order.includes('archive');await admin`insert into public.manual_exercise_catalog values(${id},${shared?null:A},'SYNTHETIC barrier','腿')`;await admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},${id}),(${shared?B:A},${id}) on conflict do nothing`;
+   await admin`insert into public.manual_exercise_catalog values(${id},${shared?null:A},${'SYNTHETIC barrier '+id},${shared?'LEGS':'腿'})`;await admin`insert into public.manual_exercise_preferences(canonical_user_id,exercise_id) values(${A},${id}),(${shared?B:A},${id}) on conflict do nothing`;
    one=await actor(isolation,events,'first',true);two=await actor(isolation,events,'second');
    const renaming=order.includes('rename');
-   const reference=create(id),management={exerciseId:id,operation:renaming?'rename':shared?'archive':'delete',...(renaming?{name:'SYNTHETIC new name'}:{}),revision:0,clientRequestId:crypto.randomUUID()},refFirst=order.startsWith('reference');
+   const renamed='SYNTHETIC new '+id,reference=create(id),management={exerciseId:id,operation:renaming?'rename':shared?'archive':'delete',...(renaming?{name:renamed}:{}),revision:0,clientRequestId:crypto.randomUUID()},refFirst=order.startsWith('reference');
    const firstAction=refFirst?'addWorkoutRecord':'manageExercise',secondAction=refFirst?'manageExercise':'addWorkoutRecord';
    const firstPayload=refFirst?reference:management,secondPayload=refFirst?management:reference;
    first=api(one,firstAction,firstPayload).then(r=>{events.push({event:'FIRST_COMMITTED_RESPONSE',ok:r.ok,at:performance.now()});return r;});
@@ -56,7 +56,7 @@ for(const isolation of ['read committed','repeatable read','serializable'])for(c
    else{assert.equal(secondResult.ok,false);assert.equal(secondResult.error,order==='reference_delete'?'EXERCISE_REFERENCED':order==='delete_reference'?'EXERCISE_NOT_FOUND':'EXERCISE_ARCHIVED');}
    const rows=await admin`select body,deleted from public.manual_workout_sets where canonical_user_id=${A} and exercise_id=${id}`;
    assert.equal(rows.length,refFirst||renaming?1:0);assert.equal((await admin`select s.record_id from public.manual_workout_sets s left join public.manual_exercise_preferences p using(canonical_user_id,exercise_id) where p.exercise_id is null`).length,0);
-   if(renaming){assert.equal(rows[0].body.exerciseId,id);assert.equal(rows[0].body.exerciseName,refFirst?'SYNTHETIC barrier':'SYNTHETIC new name');assert.equal(rows[0].body.totalVolume,0);}
+   if(renaming){assert.equal(rows[0].body.exerciseId,id);assert.equal(rows[0].body.exerciseName,refFirst?'SYNTHETIC barrier '+id:renamed);assert.equal(rows[0].body.totalVolume,0);}
    const receipt=await api(two,'getTrainingWriteStatus',{clientRequestId:secondPayload.clientRequestId});assert.equal(receipt.data.exists,order==='reference_archive'||renaming);
    const replay=await api(two,firstAction,firstPayload);assert.equal(replay.ok,true);assert.equal(replay.data.replayed,true);
    if(shared){

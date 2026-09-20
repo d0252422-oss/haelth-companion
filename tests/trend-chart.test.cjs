@@ -238,5 +238,9 @@ assert.doesNotMatch(exerciseSelect.innerHTML, /Disabled/);
 evaluate('renderExerciseOptions("Back")');
 assert.match(exerciseSelect.innerHTML, />Row</);
 assert.doesNotMatch(exerciseSelect.innerHTML, /Bench Press/);
+evaluate(`exerciseDatabase=[{exerciseId:"global:barbell-back-squat",exerciseName:"槓鈴深蹲",muscleGroup:"LEGS",active:true}]`);
+evaluate('renderMuscleGroupOptions()');
+assert.match(groupSelect.innerHTML, /value="LEGS">腿部</);
+assert.match(exerciseSelect.innerHTML, /槓鈴深蹲/);
 
 console.log('Trend chart unit tests: PASS');

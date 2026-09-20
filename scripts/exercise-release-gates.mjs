@@ -14,7 +14,7 @@ export async function runExerciseReleaseGates(h){
   const catalog=()=>invoke(a,'getExerciseDatabase',{});
   const manage=async(id,operation,extra={})=>{const row=(await catalog()).find(e=>e.exerciseId===id);return invoke(a,'manageExercise',{exerciseId:id,operation,revision:row.revision,clientRequestId:randomUUID(),...extra});};
   const session=(id,date=day)=>({date,startTime:day+'T01:00:00Z',endTime:day+'T01:20:00Z',clientRequestId:randomUUID(),exercises:[{exerciseId:id,sets:[{weight:0,reps:10},{weight:10,reps:5}]}]});
-  await pg.admin`insert into public.manual_exercise_catalog values('system-squat',null,'SYNTHETIC 系統深蹲','腿'),('custom-A',${A},'SYNTHETIC A 自訂','胸'),('unused-A',${A},'SYNTHETIC A 無引用','胸'),('custom-B',${B},'SYNTHETIC B 私有','背'),('race-A',${A},'SYNTHETIC 併發','腿')`;
+  await pg.admin`insert into public.manual_exercise_catalog values('custom-A',${A},'SYNTHETIC A 自訂','胸'),('unused-A',${A},'SYNTHETIC A 無引用','胸'),('custom-B',${B},'SYNTHETIC B 私有','背'),('race-A',${A},'SYNTHETIC 併發','腿')`;
   await gate('default_handler_cors_auth_and_mapping',async()=>{
     const pre=await fetch(base+'/v1/engine/web',{method:'OPTIONS',headers:{origin:base,'access-control-request-method':'POST','access-control-request-headers':'content-type,authorization'}});
     assert.equal(pre.status,204);assert.equal(pre.headers.get('access-control-allow-origin'),base);assert.equal(pre.headers.get('access-control-allow-methods'),'POST, OPTIONS');
@@ -44,8 +44,8 @@ export async function runExerciseReleaseGates(h){
     let row=(await catalog()).find(e=>e.exerciseId==='custom-A');assert.equal(row.exerciseName,'SYNTHETIC A 新名稱');
     assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'rename',name:'stale',revision:0,clientRequestId:randomUUID()})).error,'STALE_REVISION');
     const records=(await invoke(a,'getWorkoutRecords',{date:day})).records;assert.ok(records.every(r=>r.exerciseName==='SYNTHETIC A 自訂'));assert.equal(records.reduce((s,r)=>s+r.totalVolume,0),50);
-    await manage('system-squat','rename',{name:'<img src=x onerror=alert(1)> 個人別名'});
-    assert.equal((await invoke(b,'getExerciseDatabase',{})).find(e=>e.exerciseId==='system-squat').exerciseName,'SYNTHETIC 系統深蹲');
+    await manage('global:barbell-back-squat','rename',{name:'<img src=x onerror=alert(1)> 個人別名'});
+    assert.equal((await invoke(b,'getExerciseDatabase',{})).find(e=>e.exerciseId==='global:barbell-back-squat').exerciseName,'槓鈴深蹲');
     await manage('custom-A','archive');assert.equal((await http(a,'addWorkoutRecord',session('custom-A'))).error,'EXERCISE_ARCHIVED');
     await assert.rejects(()=>pg.admin.begin(async tx=>{await tx.unsafe('set local role service_role');await tx`update public.manual_exercise_catalog set owner_user_id=${B} where exercise_id='custom-A'`;}),e=>e.code==='42501');
     await assert.rejects(()=>pg.admin.begin(async tx=>{await tx.unsafe('set local role service_role');await tx`insert into public.manual_workout_sets(canonical_user_id,record_id,exercise_id,session_id,local_date,revision,body) values(${A},${randomUUID()},'custom-A',${randomUUID()},${day},1,${tx.json({source:'MANUAL_WEB'})})`;}),/EXERCISE_ARCHIVED/);
@@ -108,7 +108,7 @@ export async function runExerciseReleaseGates(h){
     const training=async()=>{await p.setViewportSize({width:1280,height:900});await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#manage-exercises').click();await p.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();};
     await training();
     const item=id=>p.locator(`#exercise-manager-list article[data-exercise-id="${id}"]`);
-    assert.equal(await item('custom-B').count(),0);assert.equal(await item('system-squat').locator('img').count(),0);
+    assert.equal(await item('custom-B').count(),0);assert.equal(await item('global:barbell-back-squat').locator('img').count(),0);
     let lost=false;
     await context.route(base+'/v1/engine/web',async route=>{const input=route.request().postDataJSON();if(!lost&&input.action==='manageExercise'&&input.payload.exerciseId==='custom-A'&&input.payload.operation==='rename'){lost=true;const response=await route.fetch();assert.equal((await response.json()).ok,true);await route.abort('failed');return;}await route.continue();});
     await item('custom-A').locator('.exercise-manage-name').fill('SYNTHETIC Browser 改名');await item('custom-A').locator('[data-operation="rename"]').click({clickCount:2});
@@ -129,13 +129,13 @@ export async function runExerciseReleaseGates(h){
     await p.screenshot({path:path.join(evidence,'exercise-manager-history-preserved.png'),fullPage:true});
     ({page:p}=await browserContext('A'));setPage(p);await training();assert.equal(await item('custom-A').locator('.exercise-manage-name').inputValue(),'SYNTHETIC Browser 改名');assert.equal(await item('unused-A').count(),0);
     const keys=await p.evaluate(()=>{const before=dashboardCacheKey('2026-09-01','2026-09-02');const original=window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace;window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='different-synthetic-db';const after=dashboardCacheKey('2026-09-01','2026-09-02');window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace=original;return {before,after};});assert.notEqual(keys.before,keys.after);
-    ({page:p}=await browserContext('B'));setPage(p);await training();assert.equal(await item('custom-A').count(),0);assert.equal(await item('system-squat').locator('.exercise-manage-name').inputValue(),'SYNTHETIC 系統深蹲');
+    ({page:p}=await browserContext('B'));setPage(p);await training();assert.equal(await item('custom-A').count(),0);assert.equal(await item('global:barbell-back-squat').locator('.exercise-manage-name').inputValue(),'槓鈴深蹲');
     record('Real browser rename/recovered lost response/archive/archived history edit/delete cancel+accept/restore/new context/B isolation; environment cache namespace differs');
   });
   await gate('browser_workout_create_zero_response_loss_and_delete',async()=>{
     const {page:p,context}=await browserContext('A');setPage(p);await p.setViewportSize({width:1280,height:900});
     const date=shift(-2);await h.customRange(p,date,date);await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#manage-exercises').click();await p.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
-    await p.locator('#start-workout').click();await p.locator('#muscle-group-select').selectOption('腿');await p.locator('#exercise-select').selectOption('system-squat');await p.locator('#add-exercise').click();
+    await p.locator('#start-workout').click();await p.locator('#muscle-group-select').selectOption('LEGS');await p.locator('#exercise-select').selectOption('global:barbell-back-squat');await p.locator('#add-exercise').click();
     await p.locator('#workout-date').fill(date);await p.locator('.exercise-weight').fill('0');await p.locator('.exercise-reps').fill('10');await p.locator('.complete-set').click();let lost=false,receiptLost=false;const submissions=[];
     await context.route(base+'/v1/engine/web',async route=>{const input=route.request().postDataJSON();if(input.action==='addWorkoutRecord'){submissions.push(input);if(!lost){lost=true;const real=await route.fetch();assert.equal((await real.json()).ok,true);await route.abort('failed');return;}}if(lost&&!receiptLost&&input.action==='getTrainingWriteStatus'){receiptLost=true;await route.abort('failed');return;}await route.continue();});
     await p.locator('#finish-workout').click({clickCount:2});await until(async()=>receiptLost&&await p.locator('#finish-workout').isEnabled(),'unresolved-draft-retry');
@@ -149,7 +149,7 @@ export async function runExerciseReleaseGates(h){
     const id=saved.records[0].recordId;await p.locator(`.workout-edit-button[data-record-id="${id}"]`).click();
     const dialog=new Promise(resolve=>p.once('dialog',resolve)),click=p.locator('#edit-workout-delete').click();const native=await dialog;assert.equal(native.message(),'確定刪除這一組訓練紀錄？此動作無法復原。');await native.accept();await click;await p.locator('#workout-edit-form').waitFor({state:'hidden'});
     await until(async()=>(await invoke(a,'getWorkoutRecords',{date})).records.length===0,'workout-set-tombstone');
-    const retained=(await pg.admin`select deleted,body from public.manual_workout_sets where canonical_user_id=${A} and record_id=${id}`)[0];assert.equal(retained.deleted,true);assert.equal(retained.body.exerciseId,'system-squat');
+    const retained=(await pg.admin`select deleted,body from public.manual_workout_sets where canonical_user_id=${A} and record_id=${id}`)[0];assert.equal(retained.deleted,true);assert.equal(retained.body.exerciseId,'global:barbell-back-squat');
     await p.reload();await p.locator('.side-btn[data-screen="training-screen"]').click();await p.locator('#training-volume').filter({hasText:'—'}).waitFor();
     record('Existing workout form creates SQL once despite double click/lost response; zero volume displayed, individual set deletion preserves catalog and tombstone');
   });
@@ -223,8 +223,8 @@ export async function runExerciseReleaseGates(h){
     await p.locator('#exercise-create-name').fill(name);await p.locator('#exercise-create-category').fill('腿');await p.locator('#exercise-create-submit').click({clickCount:2});
     await until(async()=>created.length&&await p.locator(`article[data-exercise-id="${created[0]}"]`).count(),'custom-create-recovered');
     assert.equal((await catalog()).filter(r=>r.exerciseName===name).length,1);assert.equal(lost,true);
-    await p.locator('#exercise-create-name').fill(name);await p.locator('#exercise-create-category').fill('背');await p.locator('#exercise-create-submit').click();
-    await until(async()=>(await catalog()).filter(r=>r.exerciseName===name).length===2,'duplicate-names-distinct-ids');
+    const duplicate=await http(a,'manageExercise',{operation:'create',name:'  synthetic   <b>duplicate</b>  ',muscleGroup:'背',clientRequestId:randomUUID()});
+    assert.equal(duplicate.error,'DUPLICATE_CUSTOM_EXERCISE_NAME');assert.equal((await catalog()).filter(r=>r.exerciseName===name).length,1);
     const entry=p.locator(`article[data-exercise-id="${created[0]}"]`);await entry.locator('.exercise-manage-category').fill('全身');await entry.locator('[data-operation="classify"]').click();
     await until(async()=>(await catalog()).find(r=>r.exerciseId===created[0]).muscleGroup==='全身','category-sql-readback');
     assert.equal(await p.locator('#exercise-manager-list b').count(),0,'names are literal text, not HTML');
@@ -234,6 +234,6 @@ export async function runExerciseReleaseGates(h){
     assert.match(await fresh.locator('#technical-provider-name').innerText(),/PostgreSQL/);assert.match(await fresh.locator('#technical-provider-updated').innerText(),/最近請求成功/);
     const {page:other}=await browserContext('WEB_B');setPage(other);await other.setViewportSize({width:1280,height:900});await other.locator('.side-btn[data-screen="training-screen"]').click();await other.locator('#manage-exercises').click();await other.locator('#exercise-manager-status').filter({hasText:'SQL 已讀回'}).waitFor();
     assert.equal(await other.locator(`article[data-exercise-id="${created[0]}"]`).count(),0);
-    record('Original manager custom create lost-response/double-submit recovery, duplicate name stable IDs, category SQL read-back and fresh-context A/B isolation');
+    record('Original manager custom create lost-response/double-submit recovery, normalized same-owner duplicate rejection, category SQL read-back and fresh-context A/B isolation');
   });
 }

@@ -323,7 +323,7 @@ function renderLocalExerciseManager(entries){
     const row=document.createElement('article');row.dataset.exerciseId=exercise.exerciseId;row.style.marginBottom='16px';
     const label=document.createElement('label');label.textContent=(exercise.custom?'本人自訂動作':'共享動作的個人別名')+(exercise.archived?' · 已封存':'');
     const input=document.createElement('input');input.className='form-input exercise-manage-name';input.value=exercise.exerciseName;input.maxLength=80;input.setAttribute('aria-label','動作名稱');label.append(input);row.append(label);
-    const category=document.createElement('input');category.className='form-input exercise-manage-category';category.value=exercise.muscleGroup;category.maxLength=40;category.setAttribute('aria-label','訓練部位／分類');category.disabled=!exercise.custom;row.append(category);
+    const category=document.createElement('input');category.className='form-input exercise-manage-category';category.value=exercise.custom?exercise.muscleGroup:exerciseCategoryLabel(exercise.muscleGroup);category.maxLength=40;category.setAttribute('aria-label','訓練部位／分類');category.disabled=!exercise.custom;row.append(category);
     const status=document.createElement('p');status.className='exercise-manage-result';status.setAttribute('role','status');
     for(const [operation,title] of [['rename','儲存名稱'],...(exercise.custom?[['classify','儲存分類']]:[]),[exercise.archived?'restore':'archive',exercise.archived?'恢復動作':'封存／從我的清單隱藏'],...(exercise.custom?[['delete','永久刪除（僅無引用）']]:[])]){
       const button=document.createElement('button');button.type='button';button.className='secondary-button';button.dataset.operation=operation;button.textContent=title;

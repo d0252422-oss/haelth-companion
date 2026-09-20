@@ -7,8 +7,10 @@ const analysis = { analysisStatus: 'ANALYSIS_PENDING', analysisReason: 'MANUAL_W
 const sha = async (v: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(v))))).map(b=>b.toString(16).padStart(2,'0')).join('');
 export function exerciseName(v: unknown) {
   if (typeof v !== 'string') throw Error('INVALID_EXERCISE_NAME');
-  const name=v.trim().normalize('NFC');
-  if (!name || [...name].length>80 || /[\p{Cc}\p{Cf}]/u.test(name)) throw Error('INVALID_EXERCISE_NAME');
+  const normalized=v.trim().normalize('NFC');
+  if (!normalized || /[\p{Cc}\p{Cf}]/u.test(normalized)) throw Error('INVALID_EXERCISE_NAME');
+  const name=normalized.replace(/\s+/gu,' ');
+  if ([...name].length>80) throw Error('INVALID_EXERCISE_NAME');
   return name; // Output always rendered with textContent / escapeHtml, never interpreted as HTML.
 }
 export function exerciseCategory(v:unknown){
@@ -83,6 +85,8 @@ export class ManualTrainingLocalStore {
       if(action==='manageExercise'&&input.operation==='create') {
         const name=exerciseName(input.name),category=exerciseCategory(input.muscleGroup);
         if(input.exerciseId!==undefined||input.revision!==undefined)throw Error('SERVER_EXERCISE_ID_REQUIRED');
+        if((await tx`select 1 from public.manual_exercise_catalog where owner_user_id=${user}
+          and private.exercise_normalized_name(exercise_name)=private.exercise_normalized_name(${name}) limit 1`).length)throw Error('DUPLICATE_CUSTOM_EXERCISE_NAME');
         const count=(await tx`select count(*)::int as n from public.manual_exercise_catalog where owner_user_id is null or owner_user_id=${user}`)[0].n;
         if(count>=1000)throw Error('EXERCISE_CATALOG_BOUND_EXCEEDED');
         const id=crypto.randomUUID();
