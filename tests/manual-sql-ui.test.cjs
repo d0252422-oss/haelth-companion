@@ -87,6 +87,21 @@ test('sleep reload uses exact stable record ID and newer revision; missing row c
  await ctx.loadObservationDate(true);assert.equal(calls,1);assert.equal(ctx.document.getElementById('observation-value').value,420);assert.equal(vm.runInContext('observationEditor.record.revision',ctx),2);
  ctx.localEngineRequest=async()=>[];await ctx.loadObservationDate(true);assert.equal(ctx.document.getElementById('observation-save').disabled,true);assert.equal(ctx.document.getElementById('observation-delete').disabled,true);assert.match(ctx.document.getElementById('observation-status').textContent,/清單/);
 });
+test('manual sleep times auto-calculate cross-date duration and validate wake-date semantics',()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);ctx.document.getElementById('observation-status').setAttribute=()=>{};
+ ctx.document.getElementById('observation-domain').value='sleep';ctx.document.getElementById('observation-date').value='2026-09-20';
+ ctx.document.getElementById('observation-start').value='2026-09-19T23:30';ctx.document.getElementById('observation-end').value='2026-09-20T07:10';
+ assert.equal(ctx.syncSleepDuration(true),true);assert.equal(ctx.document.getElementById('observation-value').value,'460');assert.match(ctx.document.getElementById('observation-status').textContent,/7 小時 40 分鐘/);
+ ctx.document.getElementById('observation-end').value='2026-09-21T07:10';assert.equal(ctx.syncSleepDuration(false),false);assert.equal(ctx.document.getElementById('observation-value').value,'');
+});
+test('Quick Add presents eight compact items in canonical mobile order and routes observation buttons separately',()=>{
+ const block=html.match(/<div class="quick-options">([\s\S]*?)<\/div>\s*<\/section>/)[1];
+ const titles=[...block.matchAll(/<b[^>]*>([^<]+)<\/b>/g)].map(match=>match[1]);
+ assert.deepEqual(titles,['新增體重','新增體脂','新增訓練','新增飲食','新增睡眠','新增步數','新增總消耗','新增身體狀態']);
+ for(const icon of ['moon','footprints','flame'])assert.match(block,new RegExp(`data-lucide="${icon}"`));
+ assert.match(html,/\.quick-options\{[^}]*repeat\(2,minmax\(0,1fr\)\)/);assert.match(html,/\.quick-option\{[^}]*min-height:64px/);assert.match(html,/@media\(max-width:430px\)\{\.quick-option\{[^}]*min-height:52px/);
+ assert.match(html,/querySelectorAll\("\.quick-option\[data-action\]"\)/);
+});
 test('records preference keys isolate provider and user without changing date range',()=>{
  const ctx=harness(()=>{}),saved=new Map();let provider='local-A';ctx.dashboardProviderNamespace=()=>provider;ctx.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};ctx.navigate=screen=>ctx.screen=screen;
  const range=ctx.globalDateRange;ctx.selectRecordsView('training');assert.equal(ctx.selectedRecordsView(),'training');assert.equal(ctx.screen,'training-screen');assert.equal(ctx.globalDateRange,range);

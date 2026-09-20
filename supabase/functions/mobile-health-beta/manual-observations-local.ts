@@ -5,6 +5,7 @@ import {manualPrivilegedRead, prepareManualRead, prepareManualWrite} from './man
 import {observationReadState, observationPublishedAnalysis, projectManualObservationDay, timedSleepOverlaps} from './manual-observation-projection.ts';
 type Json = Record<string, any>;
 const domains = ['sleep', 'steps', 'total_energy'];
+const maximumValues: Record<string, number> = {sleep: 1440, steps: 200000, total_energy: 30000};
 const own = (o: Json, key: string) => Object.prototype.hasOwnProperty.call(o, key);
 const uuid = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const sha = async (input: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input))))).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -35,7 +36,7 @@ export function normalizeManualObservation(input: Json, previous?: Json, today =
   const timezone = pick('timezone', 'Asia/Taipei');
   if (timezone !== 'Asia/Taipei') throw Error('OBSERVATION_TIMEZONE_UNSUPPORTED');
   const value = pick('value');
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || domain === 'steps' && !Number.isSafeInteger(value) || domain === 'sleep' && value > 1440) throw Error('INVALID_OBSERVATION_VALUE');
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > maximumValues[domain] || domain === 'steps' && !Number.isSafeInteger(value)) throw Error('INVALID_OBSERVATION_VALUE');
   const coverage = pick('coverage', domain === 'sleep' ? 'SESSION' : null);
   if (domain === 'sleep' ? coverage !== 'SESSION' : !['PARTIAL_DAY', 'FULL_DAY'].includes(coverage)) throw Error('INVALID_OBSERVATION_COVERAGE');
   const cutoffTime = pick('cutoffTime');

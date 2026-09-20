@@ -34,8 +34,10 @@ Deno.test('manual observation zero is valid; blank/null/NaN/Infinity are not zer
 Deno.test('steps requires safe integer; total energy allows finite decimals', () => {
   throws(() => norm(base('steps', 12.5)), 'INVALID_OBSERVATION_VALUE');
   throws(() => norm(base('steps', Number.MAX_SAFE_INTEGER + 1)), 'INVALID_OBSERVATION_VALUE');
+  throws(() => norm(base('steps', 200001)), 'INVALID_OBSERVATION_VALUE');
   equal(norm(base('total_energy', 1234.5)).value, 1234.5);
   equal(norm(base('total_energy', 1234.5)).inputSemantics, 'DAILY_TOTAL_ENERGY_EXPENDITURE');
+  throws(() => norm(base('total_energy', 30000.1)), 'INVALID_OBSERVATION_VALUE');
 });
 Deno.test('omitted fields preserve prior observation; explicit null is distinct', () => {
   const old = norm({...base('steps', 6000), sourceNote: 'watch at cutoff', coverage: 'PARTIAL_DAY', cutoffTime: '12:30'});

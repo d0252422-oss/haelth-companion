@@ -1,10 +1,21 @@
 // The original quick-add and detail screens use the same SQL/auth provider.
 let observationEditor=null,observationReadSerial=0;
 const observationLabels={sleep:'睡眠',steps:'步數',total_energy:'總消耗熱量'};
+const observationLimits={sleep:1440,steps:200000,total_energy:30000};
 function resetManualObservationState(){observationEditor=null;observationReadSerial++;for(const id of ['sleep-manual-records','activity-manual-records'])document.getElementById(id)?.replaceChildren?.();}
 function observationStatus(text,error=false){const el=document.getElementById('observation-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
 function observationControls(locked){document.querySelectorAll('#observation-form input,#observation-form select,#observation-form textarea').forEach(el=>el.disabled=locked);}
 function observationCoverage(){const sleep=document.getElementById('observation-domain').value==='sleep',partial=document.getElementById('observation-coverage').value==='PARTIAL_DAY';document.getElementById('observation-cutoff').required=!sleep&&partial;document.getElementById('observation-cutoff-group').hidden=sleep||!partial;}
+function sleepIntervalMinutes(start,end){if(!start||!end)return null;const first=Date.parse(start+':00+08:00'),last=Date.parse(end+':00+08:00');return Number.isFinite(first)&&Number.isFinite(last)?Math.round((last-first)/60000):NaN;}
+function syncSleepDuration(announce=false){
+ const domain=document.getElementById('observation-domain').value,start=document.getElementById('observation-start'),end=document.getElementById('observation-end'),value=document.getElementById('observation-value');
+ start.setCustomValidity?.('');end.setCustomValidity?.('');if(domain!=='sleep')return true;
+ if(!start.value&&!end.value){if(announce)observationStatus('可直接填睡眠分鐘數；若填完整時段，系統會自動計算。');return true;}
+ if(!start.value||!end.value){const missing=start.value?end:start;missing.setCustomValidity?.('請同時填寫入睡與起床時間。');value.value='';if(announce)observationStatus('請同時填寫入睡與起床時間。',true);return false;}
+ const minutes=sleepIntervalMinutes(start.value,end.value),wakeDate=end.value.slice(0,10),date=document.getElementById('observation-date').value;
+ if(!Number.isFinite(minutes)||minutes<=0||minutes>observationLimits.sleep||wakeDate!==date){end.setCustomValidity?.('起床時間須晚於入睡時間、不超過 24 小時，且起床日須等於睡眠日期。');value.value='';if(announce)observationStatus('睡眠時段須大於 0、最多 24 小時，並以起床日記錄。',true);return false;}
+ value.value=String(minutes);if(announce)observationStatus(`已自動計算 ${Math.floor(minutes/60)} 小時 ${minutes%60} 分鐘；來源會標記為手動。`);return true;
+}
 async function openObservationEditor(domain,record=null){
  if(!manualSqlEnabled())return toast('手動睡眠／活動僅在 SQL 模式提供；未切換其他資料來源。');
  if(observationEditor?.pending){openSheet('observation-form');observationStatus('上一筆寫入狀態尚待確認，請重試同一筆要求。',true);return;}
@@ -13,15 +24,16 @@ async function openObservationEditor(domain,record=null){
  observationEditor={user:currentUser,epoch:localSessionEpoch,record,serial:++observationReadSerial,pending:null,loadedDate:record?.date||getLocalDateString(),loading:false};
  document.getElementById('observation-domain').value=domain;document.getElementById('observation-date').value=record?.date||getLocalDateString();document.getElementById('observation-date').max=getLocalDateString();
  document.getElementById('observation-title').textContent=(record?'編輯':'新增')+observationLabels[domain];
- document.getElementById('observation-value-label').textContent=domain==='sleep'?'睡眠時長（分鐘）':domain==='steps'?'當日累積步數（不是增量）':'當日總消耗（kcal，不含再次加計 BMR／運動）';
- const value=document.getElementById('observation-value');value.value=record?.value??'';value.step=domain==='steps'?'1':'any';value.max=domain==='sleep'?'1440':'';
+ document.getElementById('observation-date-label').textContent=domain==='sleep'?'睡眠日期（以起床日記錄；Asia/Taipei）':'日期（Asia/Taipei）';
+ document.getElementById('observation-value-label').textContent=domain==='sleep'?'睡眠總時長（分鐘；完整時段會自動計算）':domain==='steps'?'當日總步數（不是增量）':'每日總消耗（kcal；不是飲食或運動熱量增量）';
+ const value=document.getElementById('observation-value');value.value=record?.value??'';value.step=domain==='steps'?'1':'any';value.max=String(observationLimits[domain]);
  document.getElementById('observation-coverage-group').hidden=domain==='sleep';document.getElementById('observation-time-group').hidden=domain!=='sleep';
  document.getElementById('observation-coverage').value=record?.coverage||'FULL_DAY';document.getElementById('observation-cutoff').value=record?.cutoffTime||'';
  for(const [id,key]of[['observation-note','note'],['observation-source-note','sourceNote']])document.getElementById(id).value=record?.[key]||'';
  const localInstant=iso=>iso?new Date(Date.parse(iso)+8*3600000).toISOString().slice(0,16):'';
- document.getElementById('observation-start').value=localInstant(record?.startedAt);document.getElementById('observation-end').value=localInstant(record?.endedAt);
+ document.getElementById('observation-start').value=localInstant(record?.startedAt);document.getElementById('observation-end').value=localInstant(record?.endedAt);syncSleepDuration(false);
  document.getElementById('observation-delete').hidden=!record;document.getElementById('observation-delete').disabled=!record;document.getElementById('observation-save').disabled=false;observationCoverage();openSheet('observation-form');
- observationStatus(domain==='sleep'?'只有時長也可保存；不推算入睡時間、睡眠階段或效率。':'手動資料為自行回報；同日自動來源有衝突時不相加、不猜最大值。');
+ observationStatus(domain==='sleep'?'可填入睡／起床時段自動計算；只有時長也可保存，不推算睡眠階段或效率。':'手動資料為每日總值；同日自動來源有衝突時不相加、不猜最大值。');
  if(domain!=='sleep'&&!record)await loadObservationDate();
 }
 async function loadObservationDate(reload=false){
@@ -35,12 +47,14 @@ async function loadObservationDate(reload=false){
   state.record=record||null;
   if(domain==='sleep')for(const [id,key]of[['observation-start','startedAt'],['observation-end','endedAt']])document.getElementById(id).value=record[key]?new Date(Date.parse(record[key])+8*3600000).toISOString().slice(0,16):'';
   document.getElementById('observation-value').value=state.record?.value??'';document.getElementById('observation-coverage').value=state.record?.coverage||'FULL_DAY';document.getElementById('observation-cutoff').value=state.record?.cutoffTime||'';document.getElementById('observation-source-note').value=state.record?.sourceNote||'';document.getElementById('observation-note').value=state.record?.note||'';document.getElementById('observation-delete').hidden=!state.record;
-  state.loadedDate=date;state.loading=false;observationControls(false);observationCoverage();document.getElementById('observation-save').disabled=false;document.getElementById('observation-delete').disabled=!state.record||state.record.date!==date;observationStatus(state.record?(domain==='sleep'?'已重新載入同一筆睡眠的最新版本。':'已載入；修改會覆寫當日累積值，不與舊值相加。'):'此日尚無手動紀錄。');
+  state.loadedDate=date;state.loading=false;observationControls(false);observationCoverage();syncSleepDuration(false);document.getElementById('observation-save').disabled=false;document.getElementById('observation-delete').disabled=!state.record||state.record.date!==date;observationStatus(state.record?(domain==='sleep'?'已重新載入同一筆睡眠的最新版本。':'已載入；修改會覆寫當日總值，不與舊值相加。'):'此日尚無手動紀錄。');
  }catch(error){if(observationEditor===state&&serial===observationReadSerial){state.loading=false;observationControls(false);document.getElementById('observation-save').disabled=true;document.getElementById('observation-delete').disabled=true;observationStatus(readableError(error)+'；請按「重新載入」。',true);}}
 }
 function observationPayload(){
- const valueText=document.getElementById('observation-value').value,domain=document.getElementById('observation-domain').value,value=valueText===''?null:Number(valueText);
- if(value===null||!Number.isFinite(value)||value<0||domain==='steps'&&!Number.isSafeInteger(value))throw Error('請輸入有效數值；空白不等於 0。');
+ const domain=document.getElementById('observation-domain').value;
+ if(!syncSleepDuration(false))throw Error('請修正睡眠時段；入睡與起床時間必須成對填寫。');
+ const valueText=document.getElementById('observation-value').value,value=valueText===''?null:Number(valueText);
+ if(value===null||!Number.isFinite(value)||value<0||value>observationLimits[domain]||domain==='steps'&&!Number.isSafeInteger(value))throw Error(domain==='steps'?'步數須為 0–200000 的整數。':domain==='total_energy'?'每日總消耗須為 0–30000 kcal。':'睡眠時長須為 0–1440 分鐘。');
  const start=document.getElementById('observation-start').value,end=document.getElementById('observation-end').value;
  const record=observationEditor.record;
  return {clientRequestId:crypto.randomUUID(),...(record?{recordId:record.recordId,revision:record.revision}:{}),domain,date:document.getElementById('observation-date').value,timezone:'Asia/Taipei',value,
@@ -55,8 +69,9 @@ async function saveObservation(remove=false){
  try{if(!state.pending)state.pending={action:remove?'deleteManualObservation':'upsertManualObservation',payload:remove?{recordId:state.record.recordId,revision:state.record.revision,clientRequestId:crypto.randomUUID()}:observationPayload()};
   state.saving=true;observationControls(true);button.disabled=true;document.getElementById('observation-delete').disabled=true;observationStatus('正在儲存至 SQL…');
   const result=await localEngineRequest(state.pending.action,state.pending.payload);if(observationEditor!==state||state.user!==currentUser||state.epoch!==localSessionEpoch)return;
-  state.pending=null;observationEditor=null;closeSheet();toast('紀錄已保存至 SQL；分析狀態請見紀錄。');clearDashboardCache();sectionLoadKeys.clear();
-  const section=result.record.domain==='sleep'?'sleep':'activity',range=sectionWindows[section];await refreshSectionRange(section,range.start,range.end);
+   state.pending=null;observationEditor=null;closeSheet();toast('已保存至 SQL；相關畫面與分析更新中。');clearDashboardCache();sectionLoadKeys.clear();
+   const section=result.record.domain==='sleep'?'sleep':'activity',range={...sectionWindows[section]},refresh=async()=>{await refreshSectionRange(section,range.start,range.end);clearDashboardCache();};
+   if(typeof refreshInBackground==='function')refreshInBackground('manual-observation-'+result.record.domain,refresh);else void refresh().catch(error=>console.warn('manual observation background refresh failed',error));
  }catch(error){if(observationEditor===state&&state.user===currentUser){if(error.code&&error.retryable===false){state.pending=null;observationControls(false);}observationStatus(readableError(error)+(state.pending?'；結果待確認，重試會使用同一要求。':''),true);}}
  finally{state.saving=false;if(observationEditor===state&&state.user===currentUser&&state.epoch===localSessionEpoch){const ready=!!state.pending||!state.loading&&state.loadedDate===document.getElementById('observation-date').value;button.disabled=!ready;document.getElementById('observation-delete').disabled=!ready||!state.record||!!state.pending;}}
 }
@@ -75,5 +90,6 @@ async function refreshManualObservationList(section,start,end){
 function initializeManualObservations(){
  document.querySelectorAll('[data-observation-add]').forEach(button=>button.onclick=()=>openObservationEditor(button.dataset.observationAdd));
  document.getElementById('observation-form').onsubmit=event=>{event.preventDefault();void saveObservation();};document.getElementById('observation-delete').onclick=()=>saveObservation(true);
- document.getElementById('observation-date').onchange=()=>loadObservationDate();document.getElementById('observation-reload').onclick=()=>loadObservationDate(true);document.getElementById('observation-coverage').onchange=observationCoverage;
+ document.getElementById('observation-date').onchange=()=>{syncSleepDuration(true);void loadObservationDate();};document.getElementById('observation-reload').onclick=()=>loadObservationDate(true);document.getElementById('observation-coverage').onchange=observationCoverage;
+ for(const id of ['observation-start','observation-end'])document.getElementById(id).oninput=()=>syncSleepDuration(true);
 }

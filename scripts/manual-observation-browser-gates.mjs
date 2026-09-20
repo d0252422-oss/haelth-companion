@@ -118,6 +118,32 @@ export async function runManualObservationBrowserGates(h) {
     }
   }
 
+  await gate('manual_quick_add_mobile_layout_and_sleep_duration', async () => {
+    const {page: p} = await browser('A'), original = p.viewportSize();
+    try {
+      for (const width of [320, 360, 393, 430]) {
+        await p.setViewportSize({width, height: 780});
+        await p.locator('#quick-open').click();
+        await p.locator('#quick-sheet').waitFor({state: 'visible'});
+        const layout = await p.locator('.quick-options').evaluate((node, viewportWidth) => {
+          const cards = [...node.querySelectorAll('.quick-option')], heights = cards.map(card => card.getBoundingClientRect().height);
+          return {count: cards.length, order: cards.map(card => card.querySelector('b')?.textContent?.trim()), minHeight: Math.min(...heights), maxHeight: Math.max(...heights),
+            overflow: document.documentElement.scrollWidth > viewportWidth || cards.some(card => card.getBoundingClientRect().right > viewportWidth + 0.5)};
+        }, width);
+        assert.equal(layout.count, 8);assert.deepEqual(layout.order, ['新增體重','新增體脂','新增訓練','新增飲食','新增睡眠','新增步數','新增總消耗','新增身體狀態']);
+        assert.equal(layout.overflow, false);assert.ok(layout.minHeight >= 48);assert.ok(layout.maxHeight - layout.minHeight <= 1);
+        await p.locator('#sheet-backdrop').click({position: {x: 2, y: 2}});
+      }
+      await p.locator('#quick-open').click();await p.locator('[data-observation-add="sleep"]').click();
+      const wakeDate = proof.dates.duration, startDate = shift(-12);
+      await p.locator('#observation-date').fill(wakeDate);await p.locator('#observation-date').dispatchEvent('change');
+      await p.locator('#observation-start').fill(startDate+'T23:30');await p.locator('#observation-end').fill(wakeDate+'T07:10');
+      assert.equal(await p.locator('#observation-value').inputValue(), '460');assert.match(await p.locator('#observation-status').innerText(), /7 小時 40 分鐘/u);
+      await p.locator('#sheet-backdrop').click({position: {x: 2, y: 2}});
+      proof.assertions.push({gate: 'quick_add_mobile', widths: [320,360,393,430], cards: 8, minimum_touch_target_px: 48, sleep_cross_date_minutes: 460});
+    } finally {if (original) await p.setViewportSize(original);}
+  });
+
   await gate('manual_observation_browser_cumulative_zero_restart_and_account_isolation', async () => {
     const date = proof.dates.cumulative, {page: p} = await browser('A');
     assert.equal((await live(A, date)).length, 0, 'reserved observation fixture date must be empty');
