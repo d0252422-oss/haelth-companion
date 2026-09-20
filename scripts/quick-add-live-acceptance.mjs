@@ -36,8 +36,10 @@ try {
     // inside this read-only test page so the deployed sheet itself can be reviewed;
     // no session, entitlement or application data access is created.
     await page.addStyleTag({content:'#google-login-entry,#controlled-beta-access{display:none!important}'});
-    await page.evaluate(() => globalThis.openSheet('quick-sheet'));
+    const openStarted = await page.evaluate(() => performance.now());
+    await page.locator('#quick-open').click();
     await page.locator('#quick-sheet').waitFor({state:'visible'});
+    const clickToVisibleMs = await page.evaluate(started => Number((performance.now() - started).toFixed(2)), openStarted);
     const layout = await page.locator('#quick-sheet').evaluate((node, width) => {
       const options = [...node.querySelectorAll('.quick-option')], rects = options.map(option => option.getBoundingClientRect());
       const nav = document.querySelector('.mobile-nav')?.getBoundingClientRect();
@@ -64,7 +66,7 @@ try {
     await page.evaluate(() => history.back());
     await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
     assert.equal(page.url(), beforeBack);
-    report.viewports.push({...viewport, ...layout, android_back_dismiss:true, screenshot});
+    report.viewports.push({...viewport, ...layout, clickToVisibleMs, android_back_dismiss:true, screenshot});
     if (viewport.width === 360) {
       for (const item of [
         {domain:'sleep', title:'新增睡眠', label:'睡眠總時長', timeFields:true},
