@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
 
-  const BUILD_ID = '20260920-quick-add-v3-01';
+  const BUILD_ID = '20260920-quick-add-v3-02';
   const RECOVERY_PREFIX = 'healthCompanionBuildRecovery:';
 
   function recoveryUrl(href, liveBuildId) {
@@ -19,15 +19,16 @@
     const storage = options.storage || root.sessionStorage;
     const location = options.location || root.location;
     const expectedBuildId = options.expectedBuildId || BUILD_ID;
-    const loadedBuildId = new URL(location.href).searchParams.get('v') || expectedBuildId;
+    const entryVersionToken = new URL(location.href).searchParams.get('v') || null;
     const diagnostics = root.HEALTH_BUILD_DIAGNOSTICS = {
       expectedBuildId,
       liveDeployedBuildId: null,
-      liffLoadedBuildId: loadedBuildId,
+      liffLoadedBuildId: expectedBuildId,
+      entryVersionToken,
       recovery: 'NOT_REQUIRED'
     };
     root.EXPECTED_BUILD_ID = expectedBuildId;
-    root.LIFF_LOADED_BUILD_ID = loadedBuildId;
+    root.LIFF_LOADED_BUILD_ID = expectedBuildId;
     if (!fetchImpl) return diagnostics;
     try {
       const response = await fetchImpl(`build.json?expected=${encodeURIComponent(expectedBuildId)}&t=${Date.now()}`, {cache: 'no-store'});
