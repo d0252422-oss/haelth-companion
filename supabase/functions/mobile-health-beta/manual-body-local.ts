@@ -78,13 +78,13 @@ export class ManualBodyLocalStore {
       if (old && (!Number.isSafeInteger(input.revision) || input.revision !== Number(old.revision))) throw Error("STALE_REVISION");
       const date = remove ? old.body.date : manualDate(input.date);
       if (date > localToday()) throw Error("FUTURE_BODY_UNSUPPORTED");
-      let weight = old?.body.weight, bodyFat = old?.body.bodyFat ?? null;
+      let weight = old?.body.weight ?? null, bodyFat = old?.body.bodyFat ?? null;
       if (!remove) {
-        if ((typeof input.weight !== "number" && typeof input.weight !== "string") || String(input.weight).trim() === "") throw Error("INVALID_WEIGHT");
-        weight = Number(input.weight);
-        if (!Number.isFinite(weight) || weight < 20 || weight > 500) throw Error("INVALID_WEIGHT");
+        weight = input.weight === null || input.weight === undefined || (typeof input.weight === "string" && input.weight.trim() === "") ? null : Number(input.weight);
+        if (weight !== null && ((typeof input.weight !== "number" && typeof input.weight !== "string") || !Number.isFinite(weight) || weight < 20 || weight > 500)) throw Error("INVALID_WEIGHT");
         bodyFat = input.bodyFat === null || input.bodyFat === undefined || (typeof input.bodyFat === "string" && input.bodyFat.trim() === "") ? null : Number(input.bodyFat);
         if (bodyFat !== null && ((typeof input.bodyFat !== "number" && typeof input.bodyFat !== "string") || !Number.isFinite(bodyFat) || bodyFat < 0 || bodyFat > 100)) throw Error("INVALID_BODY_FAT");
+        if (weight === null && bodyFat === null) throw Error("BODY_METRIC_REQUIRED");
         const collision = await tx`select record_id from public.engine_manual_body_records where canonical_user_id=${identity.canonical} and local_date=${date} and not deleted and record_id<>${id}`;
         if (collision.length) throw Error("BODY_DATE_CONFLICT");
       }

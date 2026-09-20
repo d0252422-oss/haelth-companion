@@ -20,7 +20,7 @@ function harness(fetch) {
     appState: { body: [], mealsToday: [], nutrition: [], workouts: [] }, workoutSession:null, exerciseDatabase:[],
     AbortSignal, structuredClone, crypto: { randomUUID }, fetch, Map, Set, Date, Promise,
     queueMicrotask() {}, getLocalDateString: () => '2026-09-13',
-    document: { querySelectorAll(){return [];}, getElementById(id) { if (!elements.has(id)) elements.set(id, { value: '', checked: false, dataset: {}, textContent: '', remove(){}, replaceChildren(){}, style:{}, classList: { add() {}, remove() {} } }); return elements.get(id); } },
+    document: { querySelectorAll(){return [];}, getElementById(id) { if (!elements.has(id)) elements.set(id, { value: '', checked: false, dataset: {}, textContent: '', remove(){}, replaceChildren(){}, setAttribute(){}, setCustomValidity(){}, reportValidity(){return true;}, style:{}, classList: { add() {}, remove() {} } }); return elements.get(id); } },
   });
   vm.runInContext(source, ctx);
   vm.runInContext(fs.readFileSync('scripts/web-view-state.js','utf8'), ctx);
@@ -94,14 +94,24 @@ test('manual sleep times auto-calculate cross-date duration and validate wake-da
  assert.equal(ctx.syncSleepDuration(true),true);assert.equal(ctx.document.getElementById('observation-value').value,'460');assert.match(ctx.document.getElementById('observation-status').textContent,/7 小時 40 分鐘/);
  ctx.document.getElementById('observation-end').value='2026-09-21T07:10';assert.equal(ctx.syncSleepDuration(false),false);assert.equal(ctx.document.getElementById('observation-value').value,'');
 });
-test('Quick Add presents eight compact items in canonical mobile order and routes observation buttons separately',()=>{
+test('merged steps and energy form keeps failed metric pending without resending the committed metric',async()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);const calls=[];let failEnergy=true;
+ Object.assign(ctx,{manualSqlEnabled:()=>true,closeSheet(){ctx.closed=true;},toast(){},clearDashboardCache(){},sectionLoadKeys:new Map(),sectionWindows:{activity:{start:'2026-09-01',end:'2026-09-30'}},setDashboardDataState(){},refreshInBackground(){},refreshSectionRange:async()=>{}});
+ ctx.localEngineRequest=async(action,payload)=>{calls.push(payload.domain);if(payload.domain==='total_energy'&&failEnergy)throw Error('TEMPORARY');return{record:{...payload,recordId:randomUUID(),revision:1}};};
+ ctx.document.getElementById('activity-pair-date').value='2026-09-20';ctx.document.getElementById('activity-pair-steps').value='8000';ctx.document.getElementById('activity-pair-energy').value='2250';
+ vm.runInContext("activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:'2026-09-20',records:new Map(),pending:new Map(),completed:new Set(),loading:false,saving:false}",ctx);
+ await ctx.saveActivityPair();assert.deepEqual(calls,['steps','total_energy']);assert.equal(vm.runInContext("activityPairEditor.pending.has('steps')",ctx),false);assert.equal(vm.runInContext("activityPairEditor.pending.has('total_energy')",ctx),true);assert.match(ctx.document.getElementById('activity-pair-status').textContent,/已成功項目不會重送/);
+ failEnergy=false;await ctx.saveActivityPair();assert.deepEqual(calls,['steps','total_energy','total_energy']);assert.equal(ctx.closed,true);
+});
+test('Quick Add V3 presents six compact merged items in canonical mobile order',()=>{
  const block=html.match(/<div class="quick-options">([\s\S]*?)<\/div>\s*<\/section>/)[1];
  const titles=[...block.matchAll(/<b[^>]*>([^<]+)<\/b>/g)].map(match=>match[1]);
- assert.deepEqual(titles,['新增體重','新增體脂','新增訓練','新增飲食','新增睡眠','新增步數','新增總消耗','新增身體狀態']);
- for(const icon of ['moon','footprints','flame'])assert.match(block,new RegExp(`data-lucide="${icon}"`));
- assert.match(html,/\.quick-options\{[^}]*repeat\(2,minmax\(0,1fr\)\)/);assert.match(html,/\.quick-option\{[^}]*min-height:64px/);assert.match(html,/@media\(max-width:430px\)\{\.quick-option\{[^}]*min-height:52px/);
+ assert.deepEqual(titles,['新增體重 / 體脂','新增訓練','新增飲食','新增睡眠','新增步數 / 總消耗','新增身體狀態']);
+ for(const icon of ['moon','footprints'])assert.match(block,new RegExp(`data-lucide="${icon}"`));
+ assert.match(html,/\.quick-options\{[^}]*repeat\(2,minmax\(0,1fr\)\)/);assert.match(html,/\.quick-option\{grid-template-rows:auto;min-height:58px/);
  assert.match(html,/querySelectorAll\("\.quick-option\[data-action\]"\)/);
- assert.match(html,/<section id="quick-sheet" data-ui-version="quick-add-v2">/);
+ assert.match(html,/<section id="quick-sheet" data-ui-version="quick-add-v3">/);
+ assert.match(html,/id="activity-pair-form"/);
  assert.match(html,/const SHEET_HISTORY_KEY="healthCompanionSheet"/);
  assert.match(html,/addEventListener\("popstate",\(\)=>\{const backdrop=document\.getElementById\("sheet-backdrop"\);if\(backdrop\.classList\.contains\("show"\)\)closeSheet\(\{fromHistory:true\}\);\}\)/);
 });
@@ -148,10 +158,11 @@ test('late body save/delete invalidates same-account cache without touching anot
   ctx.num=value=>value===''?null:Number(value);
   ctx.document.getElementById('weight-form').addEventListener=(event,handler)=>submit=handler;
   ctx.loadWeightFormDate={binding:{user:ctx.currentUser,date:'2026-09-12',recordId:'old'}};
-  ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.toast=()=>toasts++;ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>closed++;ctx.refreshInBackground=()=>{};ctx.readableError=e=>e.message;
+  ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.toast=()=>toasts++;ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>closed++;ctx.refreshInBackground=()=>{};ctx.setDashboardDataState=()=>{};ctx.readableError=e=>e.message;
   ctx.document.getElementById('weight-date').value='2026-09-12';ctx.document.getElementById('weight-record-id').value='old';
+  ctx.document.getElementById('weight-input').value='70';
   vm.runInContext(html.split(/\r?\n/).find(line=>line.includes(operation==='delete'?'weight-delete").onclick=':'weight-form").addEventListener("submit"')),ctx);
-  const pending=operation==='delete'?ctx.document.getElementById('weight-delete').onclick():submit({preventDefault(){}});
+  const pending=operation==='delete'?ctx.document.getElementById('weight-delete').onclick():submit({preventDefault(){},currentTarget:ctx.document.getElementById('weight-form')});
   ctx.openSheet.serial=2;ctx.loadWeightFormDate.binding=null;ctx.document.getElementById('weight-date').disabled=false;ctx.document.getElementById('weight-save').disabled=true;
   if(outcome==='account-switch')ctx.currentUser={userId:'B'};
   if(outcome==='epoch-switch')vm.runInContext('localSessionEpoch++',ctx);

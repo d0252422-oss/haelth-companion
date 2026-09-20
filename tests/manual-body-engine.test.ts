@@ -15,6 +15,11 @@ Deno.test('missing body fat remains missing while zero stays zero; corrupt store
  assert.deepEqual(manualBodyEngineRecords([row('2026-09-13',80,0)],user).map(r=>r.value),[80,0,0]);
  for(const r of [row('2026-09-13',NaN),row('2026-09-13',80,101)])assert.throws(()=>manualBodyEngineRecords([r],user));
 });
+Deno.test('body-fat-only records remain valid without inventing weight or fat mass',()=>{
+ const record:any=row('2026-09-13',80,29.2);record.body.weight=null;
+ assert.deepEqual(manualBodyEngineRecords([record],user).map(r=>[r.domain,r.value]),[['body_fat',29.2]]);
+ record.body.bodyFat=null;assert.throws(()=>manualBodyEngineRecords([record],user),/INVALID_STORED_BODY_INPUT/);
+});
 Deno.test('existing body engine is insufficient without baseline/target; adapter does not invent personal targets',async()=>{
  const runtime=new PortableEngineRuntime();await runtime.start();
  try{const result=await runtime.execute({algorithm_id:'multi-domain-bundle',algorithm_version:'health-score-v1.0',domain:'multi_domain',subject_ref:user,period_start:'2026-09-13T00:00:00+08:00',period_end:'2026-09-13T23:59:59+08:00',timezone:'Asia/Taipei',canonical_inputs:{date:'2026-09-13',records:manualBodyEngineRecords([row('2026-09-13')],user),calculated_at:'2026-09-13T16:00:00Z'}});

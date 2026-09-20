@@ -45,10 +45,10 @@ function detailReadState(screen, state, message = '') {
   notice.className = state === 'error' || state === 'stale' ? 'error-state' : 'record-date-note';
   notice.setAttribute('role', state === 'error' ? 'alert' : 'status');
   notice.replaceChildren();
-  const labels = {loading:'正在載入所選期間；下方若有舊資料，尚未更新。',empty:'所選期間尚無紀錄。',success:'所選期間資料已更新。',stale:'顯示上次資料；本次更新未完成。',error:'資料載入失敗。'};
+  const labels = {loading:'數據載入中，請稍候…',updating:'數據更新中，請稍候…',empty:'目前尚無資料。',success:'所選期間資料已更新。',stale:'顯示上次資料；本次更新未完成。',error:'資料暫時無法更新。'};
   const text = document.createElement('p'); text.textContent = (labels[state] || '') + (message ? ' ' + message : ''); notice.append(text);
   if (state === 'error' || state === 'stale') {
-    const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'secondary-button'; retry.textContent = '重試載入';
+    const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'secondary-button'; retry.textContent = '重新整理';
     retry.onclick = () => ensureScreenData(screen,{force:true}).catch(handleScreenError); notice.append(retry);
   }
   // A failed first read must not leave an infinite skeleton under the inline error.

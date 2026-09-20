@@ -5,17 +5,16 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
 
-const target = new URL(process.argv[2] || 'https://d0252422-oss.github.io/health-companion-beta/');
-assert.equal(target.hostname, 'd0252422-oss.github.io');
-assert.equal(target.pathname, '/health-companion-beta/');
-const evidence = path.resolve(process.env.QUICK_ADD_EVIDENCE_DIR || 'D:/Dev/Evidence/quick-add-v2-20260920/live');
+const target = new URL(process.argv[2] || 'https://liff.line.me/2011116657-9SpSnQlN?range=30d');
+assert.ok(['liff.line.me','d0252422-oss.github.io','127.0.0.1','localhost'].includes(target.hostname));
+const evidence = path.resolve(process.env.QUICK_ADD_EVIDENCE_DIR || 'D:/Dev/Evidence/quick-add-v3-20260920/live');
 assert.ok(evidence.toLowerCase().startsWith('d:\\dev\\evidence\\'));
 await mkdir(evidence, {recursive: true});
 const modulePath = process.env.ENGINE_PLAYWRIGHT_MODULE || 'C:/Users/D0252/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs';
 const browserPath = process.env.ENGINE_BROWSER_EXECUTABLE || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const {chromium} = await import(pathToFileURL(modulePath).href);
 const viewports = [{width:360,height:800},{width:393,height:852},{width:412,height:915}];
-const expected = ['新增體重','新增體脂','新增訓練','新增飲食','新增睡眠','新增步數','新增總消耗','新增身體狀態'];
+const expected = ['新增體重 / 體脂','新增訓練','新增飲食','新增睡眠','新增步數 / 總消耗','新增身體狀態'];
 const report = {target: target.href, started_at: new Date().toISOString(), classification: 'LIVE_BETA_PUBLIC_HTML_READ_ONLY_VISUAL_NO_AUTH_NO_REMOTE_WRITE', viewports: [], manual_forms: [], blocked_non_read_requests: []};
 const browser = await chromium.launch({headless: true, executablePath: browserPath});
 try {
@@ -23,6 +22,9 @@ try {
     const context = await browser.newContext({viewport, locale:'zh-TW', timezoneId:'Asia/Taipei', colorScheme:'dark', serviceWorkers:'block'});
     const page = await context.newPage();
     await page.route('**/*', route => {
+      if (['127.0.0.1','localhost'].includes(target.hostname) && new URL(route.request().url()).pathname.endsWith('/scripts/manual-sql-config.js')) {
+        return route.fulfill({status:200, contentType:'application/javascript', body:`globalThis.HEALTH_MANUAL_SQL_CONFIG=Object.freeze({enabled:true,release:'AB',schemaVersion:'manual-sql-v1',projectRef:'uavimjgccigpbwqmfkhh',endpoint:'https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta/v1/engine/web'});`});
+      }
       const method = route.request().method();
       if (method === 'GET' || method === 'HEAD') return route.continue();
       report.blocked_non_read_requests.push({method, url: route.request().url()});
@@ -32,6 +34,14 @@ try {
     const response = await page.goto(url.href, {waitUntil:'domcontentloaded', timeout:30000});
     assert.equal(response?.status(), 200);
     await page.waitForFunction(() => typeof globalThis.openSheet === 'function');
+    const delivery = await page.evaluate(() => ({
+      resolvedUrl: location.href,
+      expectedBuildId: globalThis.EXPECTED_BUILD_ID || null,
+      liveDeployedBuildId: globalThis.LIVE_DEPLOYED_BUILD_ID || null,
+      liffLoadedBuildId: globalThis.LIFF_LOADED_BUILD_ID || null,
+      entryVersionToken: globalThis.HEALTH_BUILD_DIAGNOSTICS?.entryVersionToken || null,
+      recovery: globalThis.HEALTH_BUILD_DIAGNOSTICS?.recovery || null,
+    }));
     // The public route correctly presents auth first. Hide only its visual layer
     // inside this read-only test page so the deployed sheet itself can be reviewed;
     // no session, entitlement or application data access is created.
@@ -57,9 +67,9 @@ try {
         bottomNavPresent: Boolean(nav && nav.height > 0),
       };
     }, viewport.width);
-    assert.equal(layout.uiVersion, 'quick-add-v2');
+    assert.equal(layout.uiVersion, 'quick-add-v3');
     assert.deepEqual(layout.labels, expected);
-    assert.equal(layout.count, 8);assert.equal(layout.columns, 2);
+    assert.equal(layout.count, 6);assert.equal(layout.columns, 2);
     assert.ok(layout.minCardHeight >= 48);assert.ok(layout.maxCardHeight - layout.minCardHeight <= 1);
     assert.equal(layout.horizontalOverflow, false);assert.equal(layout.clipped, false);assert.equal(layout.bottomNavPresent, true);
     const screenshot = path.join(evidence, `quick-add-live-${viewport.width}x${viewport.height}.png`);
@@ -68,12 +78,10 @@ try {
     await page.evaluate(() => history.back());
     await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
     assert.equal(page.url(), beforeBack);
-    report.viewports.push({...viewport, ...layout, clickToVisibleMs, appClickToVisibleMs, android_back_dismiss:true, screenshot});
+    report.viewports.push({...viewport, ...layout, ...delivery, clickToVisibleMs, appClickToVisibleMs, android_back_dismiss:true, screenshot});
     if (viewport.width === 360) {
       for (const item of [
         {domain:'sleep', title:'新增睡眠', label:'睡眠總時長', timeFields:true},
-        {domain:'steps', title:'新增步數', label:'當日總步數', timeFields:false},
-        {domain:'total_energy', title:'新增總消耗熱量', label:'每日總消耗', timeFields:false},
       ]) {
         await page.evaluate(() => globalThis.openSheet('quick-sheet'));
         await page.locator(`[data-observation-add="${item.domain}"]`).click();
@@ -93,6 +101,20 @@ try {
         await page.evaluate(() => globalThis.closeSheet());
         await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
       }
+      await page.evaluate(() => globalThis.openSheet('quick-sheet'));
+      await page.locator('[data-action="weight"]').click();
+      await page.locator('#weight-form').waitFor({state:'visible'});
+      assert.equal(await page.locator('#weight-input').getAttribute('required'), null);
+      assert.equal(await page.locator('#fat-input').getAttribute('required'), null);
+      await page.evaluate(() => globalThis.closeSheet());
+      await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
+      await page.evaluate(() => globalThis.openSheet('quick-sheet'));
+      await page.locator('[data-action="activitypair"]').click();
+      await page.locator('#activity-pair-form').waitFor({state:'visible'});
+      assert.equal(await page.locator('#activity-pair-steps').getAttribute('step'), '1');
+      assert.equal(await page.locator('#activity-pair-energy').getAttribute('max'), '30000');
+      await page.evaluate(() => globalThis.closeSheet());
+      await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
     }
     await context.close();
   }

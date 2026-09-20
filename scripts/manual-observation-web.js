@@ -1,8 +1,8 @@
 // The original quick-add and detail screens use the same SQL/auth provider.
-let observationEditor=null,observationReadSerial=0;
+let observationEditor=null,observationReadSerial=0,activityPairEditor=null,activityPairReadSerial=0;
 const observationLabels={sleep:'睡眠',steps:'步數',total_energy:'總消耗熱量'};
 const observationLimits={sleep:1440,steps:200000,total_energy:30000};
-function resetManualObservationState(){observationEditor=null;observationReadSerial++;for(const id of ['sleep-manual-records','activity-manual-records'])document.getElementById(id)?.replaceChildren?.();}
+function resetManualObservationState(){observationEditor=null;activityPairEditor=null;observationReadSerial++;activityPairReadSerial++;for(const id of ['sleep-manual-records','activity-manual-records'])document.getElementById(id)?.replaceChildren?.();}
 function observationStatus(text,error=false){const el=document.getElementById('observation-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
 function observationControls(locked){document.querySelectorAll('#observation-form input,#observation-form select,#observation-form textarea').forEach(el=>el.disabled=locked);}
 function observationCoverage(){const sleep=document.getElementById('observation-domain').value==='sleep',partial=document.getElementById('observation-coverage').value==='PARTIAL_DAY';document.getElementById('observation-cutoff').required=!sleep&&partial;document.getElementById('observation-cutoff-group').hidden=sleep||!partial;}
@@ -75,6 +75,47 @@ async function saveObservation(remove=false){
  }catch(error){if(observationEditor===state&&state.user===currentUser){if(error.code&&error.retryable===false){state.pending=null;observationControls(false);}observationStatus(readableError(error)+(state.pending?'；結果待確認，重試會使用同一要求。':''),true);}}
  finally{state.saving=false;if(observationEditor===state&&state.user===currentUser&&state.epoch===localSessionEpoch){const ready=!!state.pending||!state.loading&&state.loadedDate===document.getElementById('observation-date').value;button.disabled=!ready;document.getElementById('observation-delete').disabled=!ready||!state.record||!!state.pending;}}
 }
+function activityPairStatus(text,error=false){const el=document.getElementById('activity-pair-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
+function activityPairControls(locked){for(const id of ['activity-pair-date','activity-pair-steps','activity-pair-energy'])document.getElementById(id).disabled=locked;document.getElementById('activity-pair-save').disabled=locked;}
+function activityPairRecord(domain){return activityPairEditor?.records?.get(domain)||null;}
+async function openActivityPairEditor(){
+ if(!manualSqlEnabled())return toast('手動步數／總消耗僅在 SQL 模式提供；未切換其他資料來源。');
+ const date=getLocalDateString();activityPairEditor={user:currentUser,epoch:localSessionEpoch,date,records:new Map(),pending:new Map(),completed:new Set(),loading:false,saving:false};
+ document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=date;openSheet('activity-pair-form');
+ await loadActivityPairDate();
+}
+async function loadActivityPairDate(){
+ const state=activityPairEditor,date=document.getElementById('activity-pair-date').value;if(!state||state.saving)return;
+ const serial=++activityPairReadSerial;state.loading=true;activityPairControls(true);document.getElementById('activity-pair-date').disabled=false;activityPairStatus('數據載入中，請稍候…');
+ try{const rows=await localEngineRequest('getManualObservations',{date});if(activityPairEditor!==state||currentUser!==state.user||localSessionEpoch!==state.epoch||serial!==activityPairReadSerial)return;
+  state.date=date;state.records=new Map(rows.filter(row=>row.date===date&&['steps','total_energy'].includes(row.domain)).map(row=>[row.domain,row]));state.pending.clear();state.completed.clear();
+  document.getElementById('activity-pair-steps').value=activityPairRecord('steps')?.value??'';document.getElementById('activity-pair-energy').value=activityPairRecord('total_energy')?.value??'';
+  activityPairStatus(state.records.size?'已載入既有手動總值；儲存會覆寫同日數值，不會相加。':'此日尚無手動步數或總消耗；至少填寫一項。');
+ }catch(error){if(activityPairEditor===state&&serial===activityPairReadSerial)activityPairStatus(readableError(error)+'；請重新選擇日期後重試。',true);}
+ finally{if(activityPairEditor===state&&serial===activityPairReadSerial){state.loading=false;activityPairControls(false);}}
+}
+function activityPairPayload(domain,value){
+ const record=activityPairRecord(domain);return {clientRequestId:crypto.randomUUID(),...(record?{recordId:record.recordId,revision:record.revision}:{}),domain,date:document.getElementById('activity-pair-date').value,timezone:'Asia/Taipei',value,coverage:'FULL_DAY',cutoffTime:null,startedAt:null,endedAt:null,note:null,sourceNote:null};
+}
+async function saveActivityPair(){
+ const state=activityPairEditor;if(!state||state.loading||state.saving||state.user!==currentUser||state.epoch!==localSessionEpoch)return;
+ const date=document.getElementById('activity-pair-date').value,stepsText=document.getElementById('activity-pair-steps').value.trim(),energyText=document.getElementById('activity-pair-energy').value.trim();
+ if(state.date!==date)return activityPairStatus('日期資料尚未載入完成，請重新選擇日期。',true);
+ if(!state.pending.size){
+  if(!stepsText&&!energyText)return activityPairStatus('請至少填寫每日步數或每日總消耗其中一項。',true);
+  if(stepsText){const value=Number(stepsText);if(!Number.isSafeInteger(value)||value<0||value>observationLimits.steps)return activityPairStatus('步數須為 0–200000 的整數。',true);state.pending.set('steps',activityPairPayload('steps',value));}
+  if(energyText){const value=Number(energyText);if(!Number.isFinite(value)||value<0||value>observationLimits.total_energy)return activityPairStatus('每日總消耗須為 0–30000 kcal。',true);state.pending.set('total_energy',activityPairPayload('total_energy',value));}
+ }
+ state.saving=true;activityPairControls(true);activityPairStatus('正在儲存至 SQL…');
+ const attempts=[...state.pending.entries()],results=await Promise.allSettled(attempts.map(([,payload])=>localEngineRequest('upsertManualObservation',payload)));
+ results.forEach((result,index)=>{const domain=attempts[index][0];if(result.status==='fulfilled'){state.pending.delete(domain);state.completed.add(domain);state.records.set(domain,result.value.record);}});
+ state.saving=false;
+ if(activityPairEditor!==state||state.user!==currentUser||state.epoch!==localSessionEpoch)return;
+ if(state.pending.size){activityPairControls(false);const done=[...state.completed].map(domain=>observationLabels[domain]).join('、'),failed=[...state.pending].map(domain=>observationLabels[domain]).join('、');activityPairStatus(`${done?done+'已確認儲存；':''}${failed}尚未完成。請重試，已成功項目不會重送。`,true);return;}
+ activityPairEditor=null;closeSheet();toast('步數／總消耗已保存至 SQL；相關畫面與分析更新中。');clearDashboardCache();sectionLoadKeys.clear();if(typeof setDashboardDataState==='function')setDashboardDataState('updating');
+ const range={...sectionWindows.activity},refresh=async()=>{await refreshSectionRange('activity',range.start,range.end);clearDashboardCache();if(typeof setDashboardDataState==='function')setDashboardDataState('ready');};
+ if(typeof refreshInBackground==='function')refreshInBackground('manual-observation-activity-pair',refresh);else void refresh().catch(error=>console.warn('manual activity pair background refresh failed',error));
+}
 async function refreshManualObservationList(section,start,end){
  if(!manualSqlEnabled())return;const user=currentUser,epoch=localSessionEpoch;
  const rows=await localEngineRequest('getManualObservations',{startDate:start,endDate:end,...(section==='sleep'?{domain:'sleep'}:{})});
@@ -89,6 +130,7 @@ async function refreshManualObservationList(section,start,end){
 }
 function initializeManualObservations(){
  document.querySelectorAll('[data-observation-add]').forEach(button=>button.onclick=()=>openObservationEditor(button.dataset.observationAdd));
+ document.getElementById('activity-pair-form').onsubmit=event=>{event.preventDefault();void saveActivityPair();};document.getElementById('activity-pair-date').onchange=()=>void loadActivityPairDate();
  document.getElementById('observation-form').onsubmit=event=>{event.preventDefault();void saveObservation();};document.getElementById('observation-delete').onclick=()=>saveObservation(true);
  document.getElementById('observation-date').onchange=()=>{syncSleepDuration(true);void loadObservationDate();};document.getElementById('observation-reload').onclick=()=>loadObservationDate(true);document.getElementById('observation-coverage').onchange=observationCoverage;
  for(const id of ['observation-start','observation-end'])document.getElementById(id).oninput=()=>syncSleepDuration(true);

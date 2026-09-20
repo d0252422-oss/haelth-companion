@@ -14,7 +14,7 @@ assert.match(html, /\.mobile-nav button\{[^}]*pointer-events:auto[^}]*touch-acti
 assert.match(html, /\.mobile-nav \.add-nav\{[^}]*min-width:48px[^}]*min-height:48px/);
 assert.match(html, /function setOverlayOpen\(element,open\)/);
 assert.match(html, /function openSheet\(view="quick-sheet"\)\{[^}]*style\.display=id===view\?"block":"none"[^}]*setOverlayOpen\(backdrop,true\)/);
-assert.match(html, /function closeSheet\(\)\{setOverlayOpen\(document\.getElementById\("sheet-backdrop"\),false\);\}/);
+assert.match(html, /function closeSheet\(\{fromHistory=false\}=\{\}\)[\s\S]*?setOverlayOpen\(backdrop,false\)/);
 assert.match(html, /function refreshInBackground\(label,task\)/);
 assert.doesNotMatch(html, /await refreshAfterRecordMutation\(/);
 assert.doesNotMatch(html, /await loadRange\(globalDateRange,\{force:true\}\);closeSheet\(\)/);
