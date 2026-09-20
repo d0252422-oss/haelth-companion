@@ -526,6 +526,13 @@ export class LocalEngineRuntime {
     }
     return processed;
   }
+  scheduleDrain(user: string) {
+    // The raw mutation and its idempotency receipt are already durable before
+    // this is called. Keep recomputation off the user-visible commit response,
+    // while asking Supabase Edge Runtime to keep the bounded task alive.
+    const waitUntil = (globalThis as any).EdgeRuntime?.waitUntil;
+    if (typeof waitUntil === "function") waitUntil(this.drain(user).catch(() => undefined));
+  }
   async snapshot(identity: Json, input: Json = {}) {
     const range = localReadRange(input);
     // One bounded REPEATABLE READ snapshot: queue, inputs and output head/history
@@ -660,13 +667,10 @@ export class LocalEngineRuntime {
         data = await this.manualObservations.status(identity,payload);
       } else if (action === 'upsertManualObservation' || action === 'deleteManualObservation') {
         data = await this.manualObservations.write(identity,payload,action==='deleteManualObservation');
-        try { await this.drain(identity.canonical); } catch { /* Committed raw record and receipt remain recoverable; never hide saved data. */ }
-        if(!data.deleted){try { const rows=await this.manualObservations.read(identity,{date:data.record.date,domain:data.record.domain});const saved=rows.find((r:Json)=>r.recordId===data.recordId);if(saved)data={...data,record:saved,analysisStatus:saved.analysisStatus,analysisJobScheduled:saved.analysisJobScheduled}; }catch {data={...data,analysisStatus:'ANALYSIS_UNAVAILABLE'};}}
+        this.scheduleDrain(identity.canonical);
       } else if (["addBodyRecord", "upsertBodyRecord", "deleteBodyRecord"].includes(action)) {
         data = await this.manualBody.write(identity, payload, action === "deleteBodyRecord");
-        try{await this.drain(identity.canonical);}catch{/* Raw row + receipt + durable queue committed; expose actual retry/failure below. */}
-        let state:Json;try{state=await this.manualBody.analysis(identity,data.record.date);}catch{state=manualBodyUnavailableAnalysis;}
-        data={...data,...state,record:{...data.record,...state}};
+        this.scheduleDrain(identity.canonical);
       } else if (action === "getBodyWriteStatus") {
         data = await this.manualBody.status(identity, payload);
       } else if (action === "upsertMealRecord" || action === "deleteMealRecord") {
@@ -675,13 +679,8 @@ export class LocalEngineRuntime {
           payload,
           action === "deleteMealRecord",
         );
-        try {
-          await this.drain(identity.canonical);
-          data.analysisStatus = "COMPUTED";
-        } catch {
-          // SQL transaction/receipt already committed. Analysis failure must not hide a saved record.
-          data = { ...data, status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
-        }
+        this.scheduleDrain(identity.canonical);
+        data = { ...data, status: "SAVED", analysisStatus: "ANALYSIS_PENDING" };
       } else if (action === "getManualProviderIdentity") {
         data={canonicalUserId:identity.canonical,provider:'postgresql-manual-v1',release:this.exerciseEnabled?'AB':'A',schemaVersion:'manual-sql-v1',access};
       } else if (action === "getCurrentUser") {
@@ -698,6 +697,9 @@ export class LocalEngineRuntime {
           return {userId:row.id,status:row.status,profileDetails:null,profileDetailsStatus:'NOT_CONFIGURED'};
         });
       } else if (action === "localEngineSnapshot") {
+        // An explicit consistency snapshot is allowed to wait for pending
+        // recomputation; mutation responses themselves remain commit-fast.
+        await this.drain(identity.canonical);
         data = await this.snapshot(identity, payload);
       } else if (action === "getNutritionRecords") {
         data = (await this.snapshot(identity, payload)).meals;
@@ -725,7 +727,7 @@ export class LocalEngineRuntime {
           await this.drain(identity.canonical);
           data = {status:'SAVED',...await this.manualBody.analysis(identity,manualDate(payload.date??today()))};
         } else {
-          if(payload.recordType&&!['nutrition','meal'].includes(payload.recordType))throw Error('MANUAL_ACTION_NOT_SUPPORTED');
+          if(payload.recordType&&!['nutrition','meal','sleep','steps','total_energy'].includes(payload.recordType))throw Error('MANUAL_ACTION_NOT_SUPPORTED');
           await this.drain(identity.canonical);
           data = await this.snapshot(identity, payload);
         }

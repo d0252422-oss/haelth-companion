@@ -174,7 +174,7 @@ test('daily SQL read validates shape, preserves measured zero and marks unavaila
 test('daily detail reads reject late account and range responses before touching UI state',async()=>{
  const pending=[],ctx=harness(()=>{});ctx.sectionWindows={sleep:{start:'a',end:'b'},activity:{start:'a',end:'b'}};
  ctx.apiService={getSleepRecords:()=>new Promise(r=>pending.push(r)),getActivityRecords:()=>new Promise(r=>pending.push(r))};
- ctx.renderSleep=()=>{};ctx.renderActivity=()=>{};
+ ctx.renderSleep=()=>{};ctx.renderActivity=()=>{};ctx.refreshManualObservationList=()=>Promise.resolve();
  const refresh=html.match(/    async function refreshSectionRange[^\n]+/)[0];vm.runInContext(refresh,ctx);
  const old=ctx.refreshSectionRange('sleep','a','b');ctx.currentUser={userId:'synthetic-B'};pending.shift()([{date:'secret-A'}]);await old;assert.equal(ctx.appState.sleep,undefined);
  const range=ctx.refreshSectionRange('activity','a','b');ctx.sectionWindows.activity={start:'c',end:'d'};pending.shift()([{date:'old-range'}]);await range;assert.equal(ctx.appState.activity,undefined);

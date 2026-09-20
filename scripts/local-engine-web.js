@@ -170,6 +170,10 @@ function localManualBodyNotice(){
 async function localEngineRequest(action,payload={}){
   if(!manualSqlEnabled())throw Error('LOCAL_ENGINE_DISABLED');
   if(hostedManualEnabled())await ensureHostedManualIdentity();
+  // getManualProviderIdentity already authenticates the Web session, resolves the
+  // canonical user and returns the authoritative entitlement. Avoid a second
+  // sequential Edge round trip during every hosted app bootstrap.
+  if(hostedManualEnabled()&&action==='getCurrentUser'&&hostedManualBinding?.token===sessionToken)return {user:{userId:hostedManualBinding.canonical},access:hostedManualBinding.access};
   if(action==='logout'&&!hostedManualEnabled()){clearLocalManualState();await fetch('/local-logout',{method:'POST'});return {};}
   const epoch=localSessionEpoch;
   const sourceSequence=++manualSourceSerial;manualSourceSequences.set(action,sourceSequence);
@@ -302,7 +306,7 @@ function setupLocalExerciseManagement(){
   document.getElementById('training-overview').append(panel);
   const load=async()=>{
     const epoch=localSessionEpoch,status=document.getElementById('exercise-manager-status');status.textContent='載入中…';
-    try{const entries=await apiService.getExerciseDatabase();if(epoch!==localSessionEpoch)return;exerciseDatabase=entries;renderLocalExerciseManager(entries);await buildExerciseSelect();status.textContent='SQL 已讀回';}
+    try{const entries=await apiService.getExerciseDatabase();if(epoch!==localSessionEpoch)return;applyExerciseCatalog(entries);renderLocalExerciseManager(entries);status.textContent='SQL 已讀回';}
     catch(error){if(epoch===localSessionEpoch&&error.code!=='STALE_CATALOG_RESPONSE')status.textContent='讀取失敗：'+error.message;}
   };
   document.getElementById('manage-exercises').onclick=()=>{document.getElementById('exercise-manager').hidden=false;void load();};
@@ -333,7 +337,7 @@ function renderLocalExerciseManager(entries){
         if(operation==='delete'&&!confirm('永久刪除此自訂動作？只有沒有任何歷史引用的項目才能刪除；無法復原。'))return;
         const buttons=[...list.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);status.textContent='儲存中…';
         try{await localEngineRequest('manageExercise',{exerciseId:exercise.exerciseId,revision:exercise.revision,operation,...(operation==='rename'?{name:input.value}:operation==='classify'?{muscleGroup:category.value}:{})});
-          const entries=await apiService.getExerciseDatabase();if(epoch!==localSessionEpoch)return;exerciseDatabase=entries;renderLocalExerciseManager(exerciseDatabase);await buildExerciseSelect();if(epoch===localSessionEpoch)document.getElementById('exercise-manager-status').textContent='SQL 已儲存並讀回';}
+          const entries=await apiService.getExerciseDatabase();if(epoch!==localSessionEpoch)return;applyExerciseCatalog(entries);renderLocalExerciseManager(exerciseDatabase);if(epoch===localSessionEpoch)document.getElementById('exercise-manager-status').textContent='SQL 已儲存並讀回';}
         catch(error){if(epoch===localSessionEpoch&&error.code!=='STALE_CATALOG_RESPONSE')status.textContent=error.code==='EXERCISE_REFERENCED'?'有歷史引用，不能永久刪除；可以封存。':'未完成：'+error.message;}
         finally{buttons.forEach(b=>b.disabled=false);}
       };row.append(button);
