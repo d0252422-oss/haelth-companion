@@ -33,8 +33,8 @@ export async function runExerciseReleaseGates(h){
     assert.equal((await http(a,'getWorkoutRecords',{canonical_user_id:B})).ok,false);
     await assert.rejects(()=>pg.admin`insert into private.beta_native_auth_identities(auth_user_id,canonical_user_id,provider) values(${subjects.A.auth},${B},'google')`,e=>e.code==='23505');
     const mapped=await pg.admin`select canonical_user_id from private.beta_native_auth_identities where auth_user_id=${subjects.A.auth}`;assert.equal(mapped[0].canonical_user_id,A);assert.notEqual(subjects.A.auth,A);
-    const saved=await invoke(a,'upsertBodyRecord',{date:shift(-3),weight:80,clientRequestId:randomUUID()});assert.equal(saved.analysisStatus,'INSUFFICIENT_DATA');assert.equal(saved.analysisReason,'MISSING_BODY_BASELINE_OR_TARGET');assert.equal(saved.analysisJobScheduled,false);
-    const read=await invoke(a,'getBodyRecords',{date:shift(-3)});assert.equal(read[0].analysisJobScheduled,false);
+    const bodyDate=shift(-3),saved=await invoke(a,'upsertBodyRecord',{date:bodyDate,weight:80,clientRequestId:randomUUID()});assert.equal(saved.analysisStatus,'ANALYSIS_PENDING');assert.equal(saved.analysisReason,'RECOMPUTE_QUEUED');assert.equal(saved.analysisJobScheduled,true);
+    const read=await until(async()=>{const rows=await invoke(a,'getBodyRecords',{date:bodyDate}),row=rows[0];return row?.analysisStatus&&row.analysisStatus!=='ANALYSIS_PENDING'?row:false;},'default-handler-body-analysis-convergence');assert.equal(read.analysisStatus,'INSUFFICIENT_DATA');assert.equal(read.analysisReason,'MISSING_BODY_BASELINE_OR_TARGET');assert.equal(read.analysisJobScheduled,false);
     report.new_auth_evidence={mapping_conflict:'DB unique constraint rejected conflicting A -> B mapping, original mapping unchanged',canonical_differs_from_auth:true,live_oauth:'NOT_RUN',middleware:'actual @supabase/server@1.4.1 auth:none + real synthetic signature verification, no mocked SQL'};
     record('Actual default handler preflight/methods/prefixed route and valid/invalid/expired/missing/conflicting identities');
   });

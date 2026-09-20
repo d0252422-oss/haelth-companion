@@ -161,6 +161,7 @@ test('late body save/delete invalidates same-account cache without touching anot
   ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.toast=()=>toasts++;ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>closed++;ctx.refreshInBackground=()=>{};ctx.setDashboardDataState=()=>{};ctx.readableError=e=>e.message;
   ctx.document.getElementById('weight-date').value='2026-09-12';ctx.document.getElementById('weight-record-id').value='old';
   ctx.document.getElementById('weight-input').value='70';
+  if(operation==='save')vm.runInContext('let bodyAnalysisConvergenceSerial=0',ctx);
   vm.runInContext(html.split(/\r?\n/).find(line=>line.includes(operation==='delete'?'weight-delete").onclick=':'weight-form").addEventListener("submit"')),ctx);
   const pending=operation==='delete'?ctx.document.getElementById('weight-delete').onclick():submit({preventDefault(){},currentTarget:ctx.document.getElementById('weight-form')});
   ctx.openSheet.serial=2;ctx.loadWeightFormDate.binding=null;ctx.document.getElementById('weight-date').disabled=false;ctx.document.getElementById('weight-save').disabled=true;
@@ -230,6 +231,42 @@ test('SQL error after HTTP response keeps API/DB distinct and cache is not fresh
 });
 test('no scheduled job does not become permanent analysis-in-progress',()=>{
  const ctx=harness(()=>{});assert.equal(ctx.manualAnalysisState({analysisStatus:'ANALYSIS_PENDING'}),'UNKNOWN');assert.equal(ctx.manualAnalysisState({analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:false}),'NOT_ENABLED');assert.equal(ctx.manualAnalysisState({analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true}),'UPDATING');
+});
+test('body analysis convergence only polls an explicitly scheduled asynchronous write',()=>{
+ const ctx=harness(()=>{}),line=html.split(/\r?\n/).find(value=>value.includes('function bodyAnalysisNeedsConvergence('));vm.runInContext(line,ctx);
+ assert.equal(ctx.bodyAnalysisNeedsConvergence(),false);assert.equal(ctx.bodyAnalysisNeedsConvergence({}),false);
+ assert.equal(ctx.bodyAnalysisNeedsConvergence({analysisStatus:'ANALYSIS_PENDING'}),false);
+ assert.equal(ctx.bodyAnalysisNeedsConvergence({analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:false}),false);
+ assert.equal(ctx.bodyAnalysisNeedsConvergence({analysisStatus:'INSUFFICIENT_DATA',analysisJobScheduled:true}),false);
+ assert.equal(ctx.bodyAnalysisNeedsConvergence({analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true}),true);
+});
+test('body analysis convergence is bounded, re-reads final state and cancels on identity or superseding mutation',async()=>{
+ const ctx=harness(()=>{}),lines=html.split(/\r?\n/),calls=[];
+ ctx.sectionWindows={body:{start:'2026-09-01',end:'2026-09-30'}};ctx.setTimeout=setTimeout;
+ ctx.apiService={getBodyRecords:async()=>{calls.push('read');return[{recordId:'body-1',date:'2026-09-13',revision:1,analysisStatus:calls.filter(value=>value==='read').length===1?'ANALYSIS_PENDING':'INSUFFICIENT_DATA'}];}};
+ ctx.refreshSectionRange=async()=>calls.push('render');
+ vm.runInContext(lines.find(line=>line.includes('const BODY_ANALYSIS_TERMINAL_STATES=')),ctx);
+ vm.runInContext(lines.find(line=>line.includes('async function convergeBodyAnalysis(')),ctx);
+ const result=await ctx.convergeBodyAnalysis('2026-09-13',{delays:[0,0,0]});assert.equal(result.status,'INSUFFICIENT_DATA');assert.deepEqual(calls,['read','read','render']);
+ ctx.apiService.getBodyRecords=async()=>{vm.runInContext('localSessionEpoch++',ctx);return[{recordId:'body-1',date:'2026-09-13',revision:1,analysisStatus:'COMPUTED'}];};
+ assert.equal((await ctx.convergeBodyAnalysis('2026-09-13',{delays:[0]})).status,'CANCELLED');
+ ctx.currentUser={userId:'synthetic-C'};ctx.apiService.getBodyRecords=async()=>[{recordId:'body-1',date:'2026-09-13',revision:1,analysisStatus:'COMPUTED'}];calls.length=0;
+ assert.equal((await ctx.convergeBodyAnalysis('2026-09-13',{delays:[0]})).status,'COMPUTED');assert.deepEqual(calls,['render']);
+ ctx.apiService.getBodyRecords=async()=>[{recordId:'body-1',date:'2026-09-13',revision:1,analysisStatus:'ANALYSIS_PENDING'}];
+ assert.equal((await ctx.convergeBodyAnalysis('2026-09-13',{delays:[0,0,0]})).status,'TIMEOUT');
+ let releaseFirst,reads=0;calls.length=0;ctx.apiService.getBodyRecords=async()=>{if(++reads===1)return new Promise(resolve=>releaseFirst=resolve);return[{recordId:'body-1',date:'2026-09-13',analysisStatus:'COMPUTED'}];};
+ const firstSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),first=ctx.convergeBodyAnalysis('2026-09-13',{delays:[0],serial:firstSerial});
+ await new Promise(resolve=>setImmediate(resolve));const secondSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),second=ctx.convergeBodyAnalysis('2026-09-13',{delays:[0],serial:secondSerial});
+ assert.equal((await second).status,'COMPUTED');releaseFirst([{recordId:'body-1',date:'2026-09-13',analysisStatus:'COMPUTED'}]);assert.equal((await first).status,'CANCELLED');assert.deepEqual(calls,['render']);
+});
+test('body refresh skips polling for default providers and settles the dashboard after timeout',async()=>{
+ const ctx=harness(()=>{}),lines=html.split(/\r?\n/),calls=[];ctx.sectionWindows={body:{start:'2026-09-01',end:'2026-09-30'}};ctx.setTimeout=setTimeout;
+ Object.assign(ctx,{refreshSectionRange:async()=>calls.push('refresh'),clearDashboardCache:()=>calls.push('clear'),setDashboardDataState:value=>calls.push(value),perfLog:event=>calls.push(event)});
+ vm.runInContext(lines.find(line=>line.includes('const BODY_ANALYSIS_TERMINAL_STATES=')),ctx);vm.runInContext(lines.find(line=>line.includes('function bodyAnalysisNeedsConvergence(')),ctx);vm.runInContext(lines.find(line=>line.includes('async function convergeBodyAnalysis(')),ctx);vm.runInContext(lines.find(line=>line.includes('async function completeBodyAnalysisRefresh(')),ctx);
+ let dbReads=0;ctx.apiService={getBodyRecords:async()=>{dbReads++;return[{date:'2026-09-13',analysisStatus:'ANALYSIS_PENDING'}];}};
+ const defaultSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx);assert.equal((await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:undefined,serial:defaultSerial,current:()=>true,delays:[0]})).status,'NOT_SCHEDULED');assert.equal(dbReads,0);assert.deepEqual(calls,['refresh','clear','ready']);
+ calls.length=0;const pendingSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),timeout=await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:{analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true},serial:pendingSerial,current:()=>true,delays:[0,0]});assert.equal(timeout.status,'TIMEOUT');assert.equal(dbReads,2);assert.deepEqual(calls,['refresh','clear','ready','body-analysis-convergence-timeout']);
+ calls.length=0;ctx.apiService.getBodyRecords=async()=>{ctx.sectionWindows.body={start:'2026-08-01',end:'2026-08-31'};return[{date:'2026-09-13',analysisStatus:'COMPUTED'}];};const rangeSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),cancelled=await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:{analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true},serial:rangeSerial,current:()=>true,delays:[0]});assert.equal(cancelled.status,'CANCELLED');assert.deepEqual(calls,['refresh']);
 });
 test('analysis snapshot uses latest domain date and does not flatten insufficient/stale to green',()=>{
  const ctx=harness(()=>{});ctx.recordManualSourceEvidence('localEngineSnapshot',{received:true,ok:true,data:{meals:[],outputs:[{domain:'body',calculation_date:'2026-09-14',score:null,score_status:'INSUFFICIENT_DATA'},{domain:'body',calculation_date:'2026-09-13',score:90,score_status:'VALID'},{domain:'nutrition',calculation_date:'2026-09-14',score:60,score_status:'STALE'}]}});const s=ctx.manualSourceStatus();assert.equal(s.domains.body.analysis,'INSUFFICIENT_DATA');assert.equal(s.domains.nutrition.analysis,'STALE');assert.equal(ctx.document.getElementById('data-analysis-state').dataset.state,'STALE');assert.equal(s.analysisUpdatedAt,null);

@@ -64,6 +64,7 @@ test('custom exercise UI selects stable IDs and exposes an explicit create-body-
   assert.match(web,/bodyPartId:bodyPartSelect\.value/);
   assert.match(web,/newBodyPartName:document\.getElementById\('exercise-create-body-part-name'\)\.value/);
   assert.match(web,/operation==='classify'\?\{bodyPartId:category\.value\}/);
+  assert.match(web,/STALE_CATALOG_RESPONSE'&&attempt<1\)return load\(successText,attempt\+1\)/);
   assert.doesNotMatch(web,/id="exercise-create-category"/);
   assert.match(index,/const EXERCISE_CACHE_SCHEMA="v2"/);
   assert.match(index,/function exerciseBodyPartId/);

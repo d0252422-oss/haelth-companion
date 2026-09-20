@@ -324,10 +324,10 @@ function setupLocalExerciseManagement(){
   const panel=document.createElement('section');panel.id='exercise-management';panel.className='card card-pad';
   panel.innerHTML='<button id="manage-exercises" type="button" class="secondary-button">管理我的動作</button><div id="exercise-manager" hidden><p>改名／個人別名不改歷史名稱與訓練量。封存可恢復；歷史紀錄仍可編修。SQL 手動訓練紀錄已保存；此項分數分析尚未啟用。</p><form id="exercise-create-form"><label>新自訂動作名稱<input id="exercise-create-name" class="form-input" maxlength="80" required></label><label>訓練部位<select id="exercise-create-body-part" class="select-input" required></select></label><label id="exercise-create-new-body-part" hidden>新訓練部位名稱<input id="exercise-create-body-part-name" class="form-input" maxlength="40"></label><button id="exercise-create-submit" type="submit">建立自訂動作</button></form><p id="exercise-manager-status" role="status"></p><div id="exercise-manager-list"></div><button id="exercise-manager-retry" type="button">重新載入</button></div>';
   document.getElementById('training-overview').append(panel);
-  const load=async(successText='SQL 已讀回')=>{
+  const load=async(successText='SQL 已讀回',attempt=0)=>{
     const epoch=localSessionEpoch,status=document.getElementById('exercise-manager-status');status.textContent='載入中…';
     try{const [entries,parts]=await Promise.all([apiService.getExerciseDatabase(),apiService.getExerciseBodyParts()]);if(epoch!==localSessionEpoch)return;exerciseBodyParts=parts;applyExerciseCatalog(entries);populateExerciseBodyPartSelect(document.getElementById('exercise-create-body-part'),{allowCreate:true});syncCreateBodyPartMode();renderLocalExerciseManager(entries,load);status.textContent=successText;}
-    catch(error){if(epoch===localSessionEpoch&&error.code!=='STALE_CATALOG_RESPONSE')status.textContent='讀取失敗：'+error.message;}
+    catch(error){if(epoch!==localSessionEpoch)return;if(error.code==='STALE_CATALOG_RESPONSE'&&attempt<1)return load(successText,attempt+1);status.textContent='讀取失敗：'+error.message;}
   };
   document.getElementById('manage-exercises').onclick=()=>{document.getElementById('exercise-manager').hidden=false;void load();};
   document.getElementById('exercise-manager-retry').onclick=()=>void load();
