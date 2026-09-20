@@ -16,7 +16,7 @@ const browserPath = process.env.ENGINE_BROWSER_EXECUTABLE || 'C:/Program Files/G
 const {chromium} = await import(pathToFileURL(modulePath).href);
 const viewports = [{width:360,height:800},{width:393,height:852},{width:412,height:915}];
 const expected = ['新增體重','新增體脂','新增訓練','新增飲食','新增睡眠','新增步數','新增總消耗','新增身體狀態'];
-const report = {target: target.href, started_at: new Date().toISOString(), classification: 'LIVE_BETA_PUBLIC_HTML_READ_ONLY_VISUAL_NO_AUTH_NO_REMOTE_WRITE', viewports: [], blocked_non_read_requests: []};
+const report = {target: target.href, started_at: new Date().toISOString(), classification: 'LIVE_BETA_PUBLIC_HTML_READ_ONLY_VISUAL_NO_AUTH_NO_REMOTE_WRITE', viewports: [], manual_forms: [], blocked_non_read_requests: []};
 const browser = await chromium.launch({headless: true, executablePath: browserPath});
 try {
   for (const viewport of viewports) {
@@ -32,6 +32,10 @@ try {
     const response = await page.goto(url.href, {waitUntil:'domcontentloaded', timeout:30000});
     assert.equal(response?.status(), 200);
     await page.waitForFunction(() => typeof globalThis.openSheet === 'function');
+    // The public route correctly presents auth first. Hide only its visual layer
+    // inside this read-only test page so the deployed sheet itself can be reviewed;
+    // no session, entitlement or application data access is created.
+    await page.addStyleTag({content:'#google-login-entry,#controlled-beta-access{display:none!important}'});
     await page.evaluate(() => globalThis.openSheet('quick-sheet'));
     await page.locator('#quick-sheet').waitFor({state:'visible'});
     const layout = await page.locator('#quick-sheet').evaluate((node, width) => {
@@ -61,6 +65,31 @@ try {
     await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
     assert.equal(page.url(), beforeBack);
     report.viewports.push({...viewport, ...layout, android_back_dismiss:true, screenshot});
+    if (viewport.width === 360) {
+      for (const item of [
+        {domain:'sleep', title:'新增睡眠', label:'睡眠總時長', timeFields:true},
+        {domain:'steps', title:'新增步數', label:'當日總步數', timeFields:false},
+        {domain:'total_energy', title:'新增總消耗熱量', label:'每日總消耗', timeFields:false},
+      ]) {
+        await page.evaluate(() => globalThis.openSheet('quick-sheet'));
+        await page.locator(`[data-observation-add="${item.domain}"]`).click();
+        await page.locator('#observation-form').waitFor({state:'visible'});
+        const form = await page.locator('#observation-form').evaluate(node => ({
+          domain: node.querySelector('#observation-domain')?.value,
+          title: node.querySelector('#observation-title')?.textContent?.trim(),
+          valueLabel: node.querySelector('#observation-value-label')?.textContent?.trim(),
+          dateVisible: Boolean(node.querySelector('#observation-date')?.getClientRects().length),
+          timeVisible: !node.querySelector('#observation-time-group')?.hidden,
+        }));
+        assert.equal(form.domain, item.domain);assert.equal(form.title, item.title);
+        assert.match(form.valueLabel, new RegExp(item.label));assert.equal(form.dateVisible, true);assert.equal(form.timeVisible, item.timeFields);
+        const formScreenshot = path.join(evidence, `quick-add-live-${item.domain}-form.png`);
+        await page.screenshot({path:formScreenshot, fullPage:false});
+        report.manual_forms.push({...form, screenshot:formScreenshot});
+        await page.evaluate(() => globalThis.closeSheet());
+        await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
+      }
+    }
     await context.close();
   }
   report.status = 'PASS';
