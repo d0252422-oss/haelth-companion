@@ -18,7 +18,9 @@ assert.match(html, /function closeSheet\(\)\{setOverlayOpen\(document\.getElemen
 assert.match(html, /function refreshInBackground\(label,task\)/);
 assert.doesNotMatch(html, /await refreshAfterRecordMutation\(/);
 assert.doesNotMatch(html, /await loadRange\(globalDateRange,\{force:true\}\);closeSheet\(\)/);
-assert.match(html, /upsertBodyRecord\(data\);setSubmitting\(btn,false\);closeSheet\(\);toast/);
+assert.match(html, /await apiService\.upsertBodyRecord\(data\)/);
+assert.match(html, /sectionLoadKeys\.delete\("body"\);clearDashboardCache\(\)/);
+assert.match(html, /if\(!current\(\)\)return;setSubmitting\(btn,false\);closeSheet\(\);toast/);
 assert.match(html, /upsertHealthCheckin\([\s\S]*?\);closeSheet\(\);toast\("身體狀態已更新。"\)/);
 // Local unresolved writes must retain their envelope before normal draft creation.
 assert.match(html, /start-workout"\)\.onclick=\(\)=>requestWorkoutStart\(\)/);

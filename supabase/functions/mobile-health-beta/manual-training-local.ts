@@ -73,7 +73,7 @@ export class ManualTrainingLocalStore {
     rejectClientIdentity(input);
     if(!uuid(input.clientRequestId))throw Error('INVALID_MUTATION_ID');
     const hash=await sha({action,input}),user=identity.canonical;
-    return await this.sql.begin(async(tx:any)=>{
+    const writeStarted=performance.now(),result=await this.sql.begin(async(tx:any)=>{
       await prepareManualWrite(tx,identity);
       // Same canonical lock as body/meals; serializes absent preference rows as well.
       await tx`select pg_advisory_xact_lock(hashtextextended(${user},0))`;
@@ -154,5 +154,6 @@ export class ManualTrainingLocalStore {
       await tx`insert into private.manual_training_receipts values(${user},${input.clientRequestId},${hash},${tx.json(result)})`;
       return result;
     });
+    return {...result,timing:{requestId:input.clientRequestId,dbCommitMs:Number((performance.now()-writeStarted).toFixed(2)),committedAt:new Date().toISOString()}};
   }
 }
