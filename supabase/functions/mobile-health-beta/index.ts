@@ -1,6 +1,7 @@
 import { withSupabase } from "@supabase/server";
 import { boundedSdkFetch } from "./bounded-auth-fetch.ts";
 import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
+import { canonicalScoreDate, scoreRecomputeStatus } from "./score-read-contract.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -443,9 +444,11 @@ async function getScores(request: Request, admin: any, origin: string): Promise<
   const identity = await resolveCanonicalWebIdentity(request, admin);
   const userId = String(identity.canonical_user_id);
   const date = new URL(request.url).searchParams.get("date") ?? undefined;
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw failure("INVALID_SCORE_DATE", 400);
+  if (date) {
+    try { canonicalScoreDate(date); } catch { throw failure("INVALID_SCORE_DATE", 400); }
+  }
   const scores = await readBetaScores(admin, userId, date);
-  return json(200, { ...scores, recompute_status: scores.score_freshness === "UPDATING" ? "QUEUED" : "CURRENT" }, origin);
+  return json(200, { ...scores, recompute_status: scoreRecomputeStatus(scores.score_freshness) }, origin);
 }
 
 async function getLatestHealth(request: Request, admin: any, origin: string): Promise<Response> {

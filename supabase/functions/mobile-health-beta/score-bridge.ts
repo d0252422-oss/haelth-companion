@@ -1,4 +1,5 @@
 import "../../../fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js";
+import { selectScoreRowsForDate } from "./score-read-contract.ts";
 
 type Json = Record<string, unknown>;
 type ScoreResult = {
@@ -100,7 +101,8 @@ export async function readBetaScores(admin: any, userId: string, localDate?: str
   const { data, error } = await query;
   if (error) throw error;
   const rows = Array.isArray(data) ? data : [];
-  const byType = Object.fromEntries(rows.map((row: Json) => [String(row.score_type), row]));
+  const { selectedDate, selectedRows } = selectScoreRowsForDate(rows, localDate);
+  const byType = Object.fromEntries(selectedRows.map((row: Json) => [String(row.score_type), row]));
   const [{ data: healthRows, error: healthError }, { data: queueRows, error: queueError }] = await Promise.all([
     admin.rpc("beta_get_health_freshness", { p_canonical_user_id: userId }),
     admin.rpc("beta_get_score_queue_summary", { p_canonical_user_id: userId }),
@@ -109,10 +111,10 @@ export async function readBetaScores(admin: any, userId: string, localDate?: str
   if (queueError) throw queueError;
   const health = Array.isArray(healthRows) ? healthRows[0] ?? {} : {};
   const queue = Array.isArray(queueRows) ? queueRows[0] ?? {} : {};
-  const scoreUpdatedAt = rows.map((row: Json) => String(row.calculated_at ?? "")).filter(Boolean).sort().at(-1) ?? null;
+  const scoreUpdatedAt = selectedRows.map((row: Json) => String(row.calculated_at ?? "")).filter(Boolean).sort().at(-1) ?? null;
   const pending = Number(queue.dirty_count ?? 0) + Number(queue.processing_count ?? 0);
   return {
-    local_date: rows[0]?.score_date ?? localDate ?? null,
+    local_date: selectedDate,
     algorithm_version: runtime.algorithmVersion,
     scores: byType,
     health_data_updated_at: health.health_data_updated_at ?? null,

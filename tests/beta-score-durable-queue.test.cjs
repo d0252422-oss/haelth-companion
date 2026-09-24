@@ -8,6 +8,7 @@ const read = (path) => fs.readFileSync(path, 'utf8');
 const migration = read('supabase/migrations/20260903021109_durable_beta_score_processor.sql');
 const edge = read('supabase/functions/mobile-health-beta/index.ts');
 const bridge = read('supabase/functions/mobile-health-beta/score-bridge.ts');
+const readContract = read('supabase/functions/mobile-health-beta/score-read-contract.ts');
 const web = read('beta-tester-site/index.html');
 
 test('ingestion dirty state is durable and processor is independent of request lifetime', () => {
@@ -94,5 +95,8 @@ test('score GET is read-only and reports queued analysis rather than relying on 
   const scoreGet = edge.slice(edge.indexOf('async function getScores('), edge.indexOf('async function getLatestHealth('));
   assert.doesNotMatch(scoreGet, /processScoreQueue|recomputeBetaScore/u);
   assert.match(scoreGet, /readBetaScores/u);
-  assert.match(scoreGet, /score_freshness === "UPDATING" \? "QUEUED"/u);
+  assert.match(scoreGet, /canonicalScoreDate\(date\)/u);
+  assert.match(scoreGet, /scoreRecomputeStatus\(scores\.score_freshness\)/u);
+  assert.match(readContract, /freshness === "PARTIAL"\) return "PARTIAL"/u);
+  assert.match(readContract, /freshness === "UP_TO_DATE"\) return "CURRENT"/u);
 });
