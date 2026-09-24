@@ -52,7 +52,8 @@ test('edited meal totals preserve unknown nutrients instead of fabricating zero'
     const context = vm.createContext({ module: { exports: {} }, exports: {}, require, console });
     vm.runInContext(helper, context);
     const core = context.module.exports;
-    assert.deepEqual(core.calculateKnownNutrientTotals([{ calories: null, protein: '', carbs: undefined, fat: null }]), { calories: null, protein: null, carbs: null, fat: null });
+    const unknown = JSON.parse(JSON.stringify(core.calculateKnownNutrientTotals([{ calories: null, protein: '', carbs: undefined, fat: null }])));
+    assert.deepEqual(unknown, { calories: null, protein: null, carbs: null, fat: null });
   } else {
     const context = vm.createContext({});
     vm.runInContext(source, context);
