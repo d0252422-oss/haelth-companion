@@ -24,7 +24,7 @@ actor PendingUploadStore {
         try persist()
     }
 
-    func batch(limit: Int = 250) -> [HealthRecordMutation] { Array(records.prefix(limit)) }
+    func batch(limit: Int = 100) -> [HealthRecordMutation] { Array(records.prefix(limit)) }
 
     func acknowledge(idempotencyKeys: Set<String>) throws {
         records.removeAll { idempotencyKeys.contains($0.idempotencyKey) }

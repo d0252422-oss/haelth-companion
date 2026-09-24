@@ -217,3 +217,14 @@ test('background callbacks use isolated one-shot lifecycle ownership', () => {
   assert.match(observer, /continuation\.yield\(\(\)\)/u);
   assert.doesNotMatch(source, /nonisolated\(unsafe\)|unsafeBitCast|@unchecked Sendable/u);
 });
+
+test('native iOS upload batches match the 100-record Edge limit and drain backlog iteratively', () => {
+  const root = path.resolve(__dirname, '..', 'ios-helper');
+  const pending = fs.readFileSync(path.join(root, 'Storage', 'PendingUploadStore.swift'), 'utf8');
+  const coordinator = fs.readFileSync(path.join(root, 'Features', 'HealthSync', 'HealthSyncCoordinator.swift'), 'utf8');
+  assert.match(pending, /func batch\(limit: Int = 100\)/u);
+  assert.doesNotMatch(pending, /func batch\(limit: Int = 250\)/u);
+  assert.match(coordinator, /func flush\(session: AppSession\) async throws \{\s*while true/u);
+  assert.match(coordinator, /let batch = await pendingStore\.batch\(\)/u);
+  assert.match(coordinator, /pendingStore\.acknowledge\(idempotencyKeys: completed\)/u);
+});

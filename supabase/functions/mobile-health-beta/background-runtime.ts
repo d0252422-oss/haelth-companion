@@ -1,5 +1,6 @@
 // Existing connector payloads and device grants. No Web context or privileged fallback.
 import { shortcutRecordToMutation, validateMutation } from "./index.ts";
+import { sameCanonicalUserId } from "./canonical-user-id.ts";
 import { readManualRequest } from "./manual-request-body.ts";
 import { scopedWorkerSql } from "./worker-sql-context.ts";
 import { LocalEngineRuntime } from "./local-engine-runtime.ts";
@@ -49,7 +50,7 @@ export function createDelegatedIngestion(raw: any) {
               body.environment !== "beta" &&
               !(statusRequest && body.environment === undefined)
             ) throw Error("WRONG_ENVIRONMENT");
-            if (body.canonical_user_id !== identity.id) {
+            if (!sameCanonicalUserId(body.canonical_user_id, identity.id)) {
               throw Error("CROSS_USER_UPLOAD");
             }
             if (statusRequest) {
@@ -108,7 +109,7 @@ export function createDelegatedIngestion(raw: any) {
                 !Array.isArray(body.mutations) || body.mutations.length > 100
               ) throw Error("INVALID_BATCH");
               mutations = body.mutations.map((m: any) =>
-                validateMutation(m, identity.id)
+                validateMutation(m, identity.id, identity.platform)
               );
             }
             for (const m of mutations) {

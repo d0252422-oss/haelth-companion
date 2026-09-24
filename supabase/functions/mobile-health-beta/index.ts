@@ -2,6 +2,7 @@ import { withSupabase } from "@supabase/server";
 import { boundedSdkFetch } from "./bounded-auth-fetch.ts";
 import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 import { canonicalScoreDate, scoreRecomputeStatus } from "./score-read-contract.ts";
+import { sameCanonicalUserId } from "./canonical-user-id.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -18,6 +19,11 @@ const UNITS: Record<string, Set<string>> = {
   steps: new Set(["count"]), heart_rate: new Set(["bpm"]), resting_heart_rate: new Set(["bpm"]),
   sleep: new Set(["minute"]), sleep_stage: new Set(["minute"]), weight: new Set(["kg"]),
   workout: new Set(["minute"]), hrv: new Set(["ms"]), spo2: new Set(["percent"]),
+};
+const MAX_VALUE_BY_DOMAIN: Record<string, number> = {
+  steps: 10_000_000, heart_rate: 1_000, resting_heart_rate: 1_000,
+  sleep: 10_080, sleep_stage: 10_080, weight: 2_000,
+  workout: 10_080, hrv: 100_000, spo2: 100,
 };
 type Json = Record<string, unknown>;
 
@@ -219,7 +225,7 @@ async function ingestShortcut(request: Request, admin: any, origin: string): Pro
   if (!Number.isFinite(Date.parse(String(body.sync_window_start)))
       || !Number.isFinite(Date.parse(String(body.sync_window_end)))) throw failure("BAD_SYNC_WINDOW", 400);
   const session = await authorizeShortcutSession(request, admin);
-  if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!sameCanonicalUserId(body.canonical_user_id, session.canonical_user_id)) throw failure("CROSS_USER_UPLOAD", 403);
   if (!Array.isArray(body.records) || body.records.length > 250) throw failure("INVALID_BATCH", 400);
 
   const receipt: Json = { accepted_idempotency_keys: [], duplicate_idempotency_keys: [], rejected: [] };
@@ -384,11 +390,15 @@ async function ingest(request: Request, admin: any, origin: string): Promise<Res
   const body = await readJson(request);
   if (body.environment !== "beta") throw failure("WRONG_ENVIRONMENT", 400);
   const session = await authorizeSession(request, admin);
-  if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
-  if (!Array.isArray(body.mutations) || body.mutations.length > 250) throw failure("INVALID_BATCH", 400);
+  if (!sameCanonicalUserId(body.canonical_user_id, session.canonical_user_id)) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!Array.isArray(body.mutations) || body.mutations.length > 100) throw failure("INVALID_BATCH", 400);
   const mutations: Json[] = [];
   for (const candidate of body.mutations) {
-    const mutation = validateMutation(candidate as Json, String(session.canonical_user_id));
+    const mutation = validateMutation(
+      candidate as Json,
+      String(session.canonical_user_id),
+      String(session.platform),
+    );
     mutations.push(mutation);
   }
   const { data: receipt, error } = await admin.rpc("beta_ingest_health_mutation_batch", {
@@ -403,7 +413,8 @@ async function ingest(request: Request, admin: any, origin: string): Promise<Res
 async function reportStatus(request: Request, admin: any, origin: string): Promise<Response> {
   const body = await readJson(request);
   const session = await authorizeSession(request, admin);
-  if (body.canonical_user_id !== session.canonical_user_id) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!sameCanonicalUserId(body.canonical_user_id, session.canonical_user_id)) throw failure("CROSS_USER_UPLOAD", 403);
+  if (body.platform !== session.platform) throw failure("PLATFORM_MISMATCH", 400);
   const lastResult = String(body.last_result || "UNKNOWN");
   const successfulSync = ["SYNCED", "SYNCED_RECENT", "SYNCED_PARTIAL", "NO_DATA"].includes(lastResult);
   const lastAttemptAt = body.last_attempt_at || new Date().toISOString();
@@ -630,29 +641,68 @@ export async function verifyWebIdentity(token: string): Promise<{ subject: strin
   return { subject, email };
 }
 
-export function validateMutation(mutation: Json, userId: string): Json {
-  if (mutation.canonical_user_id !== userId) throw failure("CROSS_USER_UPLOAD", 403);
+export function validateMutation(mutation: Json, userId: string, expectedPlatform: string): Json {
+  if (!mutation || typeof mutation !== "object" || Array.isArray(mutation)) throw failure("INVALID_MUTATION", 400);
+  if (!sameCanonicalUserId(mutation.canonical_user_id, userId)) throw failure("CROSS_USER_UPLOAD", 403);
   if (!["android", "ios"].includes(String(mutation.platform))) throw failure("PLATFORM_MISMATCH", 400);
+  if (!["android", "ios"].includes(expectedPlatform) || mutation.platform !== expectedPlatform) throw failure("PLATFORM_MISMATCH", 400);
   if (!DOMAINS.has(String(mutation.domain))) throw failure("UNSUPPORTED_DOMAIN", 400);
   if (!["UPSERT", "DELETE"].includes(String(mutation.operation))) throw failure("INVALID_OPERATION", 400);
   if (!Number.isSafeInteger(mutation.source_revision) || Number(mutation.source_revision) < 1) throw failure("INVALID_SOURCE_REVISION", 400);
   for (const field of ["source_content_hash", "idempotency_key"]) {
     if (!/^[0-9a-f]{64}$/.test(String(mutation[field] ?? ""))) throw failure("INVALID_HASH", 400);
   }
-  requiredString(mutation.source_app, "MISSING_SOURCE_IDENTITY");
-  requiredString(mutation.source_record_id, "MISSING_SOURCE_IDENTITY");
-  if (mutation.operation === "UPSERT") validateRecord(mutation.record as Json, userId);
+  if (mutation.source_updated_at != null && mutation.source_updated_at !== ""
+      && !Number.isFinite(Date.parse(String(mutation.source_updated_at)))) throw failure("MALFORMED_TIMESTAMP", 400);
+  const sourceApp = boundedIdentity(mutation.source_app);
+  const sourceRecordId = boundedIdentity(mutation.source_record_id);
+  const affectedDates = validateAffectedDates(mutation.affected_local_dates);
+  if (mutation.operation === "UPSERT") {
+    const record = mutation.record as Json;
+    validateRecord(record, userId);
+    if (record.platform !== mutation.platform || record.domain !== mutation.domain
+        || record.source_app !== sourceApp || record.source_record_id !== sourceRecordId) {
+      throw failure("MUTATION_RECORD_MISMATCH", 400);
+    }
+    if (!affectedDates.includes(String(record.local_date))) throw failure("AFFECTED_DATE_MISMATCH", 400);
+  }
   if (mutation.operation === "DELETE" && mutation.record != null) throw failure("DELETE_CONTAINS_RECORD", 400);
-  return mutation;
+  return { ...mutation, affected_local_dates: affectedDates };
 }
 
 function validateRecord(record: Json, userId: string): void {
-  if (!record || record.canonical_user_id !== userId) throw failure("CROSS_USER_UPLOAD", 403);
+  if (!record || !sameCanonicalUserId(record.canonical_user_id, userId)) throw failure("CROSS_USER_UPLOAD", 403);
   if (record.schema_version !== "hdl-v2.health-ingestion.v1") throw failure("SCHEMA_VERSION_MISMATCH", 400);
+  const platform = String(record.platform);
+  const domain = String(record.domain);
+  if (!["android", "ios"].includes(platform)) throw failure("PLATFORM_MISMATCH", 400);
+  if (!DOMAINS.has(domain)) throw failure("UNSUPPORTED_DOMAIN", 400);
+  boundedIdentity(record.source_app);
+  boundedIdentity(record.source_record_id);
+  if (!UNITS[domain]?.has(String(record.unit))) throw failure("INVALID_UNIT", 400);
   if (!Number.isFinite(Date.parse(String(record.recorded_at)))) throw failure("MALFORMED_TIMESTAMP", 400);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(record.local_date ?? ""))) throw failure("MALFORMED_LOCAL_DATE", 400);
-  if (typeof record.timezone !== "string" || !record.timezone) throw failure("MISSING_TIMEZONE", 400);
-  if (typeof record.value !== "number" || !Number.isFinite(record.value)) throw failure("MALFORMED_VALUE", 400);
+  try { canonicalScoreDate(record.local_date); } catch { throw failure("MALFORMED_LOCAL_DATE", 400); }
+  if (typeof record.timezone !== "string" || !record.timezone || record.timezone.length > 64) throw failure("MISSING_TIMEZONE", 400);
+  try { new Intl.DateTimeFormat("en-US", { timeZone: record.timezone }).format(0); } catch { throw failure("INVALID_TIMEZONE", 400); }
+  if (typeof record.value !== "number" || !Number.isFinite(record.value) || record.value < 0
+      || record.value > MAX_VALUE_BY_DOMAIN[domain]) throw failure("MALFORMED_VALUE", 400);
+}
+
+function validateAffectedDates(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 32) throw failure("INVALID_AFFECTED_DATES", 400);
+  const dates = value.map((item) => {
+    if (typeof item !== "string") throw failure("INVALID_AFFECTED_DATES", 400);
+    try { return canonicalScoreDate(item); } catch { throw failure("INVALID_AFFECTED_DATES", 400); }
+  });
+  if (new Set(dates).size !== dates.length) throw failure("INVALID_AFFECTED_DATES", 400);
+  return dates;
+}
+
+function boundedIdentity(value: unknown): string {
+  const result = requiredString(value, "MISSING_SOURCE_IDENTITY");
+  if (!result.trim()) throw failure("MISSING_SOURCE_IDENTITY", 400);
+  if (result.length > 512) throw failure("SOURCE_IDENTITY_TOO_LONG", 400);
+  return result;
 }
 
 export async function readJson(request: Request): Promise<Json> {

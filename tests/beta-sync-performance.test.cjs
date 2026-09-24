@@ -22,3 +22,15 @@ test('Android ingestion uses one bulk RPC and returns score queued without block
   assert.doesNotMatch(ingest, /recomputeBetaScore|recomputeDates/u);
   assert.match(migration, /'score_status', 'QUEUED'/u);
 });
+
+test('Edge and SQL share the same bounded batch ceiling', () => {
+  assert.match(edge, /body\.mutations\.length > 100/u);
+  assert.doesNotMatch(edge, /body\.mutations\.length > 250/u);
+});
+
+test('connector status cannot cross the authenticated session platform', () => {
+  assert.match(
+    edge,
+    /async function reportStatus[\s\S]*?if \(body\.platform !== session\.platform\) throw failure\("PLATFORM_MISMATCH", 400\)/u,
+  );
+});
