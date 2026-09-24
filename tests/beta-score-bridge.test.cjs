@@ -36,19 +36,24 @@ test('Beta runtime reuses the frozen Apps Script formulas for all 28 golden fixt
 
 test('score storage is default-deny, version-frozen, and fingerprint-idempotent', () => {
   const sql = read('supabase/migrations/20260829091747_beta_score_bridge_storage.sql');
+  const exactSet = read('supabase/migrations/20260924133000_beta_score_bundle_exact_set.sql');
   assert.match(sql, /algorithm_version text not null check \(algorithm_version = 'health-score-v1\.0'\)/u);
   assert.match(sql, /unique \(canonical_user_id, score_date, score_type, algorithm_version\)/u);
   assert.match(sql, /where public\.beta_health_scores\.input_fingerprint is distinct from excluded\.input_fingerprint/u);
   assert.match(sql, /alter table public\.beta_health_scores enable row level security/u);
   assert.match(sql, /revoke all on table public\.beta_health_scores from public, anon, authenticated/u);
   assert.match(sql, /generation = p_generation/u);
+  assert.match(exactSet, /submitted_score_types is distinct from expected_score_types/u);
+  assert.match(exactSet, /INVALID_SCORE_BUNDLE_EXACT_SET/u);
+  assert.match(exactSet, /security invoker[\s\S]*set search_path = ''/u);
+  assert.match(exactSet, /revoke all on function public\.beta_persist_score_bundle[\s\S]*from public, anon, authenticated/u);
 });
 
 test('ingestion queues scores and durable processor performs bounded recompute', () => {
   const edge = read('supabase/functions/mobile-health-beta/index.ts');
   const androidIngest = edge.slice(edge.indexOf('async function ingest('), edge.indexOf('async function reportStatus('));
   const bridge = read('supabase/functions/mobile-health-beta/score-bridge.ts');
-  const dirtyDates = read('supabase/migrations/20260829135430_beta_score_dirty_old_dates.sql');
+  const dirtyDates = read('supabase/migrations/20260924131500_beta_score_recompute_old_dates_durable.sql');
   assert.match(edge, /beta_ingest_health_mutation_batch/u);
   assert.match(edge, /beta_claim_score_recompute/u);
   assert.match(edge, /processScoreQueue\(admin, userId, 3\)/u);
@@ -61,8 +66,9 @@ test('ingestion queues scores and durable processor performs bounded recompute',
   assert.match(edge, /beta_resolve_web_canonical_identity/u);
   assert.match(bridge, /\.eq\("operation", "UPSERT"\)\.is\("invalidated_at", null\)/u);
   assert.match(bridge, /SCORE_INPUT_BOUND_EXCEEDED/u);
-  assert.match(dirtyDates, /affected_dates := affected_dates \|\| old\.affected_local_dates/u);
-  assert.match(dirtyDates, /select distinct unnest\(affected_dates\)/u);
+  assert.match(dirtyDates, /affected_dates := affected_dates \|\| coalesce\(old\.affected_local_dates/u);
+  assert.match(dirtyDates, /select distinct local_date[\s\S]*from unnest\(affected_dates\)/u);
+  assert.match(dirtyDates, /attempt_count = 0[\s\S]*lease_token = null[\s\S]*lease_expires_at = null/u);
   assert.doesNotMatch(bridge, /service_role|SUPABASE_SERVICE_ROLE_KEY/u);
 });
 
