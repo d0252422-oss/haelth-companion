@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {mkdir, readFile, realpath, writeFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
-import {assertExpectedBuild, assertUnauthenticatedBoundary, filterFirstPartyHttpErrors, observeWebAcceptance, safeResource} from './web-acceptance-observer.mjs';
+import {assertExpectedBuild, assertResolvedBetaTarget, assertUnauthenticatedBoundary, filterFirstPartyHttpErrors, observeWebAcceptance, safeResource} from './web-acceptance-observer.mjs';
 
 const target = new URL(process.argv[2] || 'https://liff.line.me/2011116657-9SpSnQlN?range=30d');
 const local = ['127.0.0.1','localhost'].includes(target.hostname);
@@ -57,6 +57,7 @@ try {
       entryVersionTokenPresent: Boolean(globalThis.HEALTH_BUILD_DIAGNOSTICS?.entryVersionToken),
       recoveryAttempted: Boolean(globalThis.HEALTH_BUILD_DIAGNOSTICS?.recovery?.attempted),
     }));
+    assertResolvedBetaTarget(target.href, delivery.resolvedResource);
     assertExpectedBuild(expectedBuildId,delivery);
     const buildMatch = true;
     await page.waitForFunction(() => {
@@ -154,7 +155,7 @@ try {
   }
   report.status = 'PASS';
 } catch (error) {
-  const safeCodes=['EXPECTED_BUILD_ID_REQUIRED','LIVE_DEPLOYED_BUILD_MISMATCH','LIFF_LOADED_BUILD_MISMATCH','UNAUTHENTICATED_APP_VISIBLE','UNAUTHENTICATED_APP_NOT_INERT','AUTH_BOUNDARY_NOT_VISIBLE','PAGE_ERROR_DETECTED','UNEXPECTED_NETWORK_FAILURE','FIRST_PARTY_HTTP_ERROR','UNAPPROVED_ACCEPTANCE_TARGET'];
+  const safeCodes=['EXPECTED_BUILD_ID_REQUIRED','LIVE_DEPLOYED_BUILD_MISMATCH','LIFF_LOADED_BUILD_MISMATCH','UNAUTHENTICATED_APP_VISIBLE','UNAUTHENTICATED_APP_NOT_INERT','AUTH_BOUNDARY_NOT_VISIBLE','PAGE_ERROR_DETECTED','UNEXPECTED_NETWORK_FAILURE','FIRST_PARTY_HTTP_ERROR','UNAPPROVED_ACCEPTANCE_TARGET','UNAPPROVED_RESOLVED_TARGET'];
   report.status='FAIL';report.error={name:error?.name||'Error',code:safeCodes.find(code=>String(error?.message||'').includes(code))||'ACCEPTANCE_FAILED'};process.exitCode=1;
 } finally {
   report.ended_at = new Date().toISOString();

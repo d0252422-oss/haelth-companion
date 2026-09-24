@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assertExpectedBuild, assertUnauthenticatedBoundary, filterFirstPartyHttpErrors, observeWebAcceptance, safeResource} from '../scripts/web-acceptance-observer.mjs';
+import {assertExpectedBuild, assertResolvedBetaTarget, assertUnauthenticatedBoundary, filterFirstPartyHttpErrors, observeWebAcceptance, safeResource} from '../scripts/web-acceptance-observer.mjs';
 
 class FakePage {
   handlers = new Map();
@@ -52,6 +52,15 @@ test('build comparison and unauthenticated boundary fail closed', () => {
   const safe={authenticatedAppVisible:false,authenticatedAppAriaHidden:true,authenticatedAppInert:true,loginVisible:true,accessGateVisible:false};
   assert.equal(assertUnauthenticatedBoundary(safe),true);
   assert.throws(()=>assertUnauthenticatedBoundary({...safe,authenticatedAppVisible:true}),/UNAUTHENTICATED_APP_VISIBLE/u);
-  assert.equal(assertUnauthenticatedBoundary({...safe,authenticatedAppAriaHidden:false,authenticatedAppInert:false}),true);
+  assert.throws(()=>assertUnauthenticatedBoundary({...safe,authenticatedAppAriaHidden:false,authenticatedAppInert:false}),/UNAUTHENTICATED_APP_NOT_INERT/u);
   assert.throws(()=>assertUnauthenticatedBoundary({...safe,loginVisible:false}),/AUTH_BOUNDARY_NOT_VISIBLE/u);
+});
+
+test('resolved live target must remain on the exact Beta Pages application', () => {
+  const liff='https://liff.line.me/2011116657-9SpSnQlN?range=30d';
+  assert.equal(assertResolvedBetaTarget(liff,'https://d0252422-oss.github.io/health-companion-beta/'),true);
+  assert.equal(assertResolvedBetaTarget('http://127.0.0.1:8080/index.html','http://127.0.0.1:8080/index.html'),true);
+  assert.throws(()=>assertResolvedBetaTarget(liff,'https://d0252422-oss.github.io/health-companion/'),/UNAPPROVED_RESOLVED_TARGET/u);
+  assert.throws(()=>assertResolvedBetaTarget(liff,'https://vptqedxdxfoohbqctujf.supabase.co/'),/UNAPPROVED_RESOLVED_TARGET/u);
+  assert.throws(()=>assertResolvedBetaTarget(liff,'not-a-url'),/UNAPPROVED_RESOLVED_TARGET/u);
 });

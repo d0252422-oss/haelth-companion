@@ -71,8 +71,33 @@ export function assertExpectedBuild(expectedBuildId, delivery) {
   return true;
 }
 
+export function assertResolvedBetaTarget(entryResource, resolvedResource) {
+  let entry;
+  let resolved;
+  try {
+    entry = new URL(entryResource);
+    resolved = new URL(resolvedResource);
+  } catch {
+    throw Error('UNAPPROVED_RESOLVED_TARGET');
+  }
+  const localEntry = ['127.0.0.1', 'localhost'].includes(entry.hostname);
+  if (localEntry) {
+    if (!['127.0.0.1', 'localhost'].includes(resolved.hostname) || resolved.origin !== entry.origin) {
+      throw Error('UNAPPROVED_RESOLVED_TARGET');
+    }
+    return true;
+  }
+  if (resolved.protocol !== 'https:' || resolved.port
+      || resolved.hostname !== 'd0252422-oss.github.io'
+      || !resolved.pathname.startsWith('/health-companion-beta/')) {
+    throw Error('UNAPPROVED_RESOLVED_TARGET');
+  }
+  return true;
+}
+
 export function assertUnauthenticatedBoundary(boundary) {
   if (boundary?.authenticatedAppVisible !== false) throw Error('UNAUTHENTICATED_APP_VISIBLE');
+  if (boundary?.authenticatedAppInert !== true || boundary?.authenticatedAppAriaHidden !== true) throw Error('UNAUTHENTICATED_APP_NOT_INERT');
   if (boundary?.loginVisible !== true && boundary?.accessGateVisible !== true) throw Error('AUTH_BOUNDARY_NOT_VISIBLE');
   return true;
 }
