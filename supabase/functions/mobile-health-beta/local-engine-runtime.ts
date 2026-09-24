@@ -18,7 +18,15 @@ type Json = Record<string, any>;
 // historical data rewrite. Preserve every known/null nutrient and provenance.
 export function manualMealPresentation(body:Json):Json {
   const complete=body.userConfirmed===true&&['calories','protein','carbs','fat'].every(key=>typeof body[key]==='number'&&Number.isFinite(body[key])&&body[key]>=0);
-  return {...body,includedInTotals:complete,nutritionCompleteness:body.userConfirmed!==true?'UNCONFIRMED':complete?'COMPLETE':'INCOMPLETE'};
+  const included=body.includedInTotals===false?false:complete;
+  return {...body,includedInTotals:included,nutritionCompleteness:body.userConfirmed!==true?'UNCONFIRMED':complete?'COMPLETE':'INCOMPLETE'};
+}
+export function manualMealEngineRecords(rows:Json[]):Json[] {
+  return rows.filter(row=>manualMealPresentation(row.body??{}).includedInTotals===true).map(row=>{
+    const record=row.canonical_record;
+    if(!record||typeof record!=='object'||record.domain!=='nutrition')throw Error('INVALID_MEAL_RECORD');
+    return record;
+  });
 }
 const pgDay = (value: any) =>
   value instanceof Date
@@ -377,7 +385,7 @@ export class LocalEngineRuntime {
   async compute(user: string, day: string) {
     const begin = performance.now();
     const {rows,health,body,observations}=await this.sql.begin('isolation level repeatable read read only',async(tx:any)=>{
-      const rows=await tx`select canonical_record from public.engine_meals where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 5001`;
+      const rows=await tx`select body,canonical_record from public.engine_meals where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 5001`;
       const health=await tx`select * from public.beta_health_records where canonical_user_id=${user} and operation='UPSERT' and invalidated_at is null
       and affected_local_dates && array(select generate_series(${day}::date-27,${day}::date,'1 day')::date) limit 5001`;
       const body=await tx`select * from public.engine_manual_body_records where canonical_user_id=${user} and not deleted and local_date between ${day}::date-27 and ${day}::date limit 29`;
@@ -391,6 +399,7 @@ export class LocalEngineRuntime {
     const windowStart=new Date(Date.parse(day)-27*86400000).toISOString().slice(0,10);
     const manualDays=[...new Set<string>(observations.map((r:Json)=>pgDay(r.local_date)))].filter(date=>date>=windowStart&&date<=day).map(date=>({date,...observationEngineProjection(observations,health,user,date)}));
     const observationRecords=manualDays.flatMap(p=>p.records);
+    const mealRecords=manualMealEngineRecords(rows);
     const healthRecords = health.map((r: Json) => ({
       subject_ref: user,
       source: r.source_app,
@@ -420,7 +429,7 @@ export class LocalEngineRuntime {
       canonical_inputs: {
         date: day,
         records: [
-          ...rows.map((r: Json) => r.canonical_record),
+          ...mealRecords,
           ...healthRecords,
           ...bodyRecords,
           ...observationRecords,
@@ -430,7 +439,7 @@ export class LocalEngineRuntime {
     });
     this.timings.push({
       date: day,
-      records: rows.length + healthRecords.length + bodyRecords.length + observationRecords.length,
+      records: mealRecords.length + healthRecords.length + bodyRecords.length + observationRecords.length,
       elapsed_ms: performance.now() - begin,
     });
     return result.normalized.bundle;
