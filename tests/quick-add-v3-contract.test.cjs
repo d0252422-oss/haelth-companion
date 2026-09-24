@@ -7,6 +7,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const observations = fs.readFileSync(path.join(root, 'scripts', 'manual-observation-web.js'), 'utf8');
 const bodyStore = fs.readFileSync(path.join(root, 'supabase', 'functions', 'mobile-health-beta', 'manual-body-local.ts'), 'utf8');
 const build = require(path.join(root, 'scripts', 'build-version.js'));
+const liveAcceptance = fs.readFileSync(path.join(root, 'scripts', 'quick-add-live-acceptance.mjs'), 'utf8');
 
 const quick = html.match(/<section id="quick-sheet"[\s\S]*?<\/section>/)?.[0] || '';
 const labels = [...quick.matchAll(/<b(?: [^>]*)?>([^<]+)<\/b>/g)].map(match => match[1].trim());
@@ -34,5 +35,10 @@ assert.equal(recovered.searchParams.get('v'), 'new-build');
 assert.match(html, /數據載入中，請稍候…/);
 assert.match(html, /數據更新中，請稍候…/);
 assert.match(html, /資料暫時無法更新/);
+assert.match(liveAcceptance, /WEB_EXPECTED_BUILD_ID/);
+assert.match(liveAcceptance, /LIVE_DEPLOYED_BUILD_MISMATCH/);
+assert.match(liveAcceptance, /LIFF_LOADED_BUILD_MISMATCH/);
+assert.match(liveAcceptance, /observeWebAcceptance/);
+assert.match(liveAcceptance, /AUTH_BOUNDARY_NOT_VISIBLE/);
 
 console.log('Quick Add V3 contract tests: PASS');
