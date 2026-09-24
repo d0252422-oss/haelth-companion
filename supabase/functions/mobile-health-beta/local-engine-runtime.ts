@@ -28,6 +28,10 @@ export function manualMealEngineRecords(rows:Json[]):Json[] {
     return record;
   });
 }
+export function preservedManualMealExclusion(previous:Json={}):false|undefined {
+  const presented=manualMealPresentation(previous);
+  return presented.includedInTotals===false&&presented.nutritionCompleteness==='COMPLETE'?false:undefined;
+}
 const pgDay = (value: any) =>
   value instanceof Date
     ? value.toISOString().slice(0, 10)
@@ -333,7 +337,7 @@ export class LocalEngineRuntime {
             fat: input.fat,
           }
           : null,
-        includedInTotals: input.userConfirmed === true,
+        includedInTotals: preservedManualMealExclusion(old?.body || {}),
         userConfirmed: input.userConfirmed === true,
         nutritionSource: labelMode
           ? "USER_LABEL_PER_100G"
