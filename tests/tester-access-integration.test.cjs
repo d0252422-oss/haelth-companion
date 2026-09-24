@@ -44,7 +44,7 @@ test('Android beta project is read-only Health Connect and development-only', ()
   assert.match(build, /connect-client:1\.1\.0/u);
   assert.match(build, /https:\/\/beta\.invalid/u);
   assert.match(workflow, /assembleDebug/u);
-  assert.match(workflow, /actions\/upload-artifact@v4/u);
+  assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}\s*# v4/u);
   assert.doesNotMatch(workflow, /(?:\bdeploy\b|\bplay\b|\bproduction\b|signingConfig|app-store|testflight)/iu);
 });
 

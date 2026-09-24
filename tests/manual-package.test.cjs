@@ -1,8 +1,9 @@
 // Offline packaging contract, not deployment/Edge acceptance. Artifacts retained on D.
 const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
-const {execFileSync}=require('node:child_process'),{readFileSync}=require('node:fs'),{randomUUID,createHash}=require('node:crypto'),vm=require('node:vm');
+const {execFileSync}=require('node:child_process'),{readFileSync,mkdirSync}=require('node:fs'),{randomUUID,createHash}=require('node:crypto'),vm=require('node:vm');
 for(const release of ['A','AB'])test(`offline ${release} package public release matches manifest and stays OFF`,()=>{
  const output=path.resolve('.engine-artifacts','package-contract-'+randomUUID());
+ mkdirSync(path.dirname(output),{recursive:true});
  execFileSync(process.execPath,['scripts/prepare-manual-beta-package.mjs',output,'--release='+release],{cwd:process.cwd(),windowsHide:true,timeout:30000});
  const manifest=JSON.parse(readFileSync(path.join(output,'artifact-manifest.json'),'utf8')),ctx={};
  vm.runInNewContext(readFileSync(path.join(output,'scripts/manual-sql-config.js'),'utf8'),ctx);
