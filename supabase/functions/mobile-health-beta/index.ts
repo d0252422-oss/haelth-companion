@@ -529,13 +529,15 @@ function scoreErrorCode(error: unknown): string {
     message.includes("STALE_SCORE_INPUT") ? "STALE_SCORE_INPUT" : "SCORE_RECOMPUTE_FAILED";
 }
 
-async function authorizeSession(request: Request, admin: any): Promise<Json> {
+export async function authorizeSession(request: Request, admin: any): Promise<Json> {
   const sessionId = request.headers.get("x-app-session-id") ?? "";
   if (!sessionId) {
     const nativeUser = await authenticateNativeUser(request, admin);
     const identity = await resolveNativeIdentity(admin, String(nativeUser.auth_user_id), true);
     if (!identity) throw failure("NATIVE_IDENTITY_NOT_LINKED", 401);
-    return identity;
+    // Native Supabase/Google bearer auth is currently an Android-only client path.
+    // Bind the platform at this trusted boundary; never infer it from the upload body.
+    return { ...identity, platform: "android" };
   }
   if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
   const { data, error } = await admin.rpc("beta_authorize_app_session", {

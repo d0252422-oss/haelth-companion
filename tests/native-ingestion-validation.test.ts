@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { validateMutation } from "../supabase/functions/mobile-health-beta/index.ts";
+import { authorizeSession, validateMutation } from "../supabase/functions/mobile-health-beta/index.ts";
 import { sameCanonicalUserId } from "../supabase/functions/mobile-health-beta/canonical-user-id.ts";
 
 const user = "a1b2c3d4-e5f6-4789-8abc-def012345678";
@@ -53,6 +53,38 @@ Deno.test("canonical identity comparison accepts Swift UUID casing only", () => 
     () => validateMutation({ ...uppercasePayload, canonical_user_id: "b1b2c3d4-e5f6-4789-8abc-def012345678" }, user, "android"),
     /CROSS_USER_UPLOAD/,
   );
+});
+
+Deno.test("native Google bearer auth is server-bound to the Android platform", async () => {
+  const admin = {
+    auth: {
+      getUser: () => Promise.resolve({
+        data: {
+          user: {
+            id: "auth-user-a",
+            email: "owner@example.invalid",
+            app_metadata: { provider: "google", providers: ["google"] },
+            identities: [{ provider: "google", id: "google-subject-a", identity_data: { sub: "google-subject-a" } }],
+          },
+        },
+        error: null,
+      }),
+    },
+    rpc: (name: string) => {
+      if (name !== "beta_resolve_native_auth_identity") throw new Error(`unexpected RPC ${name}`);
+      return Promise.resolve({
+        data: [{ canonical_user_id: user, provider: "google", environment: "beta" }],
+        error: null,
+      });
+    },
+  };
+  const request = new Request("https://beta.invalid/v1/ingest", {
+    headers: { authorization: "Bearer native-google-access-token" },
+  });
+
+  const session = await authorizeSession(request, admin);
+  assert.equal(session.canonical_user_id, user);
+  assert.equal(session.platform, "android");
 });
 
 Deno.test("native mutation platform must match the authenticated app session", () => {
