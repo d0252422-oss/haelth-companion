@@ -29,6 +29,9 @@ test('daily nutrition totals include only explicit includedInTotals records', ()
   const renderSource = sourceLine('renderNutrition');
   assert.match(renderSource, /included=meals\.filter\(meal=>meal\.includedInTotals===true\)/u);
   assert.doesNotMatch(renderSource, /userConfirmed===true\|\|/u);
+  assert.match(renderSource, /const listedMeals=/u);
+  assert.match(renderSource, /meal-list"\)\.innerHTML=listedMeals\.length\?/u);
+  assert.doesNotMatch(renderSource, /meal-list"\)\.innerHTML=included\.length\?/u);
 });
 
 test('new analysis food starts unknown rather than fabricating zero nutrients or confidence', () => {
