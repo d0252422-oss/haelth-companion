@@ -36,3 +36,27 @@ test('new analysis food starts unknown rather than fabricating zero nutrients or
   assert.match(handler, /calories:null,protein:null,carbs:null,fat:null,confidence:null/u);
   assert.doesNotMatch(handler, /calories:0|confidence:0/u);
 });
+
+test('optimistic dashboard totals keep explicitly excluded meals out', () => {
+  const source = sourceLine('optimisticUpsertMeals');
+  assert.match(source, /row\.includedInTotals===true/u);
+  assert.doesNotMatch(source, /row\.userConfirmed===true\|\|row\.includedInTotals===true/u);
+});
+
+test('edited meal totals preserve unknown nutrients instead of fabricating zero', () => {
+  const source = sourceLine('calculateEditedMealTotal');
+  assert.ok(source);
+  if (source.includes('HealthCoreUX.calculateKnownNutrientTotals')) {
+    assert.match(source, /HealthCoreUX\.calculateKnownNutrientTotals\(foods\)/u);
+    const helper = fs.readFileSync('scripts/core-ux-contract.js', 'utf8');
+    const context = vm.createContext({ module: { exports: {} }, exports: {}, require, console });
+    vm.runInContext(helper, context);
+    const core = context.module.exports;
+    assert.deepEqual(core.calculateKnownNutrientTotals([{ calories: null, protein: '', carbs: undefined, fat: null }]), { calories: null, protein: null, carbs: null, fat: null });
+  } else {
+    const context = vm.createContext({});
+    vm.runInContext(source, context);
+    const unknown = JSON.parse(vm.runInContext('JSON.stringify(calculateEditedMealTotal([{ calories: null, protein: "", carbs: undefined, fat: null }]))', context));
+    assert.deepEqual(unknown, { calories: null, protein: null, carbs: null, fat: null });
+  }
+});

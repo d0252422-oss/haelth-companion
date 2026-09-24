@@ -546,10 +546,11 @@ test('actual nutrition render and daily rows distinguish all missing, explicit z
   }
 });
 
-test('incomplete confirmed meal cannot disappear from daily completeness and inflate known subtotal',()=>{
+test('meals explicitly excluded from totals remain visible without poisoning confirmed daily totals',()=>{
  const ctx=harness(()=>{});vm.runInContext(html.split('\n').find(line=>line.includes('function dailyNutritionRows(')),ctx);
  const rows=[{date:'2026-09-13',userConfirmed:true,includedInTotals:true,nutritionCompleteness:'COMPLETE',calories:200,protein:20,carbs:20,fat:5},{date:'2026-09-13',userConfirmed:true,includedInTotals:false,nutritionCompleteness:'INCOMPLETE',calories:null,protein:null,carbs:null,fat:null}];
- const totals=ctx.dailyNutritionRows(rows)[0];for(const key of ['calories','protein','carbs','fat'])assert.equal(totals[key],null);
+ const totals=ctx.dailyNutritionRows(rows)[0];assert.deepEqual(plain(totals),{date:'2026-09-13',calories:200,protein:20,carbs:20,fat:5});
+ assert.equal(rows.length,2);
  assert.equal(ctx.localManualTotal([rows[0]],'calories'),200);
 });
 
