@@ -31,7 +31,7 @@ const browserPath = process.env.ENGINE_BROWSER_EXECUTABLE || 'C:/Program Files/G
 const {chromium} = await import(pathToFileURL(modulePath).href);
 const viewports = [{width:360,height:800},{width:393,height:852},{width:412,height:915}];
 const expected = ['新增體重 / 體脂','新增訓練','新增飲食','新增睡眠','新增步數 / 總消耗','新增身體狀態'];
-const report = {target: safeResource(target.href), expected_build_id: expectedBuildId, started_at: new Date().toISOString(), classification: 'LIVE_BETA_PUBLIC_HTML_READ_ONLY_VISUAL_NO_AUTH_NO_REMOTE_WRITE', viewports: [], manual_forms: [], blocked_non_read_requests: [], auth_boundaries: [], diagnostics: []};
+const report = {target: safeResource(target.href), expected_build_id: expectedBuildId, started_at: new Date().toISOString(), classification: 'LIVE_BETA_PUBLIC_HTML_READ_ONLY_VISUAL_NO_AUTH_NO_REMOTE_WRITE', viewports: [], manual_forms: [], blocked_non_read_requests: [], auth_boundaries: [], test_only_visual_overrides: [], diagnostics: []};
 const browser = await chromium.launch({headless: true, executablePath: browserPath});
 try {
   for (const viewport of viewports) {
@@ -74,10 +74,26 @@ try {
     });
     assertUnauthenticatedBoundary(authBoundary);
     report.auth_boundaries.push({...viewport, ...authBoundary});
-    // The public route correctly presents auth first. Hide only its visual layer
-    // inside this read-only test page so the deployed sheet itself can be reviewed;
-    // no session, entitlement or application data access is created.
-    await page.addStyleTag({content:'#google-login-entry,#controlled-beta-access{display:none!important}'});
+    // After proving the public auth boundary, reveal only the already-loaded DOM
+    // in this disposable, write-blocked test page. Never call the product auth
+    // visibility helper and never create a session or entitlement.
+    const visualOverride = await page.evaluate(() => {
+      const before = {currentUser:Boolean(currentUser),sessionToken:Boolean(sessionToken)};
+      if (before.currentUser || before.sessionToken) throw Error('TEST_ONLY_VISUAL_OVERRIDE_AUTH_PRESENT');
+      for (const id of ['google-login-entry','controlled-beta-access']) {
+        const node = document.getElementById(id);
+        if (node) node.style.setProperty('display','none','important');
+      }
+      const app = document.getElementById('authenticated-app');
+      app.hidden = false;
+      app.removeAttribute('inert');
+      if ('inert' in app) app.inert = false;
+      app.setAttribute('aria-hidden','false');
+      return {before, after:{currentUser:Boolean(currentUser),sessionToken:Boolean(sessionToken)}, mode:'TEST_ONLY_VISUAL_OVERRIDE'};
+    });
+    assert.deepEqual(visualOverride.before,{currentUser:false,sessionToken:false});
+    assert.deepEqual(visualOverride.after,{currentUser:false,sessionToken:false});
+    report.test_only_visual_overrides.push({...viewport,...visualOverride});
     const openStarted = await page.evaluate(() => performance.now());
     await page.locator('#quick-open').click();
     await page.locator('#quick-sheet').waitFor({state:'visible'});
@@ -149,6 +165,8 @@ try {
       await page.locator('#sheet-backdrop').waitFor({state:'hidden'});
     }
     const diagnostics = observer.snapshot();
+    const authStateAfter = await page.evaluate(() => ({currentUser:Boolean(currentUser),sessionToken:Boolean(sessionToken)}));
+    assert.deepEqual(authStateAfter,{currentUser:false,sessionToken:false});
     assert.equal(diagnostics.page_errors, 0, 'PAGE_ERROR_DETECTED');
     assert.deepEqual(diagnostics.unexpected_failed_requests, [], 'UNEXPECTED_NETWORK_FAILURE');
     const resolvedHost = new URL(delivery.resolvedResource).hostname;
