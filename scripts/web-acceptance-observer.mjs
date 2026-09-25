@@ -87,9 +87,10 @@ export function assertResolvedBetaTarget(entryResource, resolvedResource) {
     }
     return true;
   }
+  const approvedPagesPaths = ['/health-companion-beta/', '/haelth-companion/'];
   if (resolved.protocol !== 'https:' || resolved.port
       || resolved.hostname !== 'd0252422-oss.github.io'
-      || !resolved.pathname.startsWith('/health-companion-beta/')) {
+      || !approvedPagesPaths.some(prefix => resolved.pathname.startsWith(prefix))) {
     throw Error('UNAPPROVED_RESOLVED_TARGET');
   }
   return true;

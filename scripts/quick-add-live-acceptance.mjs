@@ -10,7 +10,10 @@ const target = new URL(process.argv[2] || 'https://liff.line.me/2011116657-9SpSn
 const local = ['127.0.0.1','localhost'].includes(target.hostname);
 const approvedRemote = target.protocol === 'https:' && !target.port && (
   target.hostname === 'liff.line.me' && target.pathname === '/2011116657-9SpSnQlN'
-  || target.hostname === 'd0252422-oss.github.io' && target.pathname.startsWith('/health-companion-beta/')
+  || target.hostname === 'd0252422-oss.github.io' && (
+    target.pathname.startsWith('/health-companion-beta/')
+    || target.pathname.startsWith('/haelth-companion/')
+  )
 );
 assert.ok(local || approvedRemote, 'UNAPPROVED_ACCEPTANCE_TARGET');
 const localBuild = JSON.parse(await readFile(new URL('../build.json', import.meta.url), 'utf8')).buildId;

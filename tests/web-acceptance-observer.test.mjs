@@ -59,6 +59,7 @@ test('build comparison and unauthenticated boundary fail closed', () => {
 test('resolved live target must remain on the exact Beta Pages application', () => {
   const liff='https://liff.line.me/2011116657-9SpSnQlN?range=30d';
   assert.equal(assertResolvedBetaTarget(liff,'https://d0252422-oss.github.io/health-companion-beta/'),true);
+  assert.equal(assertResolvedBetaTarget(liff,'https://d0252422-oss.github.io/haelth-companion/'),true);
   assert.equal(assertResolvedBetaTarget('http://127.0.0.1:8080/index.html','http://127.0.0.1:8080/index.html'),true);
   assert.throws(()=>assertResolvedBetaTarget(liff,'https://d0252422-oss.github.io/health-companion/'),/UNAPPROVED_RESOLVED_TARGET/u);
   assert.throws(()=>assertResolvedBetaTarget(liff,'https://vptqedxdxfoohbqctujf.supabase.co/'),/UNAPPROVED_RESOLVED_TARGET/u);
