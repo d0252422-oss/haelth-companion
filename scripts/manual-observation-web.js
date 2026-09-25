@@ -19,13 +19,13 @@ function syncSleepDuration(announce=false){
  if(!Number.isFinite(minutes)||minutes<=0||minutes>observationLimits.sleep||wakeDate!==date){end.setCustomValidity?.('起床時間須晚於入睡時間、不超過 24 小時，且起床日須等於睡眠日期。');value.value='';if(announce)observationStatus('睡眠時段須大於 0、最多 24 小時，並以起床日記錄。',true);return false;}
  value.value=String(minutes);if(announce)observationStatus(`已自動計算 ${Math.floor(minutes/60)} 小時 ${minutes%60} 分鐘；來源會標記為手動。`);return true;
 }
-async function openObservationEditor(domain,record=null){
+async function openObservationEditor(domain,record=null,initialDate=getLocalDateString()){
  if(!manualSqlEnabled())return toast('手動睡眠／活動僅在 SQL 模式提供；未切換其他資料來源。');
  if(observationEditor?.pending){openSheet('observation-form');observationStatus('上一筆寫入狀態尚待確認，請重試同一筆要求。',true);return;}
  if(!Object.hasOwn(observationLabels,domain))throw Error('INVALID_OBSERVATION_DOMAIN');
  const form=document.getElementById('observation-form');form.reset();observationControls(false);
- observationEditor={user:currentUser,epoch:localSessionEpoch,record,serial:++observationReadSerial,pending:null,loadedDate:record?.date||getLocalDateString(),loading:false,dirty:false,applying:false};
- document.getElementById('observation-domain').value=domain;document.getElementById('observation-date').value=record?.date||getLocalDateString();document.getElementById('observation-date').max=getLocalDateString();
+ observationEditor={user:currentUser,epoch:localSessionEpoch,record,serial:++observationReadSerial,pending:null,loadedDate:record?.date||initialDate,loading:false,dirty:false,applying:false};
+ document.getElementById('observation-domain').value=domain;document.getElementById('observation-date').value=record?.date||initialDate;document.getElementById('observation-date').max=getLocalDateString();
  document.getElementById('observation-title').textContent=(record?'編輯':'新增')+observationLabels[domain];
  document.getElementById('observation-date-label').textContent=domain==='sleep'?'睡眠日期（以起床日記錄；Asia/Taipei）':'日期（Asia/Taipei）';
  document.getElementById('observation-value-label').textContent=domain==='sleep'?'睡眠總時長（分鐘；完整時段會自動計算）':domain==='steps'?'當日總步數（不是增量）':'每日總消耗（kcal；不是飲食或運動熱量增量）';
@@ -77,22 +77,23 @@ async function saveObservation(remove=false){
  finally{state.saving=false;if(observationEditor===state&&state.user===currentUser&&state.epoch===localSessionEpoch){const ready=!!state.pending||!state.loading&&state.loadedDate===document.getElementById('observation-date').value;button.disabled=!ready;document.getElementById('observation-delete').disabled=!ready||!state.record||!!state.pending;}}
 }
 function activityPairStatus(text,error=false){const el=document.getElementById('activity-pair-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
-function activityPairControls(locked){for(const id of ['activity-pair-date','activity-pair-steps','activity-pair-energy'])document.getElementById(id).disabled=locked;document.getElementById('activity-pair-save').disabled=locked;}
+function activityPairControls(locked){for(const id of ['activity-pair-date','activity-pair-steps','activity-pair-energy'])document.getElementById(id).disabled=locked;document.getElementById('activity-pair-save').disabled=locked;for(const [id,domain]of[['activity-pair-delete-steps','steps'],['activity-pair-delete-energy','total_energy']])document.getElementById(id).disabled=locked||!activityPairRecord(domain);}
 function activityPairRecord(domain){return activityPairEditor?.records?.get(domain)||null;}
+function updateActivityPairDeleteButtons(){for(const [id,domain]of[['activity-pair-delete-steps','steps'],['activity-pair-delete-energy','total_energy']]){const button=document.getElementById(id),available=Boolean(activityPairRecord(domain));button.hidden=!available;button.disabled=!available||Boolean(activityPairEditor?.loading||activityPairEditor?.saving);}}
 async function openActivityPairEditor(date=getLocalDateString()){
  if(!manualSqlEnabled())return toast('手動步數／總消耗僅在 SQL 模式提供；未切換其他資料來源。');
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>getLocalDateString())throw Error('INVALID_OBSERVATION_DATE');activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:date,records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null};
- document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=getLocalDateString();openSheet('activity-pair-form');activityPairEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>getLocalDateString())throw Error('INVALID_OBSERVATION_DATE');activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:date,records:new Map(),pending:new Map(),pendingDeletes:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null};
+ document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=getLocalDateString();updateActivityPairDeleteButtons();openSheet('activity-pair-form');activityPairEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
  void loadActivityPairDate();
 }
 async function loadActivityPairDate(){
  const state=activityPairEditor,date=document.getElementById('activity-pair-date').value;if(!state||state.saving)return;
- const sameDraft=state.lookupDate===date&&state.dirty.size>0;if(!sameDraft){state.dirty.clear();document.getElementById('activity-pair-steps').value='';document.getElementById('activity-pair-energy').value='';}state.lookupDate=date;state.date=null;
+ const sameDraft=state.lookupDate===date&&state.dirty.size>0;if(!sameDraft){state.dirty.clear();document.getElementById('activity-pair-steps').value='';document.getElementById('activity-pair-energy').value='';}state.lookupDate=date;state.date=null;state.records=new Map();state.pendingDeletes??=new Map();state.pendingDeletes.clear();updateActivityPairDeleteButtons();
  const serial=++activityPairReadSerial;state.loading=true;setFormLookupState('activity-pair-form','loading',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});activityPairStatus('數據正在背景載入；可先輸入，確認後即可儲存。');
  try{const rows=await localEngineRequest('getManualObservations',{date});if(activityPairEditor!==state||currentUser!==state.user||localSessionEpoch!==state.epoch||serial!==activityPairReadSerial)return;
-   state.date=date;state.records=new Map(rows.filter(row=>row.date===date&&['steps','total_energy'].includes(row.domain)).map(row=>[row.domain,row]));state.pending.clear();state.completed.clear();
+   state.date=date;state.records=new Map(rows.filter(row=>row.date===date&&['steps','total_energy'].includes(row.domain)).map(row=>[row.domain,row]));state.pending.clear();state.pendingDeletes.clear();state.completed.clear();
   if(!state.dirty.has('steps'))document.getElementById('activity-pair-steps').value=activityPairRecord('steps')?.value??'';if(!state.dirty.has('total_energy'))document.getElementById('activity-pair-energy').value=activityPairRecord('total_energy')?.value??'';
-  setFormLookupState('activity-pair-form','ready',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});activityPairStatus(state.dirty.size?'既有手動總值已確認；保留你正在輸入的內容。':state.records.size?'已載入既有手動總值；儲存會覆寫同日數值，不會相加。':'此日尚無手動步數或總消耗；至少填寫一項。');
+  setFormLookupState('activity-pair-form','ready',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});updateActivityPairDeleteButtons();activityPairStatus(state.dirty.size?'既有手動總值已確認；保留你正在輸入的內容。':state.records.size?'已載入既有手動總值；儲存會覆寫同日數值；可分別刪除，不會影響裝置資料。':'此日尚無手動步數或總消耗；至少填寫一項。');
  }catch(error){if(activityPairEditor===state&&serial===activityPairReadSerial){state.date=null;setFormLookupState('activity-pair-form','error',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});activityPairStatus(readableError(error)+'；輸入內容會保留，重新載入後才能儲存。',true);}}
  finally{if(activityPairEditor===state&&serial===activityPairReadSerial)state.loading=false;}
 }
@@ -116,6 +117,16 @@ async function saveActivityPair(){
  if(state.pending.size){activityPairControls(false);const done=[...state.completed].map(domain=>observationLabels[domain]).join('、'),failed=[...state.pending].map(domain=>observationLabels[domain]).join('、');activityPairStatus(`${done?done+'已確認儲存；':''}${failed}尚未完成。請重試，已成功項目不會重送。`,true);return;}
  activityPairEditor=null;closeSheet();toast('步數／總消耗已保存至 SQL；相關畫面與分析更新中。');
 }
+async function deleteActivityPairDomain(domain){
+ const state=activityPairEditor,record=activityPairRecord(domain),label=observationLabels[domain];if(!state||state.loading||state.saving||state.user!==currentUser||state.epoch!==localSessionEpoch)return;
+ if(!record||record.date!==state.date)return activityPairStatus(`此日期沒有可刪除的手動${label}。`,true);
+ if(!state.pendingDeletes.has(domain)&&!window.confirm(`確定刪除此日的手動${label}？穿戴裝置資料不會被刪除。`))return;
+ if(!state.pendingDeletes.has(domain))state.pendingDeletes.set(domain,{recordId:record.recordId,revision:record.revision,clientRequestId:crypto.randomUUID()});
+ state.saving=true;activityPairControls(true);activityPairStatus(`正在刪除手動${label}…`);
+ try{const result=await localEngineRequest('deleteManualObservation',state.pendingDeletes.get(domain)),sameIdentity=state.user===currentUser&&state.epoch===localSessionEpoch,active=activityPairEditor===state&&sameIdentity&&(state.sheetSerial==null||typeof openSheet!=='function'||(openSheet.serial||0)===state.sheetSerial);state.pendingDeletes.delete(domain);if(sameIdentity)scheduleManualObservationReadback('activity','manual-observation-delete-'+domain,record.date,result);if(!active)return;state.records.delete(domain);state.dirty.delete(domain);document.getElementById(domain==='steps'?'activity-pair-steps':'activity-pair-energy').value='';updateActivityPairDeleteButtons();activityPairStatus(`手動${label}已刪除；其他手動數值與穿戴裝置資料未受影響。`);toast(`手動${label}已刪除。`);
+ }catch(error){if(activityPairEditor===state&&state.user===currentUser&&state.epoch===localSessionEpoch)activityPairStatus(readableError(error)+'；可重試同一筆刪除要求。',true);
+ }finally{state.saving=false;if(activityPairEditor===state&&state.user===currentUser&&state.epoch===localSessionEpoch){activityPairControls(false);updateActivityPairDeleteButtons();}}
+}
 async function refreshManualObservationList(section,start,end){
  if(!manualSqlEnabled())return;const user=currentUser,epoch=localSessionEpoch;
  const rows=await localEngineRequest('getManualObservations',{startDate:start,endDate:end,...(section==='sleep'?{domain:'sleep'}:{})});
@@ -132,6 +143,7 @@ function manualObservationAnalysisText(row){return !['AVAILABLE','PARTIAL_DAY'].
 function initializeManualObservations(){
  document.querySelectorAll('[data-observation-add]').forEach(button=>button.onclick=()=>openObservationEditor(button.dataset.observationAdd));
  document.getElementById('activity-pair-form').onsubmit=event=>{event.preventDefault();void saveActivityPair();};document.getElementById('activity-pair-date').onchange=()=>void loadActivityPairDate();document.getElementById('activity-pair-steps').oninput=()=>activityPairEditor?.dirty.add('steps');document.getElementById('activity-pair-energy').oninput=()=>activityPairEditor?.dirty.add('total_energy');
+ document.getElementById('activity-pair-delete-steps').onclick=()=>void deleteActivityPairDomain('steps');document.getElementById('activity-pair-delete-energy').onclick=()=>void deleteActivityPairDomain('total_energy');
  document.getElementById('observation-form').onsubmit=event=>{event.preventDefault();void saveObservation();};document.getElementById('observation-delete').onclick=()=>saveObservation(true);
  document.getElementById('observation-date').onchange=()=>{syncSleepDuration(true);void loadObservationDate();};document.getElementById('observation-reload').onclick=()=>loadObservationDate(true);document.getElementById('observation-coverage').onchange=observationCoverage;
  for(const id of ['observation-value','observation-coverage','observation-cutoff','observation-source-note','observation-note'])document.getElementById(id).oninput=()=>{if(observationEditor&&!observationEditor.applying)observationEditor.dirty=true;};for(const id of ['observation-start','observation-end'])document.getElementById(id).oninput=()=>{if(observationEditor&&!observationEditor.applying)observationEditor.dirty=true;syncSleepDuration(true);};
