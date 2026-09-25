@@ -1,10 +1,13 @@
 // The original quick-add and detail screens use the same SQL/auth provider.
-let observationEditor=null,observationReadSerial=0,activityPairEditor=null,activityPairReadSerial=0;
+let observationEditor=null,observationReadSerial=0,activityPairEditor=null,activityPairReadSerial=0,manualObservationReadbackGeneration=0;
 const observationLabels={sleep:'睡眠',steps:'步數',total_energy:'總消耗熱量'};
 const observationLimits={sleep:1440,steps:200000,total_energy:30000};
-function resetManualObservationState(){observationEditor=null;activityPairEditor=null;observationReadSerial++;activityPairReadSerial++;for(const id of ['sleep-manual-records','activity-manual-records'])document.getElementById(id)?.replaceChildren?.();}
+function resetManualObservationState(){observationEditor=null;activityPairEditor=null;observationReadSerial++;activityPairReadSerial++;manualObservationReadbackGeneration++;for(const id of ['sleep-manual-records','activity-manual-records'])document.getElementById(id)?.replaceChildren?.();}
 function observationStatus(text,error=false){const el=document.getElementById('observation-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
 function observationControls(locked){document.querySelectorAll('#observation-form input,#observation-form select,#observation-form textarea').forEach(el=>el.disabled=locked);}
+const MANUAL_OBSERVATION_PUBLICATION_DELAYS=[500,1000,2000,4000];
+function manualObservationReadState(section,date){const row=(appState.healthTimeline||[]).find(item=>item.date===date);if(!row)return 'updating';const status=section==='sleep'?row.sleepDataStatus:row.activityDataStatus,reason=section==='sleep'?row.sleepStaleReason:row.activityStaleReason;if(reason==='RECOMPUTE_FAILED')return 'error';return status==='STALE'||reason?'updating':'ready';}
+function scheduleManualObservationReadback(section,label,date=null,result=null){const user=currentUser,epoch=localSessionEpoch,range={...sectionWindows[section]},generation=++manualObservationReadbackGeneration,current=()=>generation===manualObservationReadbackGeneration&&currentUser===user&&localSessionEpoch===epoch&&sectionWindows[section].start===range.start&&sectionWindows[section].end===range.end;clearDashboardCache();sectionLoadKeys.delete(section);if(typeof setDashboardDataState==='function')setDashboardDataState('updating');const publicationDelays=result?.analysisJobScheduled===false?[0]:[0,...MANUAL_OBSERVATION_PUBLICATION_DELAYS],refresh=async()=>{let state='updating';for(const delayMs of publicationDelays){if(delayMs)await new Promise(resolve=>setTimeout(resolve,delayMs));if(!current())return;if(typeof refreshAfterRecordMutation==='function')await refreshAfterRecordMutation(section);else await refreshSectionRange(section,range.start,range.end);if(!current())return;state=date?manualObservationReadState(section,date):'ready';if(state!=='updating')break;}if(!current())return;const dashboardState=HealthCoreUX.timelineReadState(appState.healthTimeline,appState.dashboard?.today);if(typeof setDashboardDataState==='function')setDashboardDataState(dashboardState,dashboardState==='updating'?'資料已儲存；部分分析稍後更新。':dashboardState==='error'?'資料已儲存，但背景分析更新失敗；請重新整理再試一次。':'');};if(typeof refreshInBackground==='function')refreshInBackground(label,refresh);else void refresh().catch(error=>console.warn('manual observation background refresh failed',error));}
 function observationCoverage(){const sleep=document.getElementById('observation-domain').value==='sleep',partial=document.getElementById('observation-coverage').value==='PARTIAL_DAY';document.getElementById('observation-cutoff').required=!sleep&&partial;document.getElementById('observation-cutoff-group').hidden=sleep||!partial;}
 function sleepIntervalMinutes(start,end){if(!start||!end)return null;const first=Date.parse(start+':00+08:00'),last=Date.parse(end+':00+08:00');return Number.isFinite(first)&&Number.isFinite(last)?Math.round((last-first)/60000):NaN;}
 function syncSleepDuration(announce=false){
@@ -21,7 +24,7 @@ async function openObservationEditor(domain,record=null){
  if(observationEditor?.pending){openSheet('observation-form');observationStatus('上一筆寫入狀態尚待確認，請重試同一筆要求。',true);return;}
  if(!Object.hasOwn(observationLabels,domain))throw Error('INVALID_OBSERVATION_DOMAIN');
  const form=document.getElementById('observation-form');form.reset();observationControls(false);
- observationEditor={user:currentUser,epoch:localSessionEpoch,record,serial:++observationReadSerial,pending:null,loadedDate:record?.date||getLocalDateString(),loading:false};
+ observationEditor={user:currentUser,epoch:localSessionEpoch,record,serial:++observationReadSerial,pending:null,loadedDate:record?.date||getLocalDateString(),loading:false,dirty:false,applying:false};
  document.getElementById('observation-domain').value=domain;document.getElementById('observation-date').value=record?.date||getLocalDateString();document.getElementById('observation-date').max=getLocalDateString();
  document.getElementById('observation-title').textContent=(record?'編輯':'新增')+observationLabels[domain];
  document.getElementById('observation-date-label').textContent=domain==='sleep'?'睡眠日期（以起床日記錄；Asia/Taipei）':'日期（Asia/Taipei）';
@@ -32,23 +35,23 @@ async function openObservationEditor(domain,record=null){
  for(const [id,key]of[['observation-note','note'],['observation-source-note','sourceNote']])document.getElementById(id).value=record?.[key]||'';
  const localInstant=iso=>iso?new Date(Date.parse(iso)+8*3600000).toISOString().slice(0,16):'';
  document.getElementById('observation-start').value=localInstant(record?.startedAt);document.getElementById('observation-end').value=localInstant(record?.endedAt);syncSleepDuration(false);
- document.getElementById('observation-delete').hidden=!record;document.getElementById('observation-delete').disabled=!record;document.getElementById('observation-save').disabled=false;observationCoverage();openSheet('observation-form');
+ document.getElementById('observation-delete').hidden=!record;document.getElementById('observation-delete').disabled=!record;document.getElementById('observation-save').disabled=false;observationCoverage();openSheet('observation-form');observationEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
  observationStatus(domain==='sleep'?'可填入睡／起床時段自動計算；只有時長也可保存，不推算睡眠階段或效率。':'手動資料為每日總值；同日自動來源有衝突時不相加、不猜最大值。');
- if(domain!=='sleep'&&!record)await loadObservationDate();
+ if(domain!=='sleep'&&!record)void loadObservationDate();
 }
 async function loadObservationDate(reload=false){
  const state=observationEditor,domain=document.getElementById('observation-domain').value,date=document.getElementById('observation-date').value;
  if(!state||state.pending)return;
  if(domain==='sleep'&&(!reload||!state.record)){state.loadedDate=date;document.getElementById('observation-delete').disabled=!state.record||state.record.date!==date;return;}
- const serial=++observationReadSerial;state.loadedDate=null;state.loading=true;observationControls(true);document.getElementById('observation-date').disabled=false;document.getElementById('observation-save').disabled=true;document.getElementById('observation-delete').disabled=true;observationStatus('正在載入此日期的累積值…');
+ const sameDraft=state.lookupDate===date&&state.dirty===true;if(!sameDraft){state.dirty=false;document.getElementById('observation-value').value='';document.getElementById('observation-source-note').value='';document.getElementById('observation-note').value='';}state.lookupDate=date;
+ const serial=++observationReadSerial;state.loadedDate=null;state.loading=true;setFormLookupState('observation-form','loading',{editableIds:['observation-date','observation-value','observation-coverage','observation-cutoff','observation-source-note','observation-note'],saveId:'observation-save',deleteId:'observation-delete'});observationStatus('正在背景確認此日期的累積值；可先輸入，確認後即可儲存。');
  try{const rows=await localEngineRequest('getManualObservations',{domain,date:domain==='sleep'?state.record.date:date});if(observationEditor!==state||currentUser!==state.user||localSessionEpoch!==state.epoch||serial!==observationReadSerial)return;
   const record=domain==='sleep'?rows.find(row=>row.recordId===state.record.recordId):rows.find(row=>row.date===date);
   if(domain==='sleep'&&!record)throw Error('此筆睡眠已刪除或移至其他日期；請回紀錄清單重新開啟，不會自動另建一筆。');
   state.record=record||null;
-  if(domain==='sleep')for(const [id,key]of[['observation-start','startedAt'],['observation-end','endedAt']])document.getElementById(id).value=record[key]?new Date(Date.parse(record[key])+8*3600000).toISOString().slice(0,16):'';
-  document.getElementById('observation-value').value=state.record?.value??'';document.getElementById('observation-coverage').value=state.record?.coverage||'FULL_DAY';document.getElementById('observation-cutoff').value=state.record?.cutoffTime||'';document.getElementById('observation-source-note').value=state.record?.sourceNote||'';document.getElementById('observation-note').value=state.record?.note||'';document.getElementById('observation-delete').hidden=!state.record;
-  state.loadedDate=date;state.loading=false;observationControls(false);observationCoverage();syncSleepDuration(false);document.getElementById('observation-save').disabled=false;document.getElementById('observation-delete').disabled=!state.record||state.record.date!==date;observationStatus(state.record?(domain==='sleep'?'已重新載入同一筆睡眠的最新版本。':'已載入；修改會覆寫當日總值，不與舊值相加。'):'此日尚無手動紀錄。');
- }catch(error){if(observationEditor===state&&serial===observationReadSerial){state.loading=false;observationControls(false);document.getElementById('observation-save').disabled=true;document.getElementById('observation-delete').disabled=true;observationStatus(readableError(error)+'；請按「重新載入」。',true);}}
+  if(!state.dirty){state.applying=true;if(domain==='sleep')for(const [id,key]of[['observation-start','startedAt'],['observation-end','endedAt']])document.getElementById(id).value=record[key]?new Date(Date.parse(record[key])+8*3600000).toISOString().slice(0,16):'';document.getElementById('observation-value').value=state.record?.value??'';document.getElementById('observation-coverage').value=state.record?.coverage||'FULL_DAY';document.getElementById('observation-cutoff').value=state.record?.cutoffTime||'';document.getElementById('observation-source-note').value=state.record?.sourceNote||'';document.getElementById('observation-note').value=state.record?.note||'';state.applying=false;}document.getElementById('observation-delete').hidden=!state.record;
+  state.loadedDate=date;state.loading=false;observationCoverage();syncSleepDuration(false);setFormLookupState('observation-form','ready',{editableIds:['observation-date','observation-value','observation-coverage','observation-cutoff','observation-source-note','observation-note'],saveId:'observation-save',deleteId:'observation-delete',canDelete:Boolean(state.record&&state.record.date===date)});observationStatus(state.dirty?'既有紀錄已確認；保留你正在輸入的內容。':state.record?(domain==='sleep'?'已重新載入同一筆睡眠的最新版本。':'已載入；修改會覆寫當日總值，不與舊值相加。'):'此日尚無手動紀錄。');
+ }catch(error){if(observationEditor===state&&serial===observationReadSerial){state.loading=false;setFormLookupState('observation-form','error',{editableIds:['observation-date','observation-value','observation-coverage','observation-cutoff','observation-source-note','observation-note'],saveId:'observation-save',deleteId:'observation-delete'});observationStatus(readableError(error)+'；輸入內容會保留，請按「重新載入」後再儲存。',true);}}
 }
 function observationPayload(){
  const domain=document.getElementById('observation-domain').value;
@@ -68,11 +71,9 @@ async function saveObservation(remove=false){
  if(remove&&!state.pending&&!window.confirm('刪除此筆手動紀錄？將保留刪除標記，不會刪除自動來源。'))return;
  try{if(!state.pending)state.pending={action:remove?'deleteManualObservation':'upsertManualObservation',payload:remove?{recordId:state.record.recordId,revision:state.record.revision,clientRequestId:crypto.randomUUID()}:observationPayload()};
   state.saving=true;observationControls(true);button.disabled=true;document.getElementById('observation-delete').disabled=true;observationStatus('正在儲存至 SQL…');
-  const result=await localEngineRequest(state.pending.action,state.pending.payload);if(observationEditor!==state||state.user!==currentUser||state.epoch!==localSessionEpoch)return;
-   state.pending=null;observationEditor=null;closeSheet();toast('已保存至 SQL；相關畫面與分析更新中。');clearDashboardCache();sectionLoadKeys.clear();
-   const section=result.record.domain==='sleep'?'sleep':'activity',range={...sectionWindows[section]},refresh=async()=>{await refreshSectionRange(section,range.start,range.end);clearDashboardCache();};
-   if(typeof refreshInBackground==='function')refreshInBackground('manual-observation-'+result.record.domain,refresh);else void refresh().catch(error=>console.warn('manual observation background refresh failed',error));
- }catch(error){if(observationEditor===state&&state.user===currentUser){if(error.code&&error.retryable===false){state.pending=null;observationControls(false);}observationStatus(readableError(error)+(state.pending?'；結果待確認，重試會使用同一要求。':''),true);}}
+  const result=await localEngineRequest(state.pending.action,state.pending.payload),sameIdentity=state.user===currentUser&&state.epoch===localSessionEpoch,active=observationEditor===state&&sameIdentity&&(state.sheetSerial==null||typeof openSheet!=='function'||(openSheet.serial||0)===state.sheetSerial);state.pending=null;if(sameIdentity)scheduleManualObservationReadback(result.record.domain==='sleep'?'sleep':'activity','manual-observation-'+result.record.domain,result.record.date,result);if(!active)return;
+   observationEditor=null;closeSheet();toast('已保存至 SQL；相關畫面與分析更新中。');
+ }catch(error){const sameIdentity=state.user===currentUser&&state.epoch===localSessionEpoch;if(sameIdentity&&observationEditor!==state)scheduleManualObservationReadback(domain==='sleep'?'sleep':'activity','manual-observation-detached-check',date);if(observationEditor===state&&sameIdentity){if(error.code&&error.retryable===false){state.pending=null;observationControls(false);}observationStatus(readableError(error)+(state.pending?'；結果待確認，重試會使用同一要求。':''),true);}}
  finally{state.saving=false;if(observationEditor===state&&state.user===currentUser&&state.epoch===localSessionEpoch){const ready=!!state.pending||!state.loading&&state.loadedDate===document.getElementById('observation-date').value;button.disabled=!ready;document.getElementById('observation-delete').disabled=!ready||!state.record||!!state.pending;}}
 }
 function activityPairStatus(text,error=false){const el=document.getElementById('activity-pair-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
@@ -80,19 +81,20 @@ function activityPairControls(locked){for(const id of ['activity-pair-date','act
 function activityPairRecord(domain){return activityPairEditor?.records?.get(domain)||null;}
 async function openActivityPairEditor(){
  if(!manualSqlEnabled())return toast('手動步數／總消耗僅在 SQL 模式提供；未切換其他資料來源。');
- const date=getLocalDateString();activityPairEditor={user:currentUser,epoch:localSessionEpoch,date,records:new Map(),pending:new Map(),completed:new Set(),loading:false,saving:false};
- document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=date;openSheet('activity-pair-form');
- await loadActivityPairDate();
+ const date=getLocalDateString();activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:date,records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null};
+ document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=date;openSheet('activity-pair-form');activityPairEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
+ void loadActivityPairDate();
 }
 async function loadActivityPairDate(){
  const state=activityPairEditor,date=document.getElementById('activity-pair-date').value;if(!state||state.saving)return;
- const serial=++activityPairReadSerial;state.loading=true;activityPairControls(true);document.getElementById('activity-pair-date').disabled=false;activityPairStatus('數據載入中，請稍候…');
+ const sameDraft=state.lookupDate===date&&state.dirty.size>0;if(!sameDraft){state.dirty.clear();document.getElementById('activity-pair-steps').value='';document.getElementById('activity-pair-energy').value='';}state.lookupDate=date;state.date=null;
+ const serial=++activityPairReadSerial;state.loading=true;setFormLookupState('activity-pair-form','loading',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});activityPairStatus('數據正在背景載入；可先輸入，確認後即可儲存。');
  try{const rows=await localEngineRequest('getManualObservations',{date});if(activityPairEditor!==state||currentUser!==state.user||localSessionEpoch!==state.epoch||serial!==activityPairReadSerial)return;
-  state.date=date;state.records=new Map(rows.filter(row=>row.date===date&&['steps','total_energy'].includes(row.domain)).map(row=>[row.domain,row]));state.pending.clear();state.completed.clear();
-  document.getElementById('activity-pair-steps').value=activityPairRecord('steps')?.value??'';document.getElementById('activity-pair-energy').value=activityPairRecord('total_energy')?.value??'';
-  activityPairStatus(state.records.size?'已載入既有手動總值；儲存會覆寫同日數值，不會相加。':'此日尚無手動步數或總消耗；至少填寫一項。');
- }catch(error){if(activityPairEditor===state&&serial===activityPairReadSerial)activityPairStatus(readableError(error)+'；請重新選擇日期後重試。',true);}
- finally{if(activityPairEditor===state&&serial===activityPairReadSerial){state.loading=false;activityPairControls(false);}}
+   state.date=date;state.records=new Map(rows.filter(row=>row.date===date&&['steps','total_energy'].includes(row.domain)).map(row=>[row.domain,row]));state.pending.clear();state.completed.clear();
+  if(!state.dirty.has('steps'))document.getElementById('activity-pair-steps').value=activityPairRecord('steps')?.value??'';if(!state.dirty.has('total_energy'))document.getElementById('activity-pair-energy').value=activityPairRecord('total_energy')?.value??'';
+  setFormLookupState('activity-pair-form','ready',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});activityPairStatus(state.dirty.size?'既有手動總值已確認；保留你正在輸入的內容。':state.records.size?'已載入既有手動總值；儲存會覆寫同日數值，不會相加。':'此日尚無手動步數或總消耗；至少填寫一項。');
+ }catch(error){if(activityPairEditor===state&&serial===activityPairReadSerial){state.date=null;setFormLookupState('activity-pair-form','error',{editableIds:['activity-pair-date','activity-pair-steps','activity-pair-energy'],saveId:'activity-pair-save'});activityPairStatus(readableError(error)+'；輸入內容會保留，重新載入後才能儲存。',true);}}
+ finally{if(activityPairEditor===state&&serial===activityPairReadSerial)state.loading=false;}
 }
 function activityPairPayload(domain,value){
  const record=activityPairRecord(domain);return {clientRequestId:crypto.randomUUID(),...(record?{recordId:record.recordId,revision:record.revision}:{}),domain,date:document.getElementById('activity-pair-date').value,timezone:'Asia/Taipei',value,coverage:'FULL_DAY',cutoffTime:null,startedAt:null,endedAt:null,note:null,sourceNote:null};
@@ -110,11 +112,9 @@ async function saveActivityPair(){
  const attempts=[...state.pending.entries()],results=await Promise.allSettled(attempts.map(([,payload])=>localEngineRequest('upsertManualObservation',payload)));
  results.forEach((result,index)=>{const domain=attempts[index][0];if(result.status==='fulfilled'){state.pending.delete(domain);state.completed.add(domain);state.records.set(domain,result.value.record);}});
  state.saving=false;
- if(activityPairEditor!==state||state.user!==currentUser||state.epoch!==localSessionEpoch)return;
+ const sameIdentity=state.user===currentUser&&state.epoch===localSessionEpoch,active=activityPairEditor===state&&sameIdentity&&(state.sheetSerial==null||typeof openSheet!=='function'||(openSheet.serial||0)===state.sheetSerial),completedResults=results.filter(result=>result.status==='fulfilled').map(result=>result.value),publication=completedResults.length&&completedResults.every(result=>result?.analysisJobScheduled===false)?{analysisJobScheduled:false}:null;if(sameIdentity&&attempts.length)scheduleManualObservationReadback('activity','manual-observation-activity-pair',date,publication);if(!active)return;
  if(state.pending.size){activityPairControls(false);const done=[...state.completed].map(domain=>observationLabels[domain]).join('、'),failed=[...state.pending].map(domain=>observationLabels[domain]).join('、');activityPairStatus(`${done?done+'已確認儲存；':''}${failed}尚未完成。請重試，已成功項目不會重送。`,true);return;}
- activityPairEditor=null;closeSheet();toast('步數／總消耗已保存至 SQL；相關畫面與分析更新中。');clearDashboardCache();sectionLoadKeys.clear();if(typeof setDashboardDataState==='function')setDashboardDataState('updating');
- const range={...sectionWindows.activity},refresh=async()=>{await refreshSectionRange('activity',range.start,range.end);clearDashboardCache();if(typeof setDashboardDataState==='function')setDashboardDataState('ready');};
- if(typeof refreshInBackground==='function')refreshInBackground('manual-observation-activity-pair',refresh);else void refresh().catch(error=>console.warn('manual activity pair background refresh failed',error));
+ activityPairEditor=null;closeSheet();toast('步數／總消耗已保存至 SQL；相關畫面與分析更新中。');
 }
 async function refreshManualObservationList(section,start,end){
  if(!manualSqlEnabled())return;const user=currentUser,epoch=localSessionEpoch;
@@ -125,13 +125,14 @@ async function refreshManualObservationList(section,start,end){
  if(!selected.length){const empty=document.createElement('p');empty.textContent='此期間尚無手動紀錄。';node.append(empty);}
  for(const row of [...selected].sort((a,b)=>b.date.localeCompare(a.date))){const card=document.createElement('article');card.className='card card-pad';card.dataset.observationId=row.recordId;
  const text=document.createElement('p');text.textContent=`${row.date} · ${observationLabels[row.domain]} ${row.value} ${row.unit} · ${row.coverage==='PARTIAL_DAY'?'部分日／截至 '+row.cutoffTime:row.coverage==='FULL_DAY'?'全日累積':'單次睡眠'} · 來源：手動`;
- const status=document.createElement('p');status.className='record-date-note';status.textContent=!['AVAILABLE','PARTIAL_DAY'].includes(row.reconciliationStatus)?`紀錄已保存；${row.reconciliationStatus}（有衝突，不合併加總）。`:row.analysisStatus==='COMPUTED'?`紀錄已保存；既有 ${row.algorithmVersion} 分數 ${row.score}（自行回報資料）。`:row.analysisStatus==='INSUFFICIENT_DATA'?'紀錄已保存；分析資料不足。':row.analysisJobScheduled?'紀錄已保存；有可追蹤的待重算工作。':row.analysisStatus==='ANALYSIS_NOT_ENABLED'?'紀錄已保存；此項分析尚未啟用。':'紀錄已保存；分析狀態暫時無法確認。';
+ const status=document.createElement('p');status.className='record-date-note';status.textContent=manualObservationAnalysisText(row);
  const edit=document.createElement('button');edit.type='button';edit.className='secondary-button';edit.textContent='編輯／刪除';edit.onclick=()=>openObservationEditor(row.domain,row);card.append(text,status,edit);node.append(card);}
 }
+function manualObservationAnalysisText(row){return !['AVAILABLE','PARTIAL_DAY'].includes(row.reconciliationStatus)?`紀錄已保存；${row.reconciliationStatus}（有衝突，不合併加總）。`:row.analysisStatus==='COMPUTED'?`紀錄已保存；既有 ${row.algorithmVersion} 分數 ${row.score}（自行回報資料）。`:row.analysisStatus==='INSUFFICIENT_DATA'?'紀錄已保存；分析資料不足。':row.analysisStatus==='ERROR'||row.analysisReason==='RECOMPUTE_FAILED'?'紀錄已保存；分析更新失敗，可重新整理後重試。':row.analysisJobScheduled?'紀錄已保存；有可追蹤的待重算工作。':row.analysisStatus==='ANALYSIS_NOT_ENABLED'?'紀錄已保存；此項分析尚未啟用。':'紀錄已保存；分析狀態暫時無法確認。';}
 function initializeManualObservations(){
  document.querySelectorAll('[data-observation-add]').forEach(button=>button.onclick=()=>openObservationEditor(button.dataset.observationAdd));
- document.getElementById('activity-pair-form').onsubmit=event=>{event.preventDefault();void saveActivityPair();};document.getElementById('activity-pair-date').onchange=()=>void loadActivityPairDate();
+ document.getElementById('activity-pair-form').onsubmit=event=>{event.preventDefault();void saveActivityPair();};document.getElementById('activity-pair-date').onchange=()=>void loadActivityPairDate();document.getElementById('activity-pair-steps').oninput=()=>activityPairEditor?.dirty.add('steps');document.getElementById('activity-pair-energy').oninput=()=>activityPairEditor?.dirty.add('total_energy');
  document.getElementById('observation-form').onsubmit=event=>{event.preventDefault();void saveObservation();};document.getElementById('observation-delete').onclick=()=>saveObservation(true);
  document.getElementById('observation-date').onchange=()=>{syncSleepDuration(true);void loadObservationDate();};document.getElementById('observation-reload').onclick=()=>loadObservationDate(true);document.getElementById('observation-coverage').onchange=observationCoverage;
- for(const id of ['observation-start','observation-end'])document.getElementById(id).oninput=()=>syncSleepDuration(true);
+ for(const id of ['observation-value','observation-coverage','observation-cutoff','observation-source-note','observation-note'])document.getElementById(id).oninput=()=>{if(observationEditor&&!observationEditor.applying)observationEditor.dirty=true;};for(const id of ['observation-start','observation-end'])document.getElementById(id).oninput=()=>{if(observationEditor&&!observationEditor.applying)observationEditor.dirty=true;syncSleepDuration(true);};
 }
