@@ -65,15 +65,34 @@ function localSectionReadGuard(section,start,end){
   localSectionReads.set(section,serial);
   return ()=>currentUser===user&&localSessionEpoch===epoch&&localSectionReads.get(section)===serial&&sectionWindows[section].start===start&&sectionWindows[section].end===end;
 }
+function latestDailyMetricRow(rows,key){return [...(rows||[])].reverse().find(row=>typeof row?.[key]==='number'&&Number.isFinite(row[key]))||null;}
+function dailyMetricSource(row,key){const field={totalSleepMinutes:'sleepSource',steps:'stepsSource',activeMinutes:'activeMinutesSource',totalCalories:'totalEnergySource',heartRate:'heartRateSource',hrv:'hrvSource'}[key];return field?row?.[field]||row?.source:row?.source;}
+function dailyMetricSourceText(source){const value=String(source||'');if(/MANUAL|SELF_REPORTED/u.test(value))return '手動自行回報';if(value==='SQL_PUBLISHED_DAILY_METRICS'||/HEALTH_CONNECT|WEARABLE/u.test(value))return '穿戴裝置同步';return '來源未提供';}
+function latestDailyPublicationState(rows){
+  const latest=rows?.at(-1)||null,staleReason=latest?.analysisStaleReason??latest?.staleReason;
+  return {latest,failed:staleReason==='RECOMPUTE_FAILED',pending:staleReason!=='RECOMPUTE_FAILED'&&(latest?.dataStatus==='STALE'||latest?.analysisDataStatus==='STALE')};
+}
+function dailyMetricNotice(rows,key){
+  const row=latestDailyMetricRow(rows,key),state=latestDailyPublicationState(rows);
+  if(!row){if(state.failed)return `${state.latest.date} 自動／分析資料更新失敗；請重新整理再試一次`;if(state.pending)return `${state.latest.date} 自動／分析資料待更新；尚未發布新數值`;return '尚無資料';}
+  const coverageKey={totalSleepMinutes:'sleep',steps:'steps',totalCalories:'totalEnergy'}[key],reconciliationDomain={totalSleepMinutes:'sleep',steps:'steps',totalCalories:'total_energy'}[key],parts=[row.date,dailyMetricSourceText(dailyMetricSource(row,key))];
+  if(reconciliationDomain&&row.reconciliationFlags?.some(flag=>String(flag).endsWith(`:${reconciliationDomain}`)))parts.push('來源／時段衝突，未合併加總');
+  if(coverageKey&&row.coverage?.[coverageKey]==='PARTIAL_DAY')parts.push('部分日累積');
+  if(state.failed)parts.push(`${state.latest.date} 自動／分析資料更新失敗，請重新整理再試一次`);
+  else if(state.pending)parts.push(`${state.latest.date} 自動／分析資料待更新`);
+  return parts.join(' · ');
+}
 function renderDailySqlReadNotice(section,rows){
   if(!manualSqlEnabled())return;
-  const latest=rows.at(-1),notice=section==='sleep'?'sleep-last-note':'activity-steps-note';
-  const staleReason=latest?.analysisStaleReason??latest?.staleReason,failed=staleReason==='RECOMPUTE_FAILED',pending=!failed&&(latest?.dataStatus==='STALE'||latest?.analysisDataStatus==='STALE');
-  if(failed)document.getElementById(notice).textContent=`${latest.date} 自動／分析資料更新失敗；請重新整理再試一次`;
-  else if(pending)document.getElementById(notice).textContent=`${latest.date} 自動／分析資料待更新；未顯示過期數值`;
-  if(section==='sleep')document.getElementById('sleep-score-note').textContent='SQL 原始睡眠分數尚未接通（不替換為實驗分數）';
-  else {document.getElementById('activity-active-note').textContent='SQL 尚無活動熱量的對應來源';document.getElementById('activity-total-note').textContent=latest?.source==='SQL_CANONICAL_MANUAL_AND_PUBLISHED'?`手動總消耗（自行回報）；不再加計 BMR／運動${pending?'；自動／分析資料待更新':''}。`:'SQL 尚無此熱量類型的對應來源';}
-  if(latest?.source==='SQL_CANONICAL_MANUAL_AND_PUBLISHED')document.getElementById(notice).textContent=`${latest.date} · 手動自行回報${latest.reconciliationFlags?.length?' · 來源／時段衝突，未合併加總':''}${Object.values(latest.coverage||{}).includes('PARTIAL_DAY')?' · 部分日累積':''}${failed?' · 自動／分析資料更新失敗，請重新整理再試一次':pending?' · 自動／分析資料待更新':''}`;
+  if(section==='sleep'){
+    document.getElementById('sleep-last-note').textContent=dailyMetricNotice(rows,'totalSleepMinutes');
+    document.getElementById('sleep-score-note').textContent='SQL 原始睡眠分數尚未接通（不替換為實驗分數）';
+    return;
+  }
+  document.getElementById('activity-steps-note').textContent=dailyMetricNotice(rows,'steps');
+  document.getElementById('activity-active-note').textContent='SQL 尚無活動熱量的對應來源';
+  const totalRow=latestDailyMetricRow(rows,'totalCalories');
+  document.getElementById('activity-total-note').textContent=totalRow?dailyMetricNotice(rows,'totalCalories'):'SQL 尚無此熱量類型的對應來源';
 }
 function clearLocalManualState(){manualProviderObservation=null;manualSourceEvidence=null;renderManualProviderStatus();hostedManualBinding=null;hostedIdentityPending=null;localSessionEpoch++;localOutputRequest++;localCatalogReadSequence++;localBodyRecords.clear();localMealRecords.clear();localPendingBodyWrites.clear();localObservationRecords.clear();localPendingObservationWrites.clear();if(typeof resetManualObservationState==='function')resetManualObservationState();localWorkoutRecords.clear();localPendingTrainingWrites.clear();localTrainingDraftLock(false);if(typeof exerciseDatabase!=='undefined')exerciseDatabase=[];if(typeof exerciseBodyParts!=='undefined')exerciseBodyParts=[];if(typeof workoutSession!=='undefined')workoutSession=null;document.getElementById('exercise-management')?.remove();const overview=document.getElementById('training-overview'),draft=document.getElementById('workout-session'),list=document.getElementById('exercise-session-list');if(overview?.style)overview.style.display='block';draft?.classList?.remove('active');list?.replaceChildren?.();if(typeof setTrainingView==='function')setTrainingView('overview');if(typeof loadWeightFormDate==='function')loadWeightFormDate.binding=null;}
 let manualProviderObservation=null;
@@ -227,11 +246,11 @@ function renderManualProviderStatus(){
   if(sql)for(const id of ['sync-dot','settings-status-dot']){const el=document.getElementById(id);if(el)el.className='status-dot '+(s.database==='CONNECTED'?'connected':s.database==='UNAVAILABLE'||s.api==='UNAVAILABLE'?'error':'notConfigured');}
 }
 function observeManualProvider(action,ok,analysis){manualProviderObservation={action,ok,analysis,at:new Date().toISOString()};renderManualProviderStatus();}
-function localManualBodyNotice(){
+function localManualBodyNotice(displayedWeightRow=null){
   if(!manualSqlEnabled())return;
   const note=document.getElementById('body-current-note');
-  const row=[...(appState.body||[])].sort((a,b)=>b.date.localeCompare(a.date))[0];
-  if(note&&row){
+  const row=[...(appState.body||[])].filter(item=>typeof item.weight==='number'&&Number.isFinite(item.weight)).sort((a,b)=>b.date.localeCompare(a.date))[0],displayedSource=displayedWeightRow?.weightSource||displayedWeightRow?.bodySource||'';
+  if(note&&row&&row.date===displayedWeightRow?.date&&/MANUAL|SELF_REPORTED/u.test(displayedSource)){
     note.dataset.analysisStatus=row.analysisStatus;
     const label=row.analysisStatus==='COMPUTED'?`Experimental 身體分數 ${row.bodyScore??'—'}（未經真實有效性驗證）`:row.analysisStatus==='INSUFFICIENT_DATA'?'紀錄已保存；身體分析資料不足':row.analysisStatus==='ANALYSIS_UNAVAILABLE'?'紀錄已保存；暫時無法查詢分析狀態':row.analysisStatus==='ERROR'?'紀錄已保存；分析失敗，可重新整理重試':row.analysisJobScheduled?'紀錄已保存；有待處理的重算工作':'紀錄已保存；此項分析尚未啟用';
     note.textContent+=' · '+label;

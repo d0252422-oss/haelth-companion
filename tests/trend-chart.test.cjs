@@ -156,8 +156,8 @@ assert.strictEqual((new Date(`${sevenDayRange.endDate}T12:00:00Z`) - new Date(`$
 assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("custom",{startDate:"2026-08-01",endDate:"2026-08-12"})'))), { startDate: '2026-08-01', endDate: '2026-08-12' });
 
 const timeline = evaluate(`normalizeHealthTimeline({timeline:[
-  {date:"2026-08-14",weight:86.5,bodyFatPercentage:28,sleepHours:null,trainingSets:0,caloriesIntake:null,fatigueIndex:17},
-  {date:"2026-08-15",weight:86.4,bodyFatPercentage:28.5,sleepHours:7.5,trainingSets:12,caloriesIntake:1900,fatigueIndex:19,fatigueScore:88}
+  {date:"2026-08-14",weight:86.5,bodyFatPercentage:28,bodySource:"MANUAL_WEB",sleepHours:null,trainingSets:0,caloriesIntake:null,fatigueIndex:17},
+  {date:"2026-08-15",weight:86.4,bodyFatPercentage:28.5,bodySource:"MANUAL_WEB",sleepHours:7.5,trainingSets:12,caloriesIntake:1900,fatigueIndex:19,fatigueScore:88}
 ]})`);
 assert.strictEqual(timeline.length, 2);
 assert.strictEqual(timeline[0].fatMass, 24.22);
