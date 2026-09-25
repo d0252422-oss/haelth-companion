@@ -27,7 +27,6 @@ class MainActivity : ComponentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var health: HealthConnectGateway
     private lateinit var auth: NativeGoogleAuth
-    private lateinit var checkpoints: SyncCheckpointStore
     private lateinit var status: TextView
     private lateinit var lastSync: TextView
     private lateinit var workerDiagnostic: TextView
@@ -50,7 +49,6 @@ class MainActivity : ComponentActivity() {
             BuildConfig.GOOGLE_WEB_CLIENT_ID,
             BuildConfig.API_BASE_URL,
         )
-        checkpoints = SyncCheckpointStore(this)
         if (health.availability == HealthConnectClient.SDK_AVAILABLE) {
             permissionLauncher = registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
                 if (granted.isEmpty()) render(ConnectorUiState.HEALTH_PERMISSION_DENIED)
@@ -182,8 +180,14 @@ class MainActivity : ComponentActivity() {
         }
         scope.launch {
             try {
-                var session = currentSession
-                if (session == null) { render(ConnectorUiState.SIGNED_OUT); return@launch }
+                val initialSession = currentSession
+                if (initialSession == null) { render(ConnectorUiState.SIGNED_OUT); return@launch }
+                var session: NativeAuthSession = initialSession
+                val checkpoints = SyncCheckpointStore(
+                    this@MainActivity,
+                    initialSession.canonicalUserId,
+                    BackgroundSyncMode.INCREMENTAL,
+                )
                 render(ConnectorUiState.SYNCING, "正在讀取最近健康資料…")
                 runCatching {
                 withTimeout(FOREGROUND_SYNC_DEADLINE_MS) {
@@ -192,34 +196,40 @@ class MainActivity : ComponentActivity() {
                     val end = Instant.now()
                     val window = SyncWindowPolicy.incremental(
                         end,
-                        SyncRuntimeStateStore(this@MainActivity).lastSuccessfulSync(session!!.canonicalUserId),
+                        SyncRuntimeStateStore(this@MainActivity).lastSuccessfulSync(session.canonicalUserId),
                     )
                     val read = withContext(Dispatchers.IO) {
                         health.readBounded(window.start, window.end) { domain, done, total ->
                             scope.launch { status.text = "正在讀取 $domain… $done/$total" }
                         }
                     }
-                    val client = IngestionClient(BuildConfig.API_BASE_URL)
-                    try {
-                        withContext(Dispatchers.IO) {
-                            client.upload(session!!, read.records, checkpoints) { done, total ->
-                                scope.launch { status.text = "正在上傳健康資料… $done/$total" }
+                    IngestionClient(BuildConfig.API_BASE_URL).use { client ->
+                        val uploadSummary = try {
+                            withContext(Dispatchers.IO) {
+                                client.upload(session, read.records, checkpoints) { done, total ->
+                                    scope.launch { status.text = "正在上傳健康資料… $done/$total" }
+                                }
                             }
+                        } catch (_: AuthenticationRequired) {
+                            session = auth.refresh().also { currentSession = it }
+                            withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints) }
                         }
-                    } catch (_: AuthenticationRequired) {
-                        session = auth.refresh().also { currentSession = it }
-                        withContext(Dispatchers.IO) { client.upload(session!!, read.records, checkpoints) }
+                        status.text = "健康資料已同步，分數正在更新…"
+                        val partial = !SyncTerminalPolicy.isDurablyComplete(
+                            readPartial = read.isPartial,
+                            reconciliationPending = uploadSummary.reconciliationPending,
+                        )
+                        val result = if (partial) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED_RECENT"
+                        val permissionState = if (granted.containsAll(health.readPermissions)) "GRANTED" else "PARTIAL"
+                        withContext(Dispatchers.IO) { client.reportStatus(session, read.records, result, permissionState) }
+                        if (!partial) checkpoints.clear()
+                        ForegroundSyncResult(read.records.isNotEmpty(), partial)
                     }
-                    status.text = "健康資料已同步，分數正在更新…"
-                    val result = if (read.isPartial) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED_RECENT"
-                    val permissionState = if (granted.containsAll(health.readPermissions)) "GRANTED" else "PARTIAL"
-                    withContext(Dispatchers.IO) { client.reportStatus(session!!, read.records, result, permissionState) }
-                    ForegroundSyncResult(read.records.isNotEmpty(), read.isPartial)
                 }
                 }.onSuccess { result ->
-                saveLastSync(session!!.canonicalUserId)
-                SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session!!.canonicalUserId)
-                if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session!!.canonicalUserId)
+                if (!result.partial) saveLastSync(session.canonicalUserId)
+                SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session.canonicalUserId)
+                if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
                 render(SyncTerminalPolicy.state(result.hasData, result.partial, timedOut = false))
                 }.onFailure { error ->
                 when (error) {
@@ -229,8 +239,8 @@ class MainActivity : ComponentActivity() {
                         render(ConnectorUiState.AUTH_ERROR)
                     }
                     is TimeoutCancellationException -> {
-                        SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session!!.canonicalUserId)
-                        if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session!!.canonicalUserId)
+                        SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session.canonicalUserId)
+                        if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
                         render(ConnectorUiState.SYNC_TIMEOUT)
                     }
                     else -> render(ConnectorUiState.SYNC_ERROR)
@@ -246,7 +256,7 @@ class MainActivity : ComponentActivity() {
         val userId = currentSession?.canonicalUserId
         userId?.let { SyncRuntimeStateStore(this).clear(it) }
         currentSession = null
-        checkpoints.clear()
+        userId?.let { SyncCheckpointStore.clearAll(this, it) }
         BackgroundSyncScheduler.cancel(this, userId)
         backgroundObserver?.cancel()
         workerDiagnostic.text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: IDLE"

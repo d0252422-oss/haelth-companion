@@ -1,48 +1,159 @@
 package app.healthcompanion.sync
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.Closeable
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
 
-data class UploadSummary(val batchesCompleted: Int, val batchesTotal: Int, val recordsUploaded: Int)
+data class UploadSummary(
+    val batchesCompleted: Int,
+    val batchesTotal: Int,
+    val recordsUploaded: Int,
+    val reconciliationPending: Boolean = false,
+)
 class AuthenticationRequired : IOException("AUTHENTICATION_REQUIRED")
 class OversizedBatchRejected : IOException("OVERSIZED_BATCH_REJECTED")
 class BatchUploadFailed(val statusCode: Int) : IOException("BATCH_UPLOAD_FAILED")
+class BackfillCatchUpRequired : IOException("BACKFILL_CATCH_UP_REQUIRED")
 
-class IngestionClient(private val baseUrl: String) {
-    fun upload(
+internal data class IngestionHttpResult(val statusCode: Int, val errorCode: String? = null)
+
+internal fun interface IngestionTransport : Closeable {
+    suspend fun post(path: String, session: BackendSession, body: String): IngestionHttpResult
+    override fun close() = Unit
+}
+
+internal class OkHttpIngestionTransport(
+    private val baseUrl: String,
+    connectTimeoutMs: Long = IngestionClient.CONNECT_TIMEOUT_MS,
+    socketTimeoutMs: Long = IngestionClient.SOCKET_TIMEOUT_MS,
+    callTimeoutMs: Long = IngestionClient.CALL_TIMEOUT_MS,
+) : IngestionTransport {
+    private val client = HttpClient(OkHttp) {
+        engine {
+            config {
+                retryOnConnectionFailure(false)
+                connectTimeout(connectTimeoutMs, TimeUnit.MILLISECONDS)
+                readTimeout(socketTimeoutMs, TimeUnit.MILLISECONDS)
+                writeTimeout(socketTimeoutMs, TimeUnit.MILLISECONDS)
+                callTimeout(callTimeoutMs, TimeUnit.MILLISECONDS)
+            }
+        }
+        install(HttpTimeout) {
+            connectTimeoutMillis = connectTimeoutMs
+            socketTimeoutMillis = socketTimeoutMs
+            requestTimeoutMillis = callTimeoutMs
+        }
+    }
+
+    override suspend fun post(path: String, session: BackendSession, body: String): IngestionHttpResult {
+        val response = client.post("$baseUrl$path") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer ${session.accessToken}")
+            session.legacySessionId?.let { header("X-App-Session-Id", it) }
+            setBody(body)
+        }
+        // Consume every response so the connection can be reused across hundreds
+        // of bounded backfill requests. Only a small, allowlisted error code is kept.
+        val responseBody = response.bodyAsText()
+        return IngestionHttpResult(
+            response.status.value,
+            response.status.value.takeIf { it >= 400 }?.let {
+                sanitizedServerError(responseBody.take(IngestionClient.MAX_ERROR_BODY_CHARS))
+            },
+        )
+    }
+
+    override fun close() {
+        client.close()
+    }
+}
+
+internal fun sanitizedServerError(body: String): String? = runCatching {
+    JSONObject(body).optString("error").takeIf { it.matches(Regex("[A-Z][A-Z0-9_]{0,63}")) }
+}.getOrNull()
+
+internal class IngestionClient(
+    private val baseUrl: String,
+    private val transport: IngestionTransport = OkHttpIngestionTransport(baseUrl),
+    private val backoff: suspend (Long) -> Unit = { delay(it) },
+    private val onHttpResult: (IngestionHttpResult) -> Unit = {},
+) : Closeable {
+    suspend fun upload(
         session: BackendSession,
         records: List<CanonicalHealthRecord>,
         checkpoints: CheckpointRepository,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): UploadSummary {
         requireConfigured()
-        val plan = BatchPlanner.plan(session.canonicalUserId, records)
-        if (plan.batches.isEmpty()) {
-            checkpoints.clear()
-            return UploadSummary(0, 0, 0)
+        val plan = BatchPlanner.streamingPlan(session.canonicalUserId, records, checkpoints.load())
+        var nextRecordIndex = plan.nextRecordIndex
+        var completedBatches = plan.nextBatchIndex
+        while (nextRecordIndex < plan.orderedRecords.size) {
+            val batch = BatchPlanner.nextStreamingBatch(session.canonicalUserId, plan.orderedRecords, nextRecordIndex)
+                ?: break
+            postBatch(session, batch.body)
+            nextRecordIndex = batch.nextRecordIndex
+            completedBatches += 1
+            checkpoints.save(SyncCheckpoint(
+                planFingerprint = plan.fingerprint,
+                nextBatchIndex = completedBatches,
+                nextRecordIndex = nextRecordIndex,
+                lastRecordKey = BatchPlanner.encodedRecordKey(plan.orderedRecords[nextRecordIndex - 1]),
+                reconciliationPass = plan.reconciliationPass,
+                datasetChanged = plan.datasetChanged,
+            ))
+            onProgress(
+                completedBatches,
+                BatchPlanner.estimatedTotalBatches(completedBatches, plan.orderedRecords.size - nextRecordIndex),
+            )
         }
-        val saved = checkpoints.load()
-        val startIndex = BatchPlanner.resumeIndex(plan, saved)
-        var uploaded = plan.batches.take(startIndex).sumOf { it.recordCount }
-        for (index in startIndex until plan.batches.size) {
-            postBatch(session, plan.batches[index].body)
-            uploaded += plan.batches[index].recordCount
-            checkpoints.save(SyncCheckpoint(plan.fingerprint, index + 1))
-            onProgress(index + 1, plan.batches.size)
+        if (plan.datasetChanged && plan.reconciliationPass < MAX_RECONCILIATION_PASSES) {
+            checkpoints.save(SyncCheckpoint(
+                planFingerprint = plan.currentFingerprint,
+                nextBatchIndex = 0,
+                nextRecordIndex = 0,
+                reconciliationPass = plan.reconciliationPass + 1,
+            ))
+            throw BackfillCatchUpRequired()
         }
-        checkpoints.clear()
-        return UploadSummary(plan.batches.size, plan.batches.size, uploaded)
+        if (plan.datasetChanged) {
+            // Keep a durable, clean-pass cursor for a later attempt. Returning a
+            // partial receipt must never strand an EOF checkpoint whose dirty bit
+            // can no longer converge.
+            checkpoints.save(SyncCheckpoint(
+                planFingerprint = plan.currentFingerprint,
+                nextBatchIndex = 0,
+                nextRecordIndex = 0,
+                reconciliationPass = MAX_RECONCILIATION_PASSES,
+            ))
+        }
+        return UploadSummary(
+            completedBatches,
+            completedBatches,
+            nextRecordIndex,
+            reconciliationPending = plan.datasetChanged,
+        )
     }
 
-    private fun postBatch(session: BackendSession, body: String) {
+    private suspend fun postBatch(session: BackendSession, body: String) {
         var attempt = 0
         while (true) {
             attempt += 1
             val status = try { execute(session, body) } catch (error: IOException) {
-                if (attempt >= MAX_ATTEMPTS) throw error
+                if (!RetryPolicy.isRetryable(error) || attempt >= MAX_ATTEMPTS) throw error
                 sleepBackoff(attempt)
                 continue
             }
@@ -56,20 +167,13 @@ class IngestionClient(private val baseUrl: String) {
         }
     }
 
-    private fun execute(session: BackendSession, body: String): Int {
-        val connection = (URL("$baseUrl/v1/health/ingestion/batches").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 30_000; doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer ${session.accessToken}")
-            session.legacySessionId?.let { setRequestProperty("X-App-Session-Id", it) }
-        }
-        return try {
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            connection.responseCode
-        } finally { connection.disconnect() }
+    private suspend fun execute(session: BackendSession, body: String): Int {
+        val result = transport.post("/v1/health/ingestion/batches", session, body)
+        onHttpResult(result)
+        return result.statusCode
     }
 
-    fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String): Int {
+    suspend fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String) {
         requireConfigured()
         val now = java.time.Instant.now().toString()
         val body = JSONObject()
@@ -83,23 +187,27 @@ class IngestionClient(private val baseUrl: String) {
             .put("available_domains", JSONArray(records.map { it.domain }.distinct()))
             .put("permission_state_if_known", permissionState)
             .toString()
-        val connection = (URL("$baseUrl/v1/mobile/connectors/status").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 15_000; readTimeout = 15_000; doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer ${session.accessToken}")
-            session.legacySessionId?.let { setRequestProperty("X-App-Session-Id", it) }
+        val httpResult = transport.post("/v1/mobile/connectors/status", session, body)
+        onHttpResult(httpResult)
+        when (RetryPolicy.action(httpResult.statusCode, 1)) {
+            RetryAction.SUCCESS -> Unit
+            RetryAction.AUTH_FAIL -> throw AuthenticationRequired()
+            RetryAction.OVERSIZE_FAIL -> throw OversizedBatchRejected()
+            RetryAction.RETRY, RetryAction.FAIL -> throw BatchUploadFailed(httpResult.statusCode)
         }
-        return try {
-            connection.outputStream.use { it.write(body.toByteArray()) }
-            connection.responseCode
-        } finally { connection.disconnect() }
     }
 
     private fun requireConfigured() = require(baseUrl.startsWith("https://") && !baseUrl.contains(".invalid")) { "STAGING_ENDPOINT_NOT_CONFIGURED" }
-    private fun sleepBackoff(attempt: Int) = Thread.sleep(250L * (1L shl (attempt - 1).coerceAtMost(2)))
+    private suspend fun sleepBackoff(attempt: Int) = backoff(250L * (1L shl (attempt - 1).coerceAtMost(2)))
+    override fun close() = transport.close()
 
     companion object {
         const val MAX_ATTEMPTS = 3
+        const val CONNECT_TIMEOUT_MS = 15_000L
+        const val SOCKET_TIMEOUT_MS = 30_000L
+        const val CALL_TIMEOUT_MS = 45_000L
+        const val MAX_ERROR_BODY_CHARS = 1_024
+        const val MAX_RECONCILIATION_PASSES = 2
 
         fun mutation(user: String, record: CanonicalHealthRecord): JSONObject {
             val canonical = JSONObject().put("schema_version", "hdl-v2.health-ingestion.v1").put("canonical_user_id", user).put("platform", "android").put("domain", record.domain).put("source_app", record.sourceApp).put("source_record_id", record.sourceRecordId).put("recorded_at", record.recordedAt).put("started_at", record.startedAt).put("ended_at", record.endedAt).put("timezone", record.timezone).put("local_date", record.localDate).put("value", record.value).put("unit", record.unit).put("stage", record.stage)
@@ -113,11 +221,27 @@ class IngestionClient(private val baseUrl: String) {
 
 enum class RetryAction { SUCCESS, AUTH_FAIL, OVERSIZE_FAIL, RETRY, FAIL }
 object RetryPolicy {
+    fun isRetryable(error: Throwable): Boolean = error is IOException &&
+        error !is AuthenticationRequired &&
+        error !is OversizedBatchRejected &&
+        error !is BatchUploadFailed
+
     fun action(status: Int, attempt: Int): RetryAction = when {
+        status == 207 -> RetryAction.FAIL
         status in 200..299 -> RetryAction.SUCCESS
         status == 401 || status == 403 -> RetryAction.AUTH_FAIL
         status == 413 -> RetryAction.OVERSIZE_FAIL
         (status == 429 || status in 500..599) && attempt < IngestionClient.MAX_ATTEMPTS -> RetryAction.RETRY
         else -> RetryAction.FAIL
+    }
+
+    fun shouldRetryWorker(error: Throwable, runAttemptCount: Int, maxAttempts: Int): Boolean {
+        if (runAttemptCount >= maxAttempts - 1) return false
+        return when (error) {
+            is AuthenticationRequired, is OversizedBatchRejected -> false
+            is BatchUploadFailed -> error.statusCode == 429 || error.statusCode in 500..599
+            is IOException -> true
+            else -> false
+        }
     }
 }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.time.Instant
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class SyncRuntimeStateStore(context: Context) {
@@ -44,16 +45,26 @@ class SyncRuntimeStateStore(context: Context) {
         .putString(key(userId, BACKGROUND_STAGE), "ENQUEUED")
         .putString(key(userId, BACKGROUND_RESULT), "ENQUEUED")
         .putString(key(userId, BACKGROUND_RESULT_AT), Instant.now().toString())
+        .putInt(key(userId, BACKGROUND_REQUEST_COUNT), 0)
+        .putInt(key(userId, BACKGROUND_ATTEMPT_COUNT), 0)
         .remove(key(userId, BACKGROUND_TERMINAL_AT))
+        .remove(key(userId, BACKGROUND_TERMINAL_STAGE))
         .apply()
-    fun recordStarted(userId: String, workId: String) = preferences.edit()
+    fun recordStarted(userId: String, workId: String, attemptCount: Int = 0) = preferences.edit()
         .putString(key(userId, BACKGROUND_WORK_ID), workId)
         .putString(key(userId, BACKGROUND_STARTED_AT), Instant.now().toString())
         .putString(key(userId, BACKGROUND_LAST_PROGRESS_AT), Instant.now().toString())
         .putString(key(userId, BACKGROUND_STAGE), "STARTING")
         .putInt(key(userId, BACKGROUND_REQUEST_COUNT), 0)
+        .putInt(key(userId, BACKGROUND_ATTEMPT_COUNT), attemptCount)
         .putString(key(userId, BACKGROUND_RESULT), "SYNCING")
         .putString(key(userId, BACKGROUND_RESULT_AT), Instant.now().toString())
+        .remove(key(userId, BACKGROUND_TERMINAL_STAGE))
+        .remove(key(userId, BACKGROUND_READ_RECORD_COUNT))
+        .remove(key(userId, BACKGROUND_READ_DOMAIN_COUNTS))
+        .remove(key(userId, BACKGROUND_READ_SOURCE_APPS))
+        .remove(key(userId, BACKGROUND_HTTP_STATUS))
+        .remove(key(userId, BACKGROUND_HTTP_ERROR_CODE))
         .apply()
     fun recordProgress(userId: String, stage: String, requestCount: Int? = null) {
         val editor = preferences.edit()
@@ -62,12 +73,36 @@ class SyncRuntimeStateStore(context: Context) {
         requestCount?.let { editor.putInt(key(userId, BACKGROUND_REQUEST_COUNT), it) }
         editor.apply()
     }
-    fun recordTerminal(userId: String, result: String) = preferences.edit()
-        .putString(key(userId, BACKGROUND_RESULT), result)
-        .putString(key(userId, BACKGROUND_RESULT_AT), Instant.now().toString())
-        .putString(key(userId, BACKGROUND_TERMINAL_AT), Instant.now().toString())
-        .putString(key(userId, BACKGROUND_STAGE), "TERMINAL")
-        .apply()
+    fun recordReadSummary(userId: String, records: List<CanonicalHealthRecord>) {
+        val domainCounts = records.groupingBy { it.domain }.eachCount().toSortedMap()
+            .entries.joinToString(",") { (domain, count) -> "${domain.take(64)}:$count" }
+        val sourceApps = records.asSequence().map { it.sourceApp }.distinct().sorted().take(20)
+            .joinToString(",") { it.take(128) }
+        preferences.edit()
+            .putInt(key(userId, BACKGROUND_READ_RECORD_COUNT), records.size)
+            .putString(key(userId, BACKGROUND_READ_DOMAIN_COUNTS), domainCounts)
+            .putString(key(userId, BACKGROUND_READ_SOURCE_APPS), sourceApps)
+            .apply()
+    }
+    internal fun recordHttpResult(userId: String, result: IngestionHttpResult) {
+        val editor = preferences.edit().putInt(key(userId, BACKGROUND_HTTP_STATUS), result.statusCode)
+        result.errorCode?.takeIf { it.matches(Regex("[A-Z][A-Z0-9_]{0,63}")) }
+            ?.let { editor.putString(key(userId, BACKGROUND_HTTP_ERROR_CODE), it) }
+            ?: editor.remove(key(userId, BACKGROUND_HTTP_ERROR_CODE))
+        editor.apply()
+    }
+    fun recordTerminal(userId: String, result: String) {
+        val terminalStage = preferences.getString(key(userId, BACKGROUND_STAGE), null)
+            ?.takeUnless { it == "TERMINAL" }
+        val now = Instant.now().toString()
+        val editor = preferences.edit()
+            .putString(key(userId, BACKGROUND_RESULT), result)
+            .putString(key(userId, BACKGROUND_RESULT_AT), now)
+            .putString(key(userId, BACKGROUND_TERMINAL_AT), now)
+            .putString(key(userId, BACKGROUND_STAGE), "TERMINAL")
+        terminalStage?.let { editor.putString(key(userId, BACKGROUND_TERMINAL_STAGE), it) }
+        editor.apply()
+    }
     fun recordObserved(
         userId: String,
         workId: String,
@@ -81,7 +116,7 @@ class SyncRuntimeStateStore(context: Context) {
             .putString(key(userId, BACKGROUND_RESULT), result)
             .putString(key(userId, BACKGROUND_RESULT_AT), Instant.now().toString())
             .putString(key(userId, BACKGROUND_STAGE), stage)
-            .putInt(key(userId, BACKGROUND_REQUEST_COUNT), attemptCount)
+            .putInt(key(userId, BACKGROUND_ATTEMPT_COUNT), attemptCount)
         progressAt?.let { editor.putString(key(userId, BACKGROUND_LAST_PROGRESS_AT), it.toString()) }
         editor.apply()
     }
@@ -93,7 +128,14 @@ class SyncRuntimeStateStore(context: Context) {
         lastProgressAt = instant(userId, BACKGROUND_LAST_PROGRESS_AT),
         terminalAt = instant(userId, BACKGROUND_TERMINAL_AT),
         stage = preferences.getString(key(userId, BACKGROUND_STAGE), null),
+        terminalStage = preferences.getString(key(userId, BACKGROUND_TERMINAL_STAGE), null),
         requestCount = preferences.getInt(key(userId, BACKGROUND_REQUEST_COUNT), 0),
+        attemptCount = preferences.getInt(key(userId, BACKGROUND_ATTEMPT_COUNT), 0),
+        readRecordCount = preferences.getInt(key(userId, BACKGROUND_READ_RECORD_COUNT), 0),
+        readDomainCounts = preferences.getString(key(userId, BACKGROUND_READ_DOMAIN_COUNTS), null),
+        readSourceApps = preferences.getString(key(userId, BACKGROUND_READ_SOURCE_APPS), null),
+        lastHttpStatus = preferences.getInt(key(userId, BACKGROUND_HTTP_STATUS), 0).takeIf { it > 0 },
+        lastHttpErrorCode = preferences.getString(key(userId, BACKGROUND_HTTP_ERROR_CODE), null),
     )
     fun lastSuccessfulSync(userId: String): Instant? = contextPreferences.getString(key(userId, LAST_SUCCESS), null)
         ?.let { runCatching { Instant.parse(it) }.getOrNull() }
@@ -104,7 +146,7 @@ class SyncRuntimeStateStore(context: Context) {
         preferences.getString(key(userId, BACKGROUND_RESULT), null) to
             preferences.getString(key(userId, BACKGROUND_RESULT_AT), null)?.let { runCatching { Instant.parse(it) }.getOrNull() }
     fun clear(userId: String) {
-        preferences.edit()
+        val editor = preferences.edit()
             .remove(key(userId, HISTORY_PENDING))
             .remove(key(userId, BACKGROUND_RESULT))
             .remove(key(userId, BACKGROUND_RESULT_AT))
@@ -114,20 +156,41 @@ class SyncRuntimeStateStore(context: Context) {
             .remove(key(userId, BACKGROUND_STARTED_AT))
             .remove(key(userId, BACKGROUND_LAST_PROGRESS_AT))
             .remove(key(userId, BACKGROUND_TERMINAL_AT))
+            .remove(key(userId, BACKGROUND_TERMINAL_STAGE))
             .remove(key(userId, BACKGROUND_STAGE))
             .remove(key(userId, BACKGROUND_REQUEST_COUNT))
-            .apply()
+            .remove(key(userId, BACKGROUND_ATTEMPT_COUNT))
+            .remove(key(userId, BACKGROUND_READ_RECORD_COUNT))
+            .remove(key(userId, BACKGROUND_READ_DOMAIN_COUNTS))
+            .remove(key(userId, BACKGROUND_READ_SOURCE_APPS))
+            .remove(key(userId, BACKGROUND_HTTP_STATUS))
+            .remove(key(userId, BACKGROUND_HTTP_ERROR_CODE))
+        BackgroundSyncMode.entries.forEach { mode ->
+            editor.remove(modeKey(userId, mode, ACTIVE_WINDOW_END))
+        }
+        editor.apply()
         contextPreferences.edit().remove(key(userId, LAST_SUCCESS)).apply()
     }
-    fun activeWindowEnd(userId: String, proposed: Instant): Instant {
-        val scopedKey = key(userId, ACTIVE_WINDOW_END)
+    fun activeWindowEnd(userId: String, mode: BackgroundSyncMode, proposed: Instant): Instant {
+        migrateLegacyBackfillWindow(userId, mode)
+        val scopedKey = modeKey(userId, mode, ACTIVE_WINDOW_END)
         preferences.getString(scopedKey, null)?.let { saved ->
             runCatching { Instant.parse(saved) }.getOrNull()?.let { return it }
         }
         preferences.edit().putString(scopedKey, proposed.toString()).apply()
         return proposed
     }
-    fun clearActiveWindow(userId: String) = preferences.edit().remove(key(userId, ACTIVE_WINDOW_END)).apply()
+    fun clearActiveWindow(userId: String, mode: BackgroundSyncMode) =
+        preferences.edit().remove(modeKey(userId, mode, ACTIVE_WINDOW_END)).apply()
+
+    private fun migrateLegacyBackfillWindow(userId: String, mode: BackgroundSyncMode) {
+        if (mode != BackgroundSyncMode.BACKFILL) return
+        val legacyKey = key(userId, ACTIVE_WINDOW_END)
+        val scopedKey = modeKey(userId, mode, ACTIVE_WINDOW_END)
+        if (preferences.contains(scopedKey) || !preferences.contains(legacyKey)) return
+        val saved = preferences.getString(legacyKey, null) ?: return
+        preferences.edit().putString(scopedKey, saved).remove(legacyKey).commit()
+    }
 
     /**
      * Claims beta.6's unscoped sync metadata only after an existing authenticated
@@ -159,6 +222,8 @@ class SyncRuntimeStateStore(context: Context) {
     }
 
     private fun key(userId: String, name: String) = "${CanonicalIdentity.sha256(userId).take(16)}_$name"
+    private fun modeKey(userId: String, mode: BackgroundSyncMode, name: String) =
+        SyncStateNamespace.modeKey(userId, mode, name)
     private fun instant(userId: String, name: String): Instant? = preferences.getString(key(userId, name), null)
         ?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
@@ -176,21 +241,36 @@ class SyncRuntimeStateStore(context: Context) {
         const val BACKGROUND_STARTED_AT = "background_started_at"
         const val BACKGROUND_LAST_PROGRESS_AT = "background_last_progress_at"
         const val BACKGROUND_TERMINAL_AT = "background_terminal_at"
+        const val BACKGROUND_TERMINAL_STAGE = "background_terminal_stage"
         const val BACKGROUND_STAGE = "background_stage"
         const val BACKGROUND_REQUEST_COUNT = "background_request_count"
+        const val BACKGROUND_ATTEMPT_COUNT = "background_attempt_count"
+        const val BACKGROUND_READ_RECORD_COUNT = "background_read_record_count"
+        const val BACKGROUND_READ_DOMAIN_COUNTS = "background_read_domain_counts"
+        const val BACKGROUND_READ_SOURCE_APPS = "background_read_source_apps"
+        const val BACKGROUND_HTTP_STATUS = "background_http_status"
+        const val BACKGROUND_HTTP_ERROR_CODE = "background_http_error_code"
     }
 }
 
 data class BackgroundWorkMetadata(
     val result: String?, val workId: String?, val enqueuedAt: Instant?, val startedAt: Instant?,
-    val lastProgressAt: Instant?, val terminalAt: Instant?, val stage: String?, val requestCount: Int,
+    val lastProgressAt: Instant?, val terminalAt: Instant?, val stage: String?,
+    val terminalStage: String?, val requestCount: Int, val attemptCount: Int,
+    val readRecordCount: Int, val readDomainCounts: String?, val readSourceApps: String?,
+    val lastHttpStatus: Int?, val lastHttpErrorCode: String?,
 )
 
 object BackgroundSyncScheduler {
     private const val LEGACY_BACKFILL = "health-sync-history-backfill"
     private const val LEGACY_PERIODIC = "health-sync-periodic"
 
-    suspend fun enqueue(context: Context, userId: String, replaceImmediate: Boolean = false): BackgroundRuntimeStatus {
+    suspend fun enqueue(
+        context: Context,
+        userId: String,
+        replaceImmediate: Boolean = false,
+        replacePeriodic: Boolean = false,
+    ): BackgroundRuntimeStatus {
         val manager = WorkManager.getInstance(context)
         manager.cancelUniqueWork(LEGACY_BACKFILL)
         manager.cancelUniqueWork(LEGACY_PERIODIC)
@@ -200,7 +280,7 @@ object BackgroundSyncScheduler {
             if (current != null && current.state in ACTIVE_STATES) {
                 val status = statusOf(current)
                 recordObserved(context, userId, current, status)
-                ensurePeriodic(manager, userId, constraints)
+                ensurePeriodic(manager, userId, constraints, replacePeriodic)
                 return status
             }
         }
@@ -214,18 +294,24 @@ object BackgroundSyncScheduler {
         val immediatePolicy = if (replaceImmediate) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
         manager.beginUniqueWork(BackgroundWorkNames.immediate(userId), immediatePolicy, immediate).enqueue()
         SyncRuntimeStateStore(context).recordEnqueued(userId, immediate.id.toString())
-        ensurePeriodic(manager, userId, constraints)
+        ensurePeriodic(manager, userId, constraints, replacePeriodic)
         return BackgroundRuntimeStatus.ENQUEUED
     }
 
-    private fun ensurePeriodic(manager: WorkManager, userId: String, constraints: Constraints) {
+    private fun ensurePeriodic(
+        manager: WorkManager,
+        userId: String,
+        constraints: Constraints,
+        replace: Boolean = false,
+    ) {
         val userKey = BackgroundWorkNames.userKey(userId)
         val periodic = PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>(12, TimeUnit.HOURS)
             .setConstraints(constraints)
             .setInputData(workDataOf(WORK_MODE to BackgroundSyncMode.INCREMENTAL.name, WORK_USER_KEY to userKey))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        manager.enqueueUniquePeriodicWork(BackgroundWorkNames.periodic(userId), ExistingPeriodicWorkPolicy.KEEP, periodic)
+        val policy = if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP
+        manager.enqueueUniquePeriodicWork(BackgroundWorkNames.periodic(userId), policy, periodic)
     }
 
     suspend fun enqueueBackfill(context: Context, userId: String) {
@@ -265,30 +351,54 @@ object BackgroundSyncScheduler {
             WorkRecoveryAction.REPLACE_STALE -> {
                 store.recordTerminal(userId, "STALE_RECOVERED")
                 manager.cancelUniqueWork(BackgroundWorkNames.backfill(userId))
-                enqueue(context, userId, replaceImmediate = true)
+                enqueue(context, userId, replaceImmediate = true, replacePeriodic = true)
             }
         }
     }
 
     fun observe(context: Context, userId: String): Flow<BackgroundRuntimeStatus> {
         val manager = WorkManager.getInstance(context)
+        val state = SyncRuntimeStateStore(context)
         return combine(
             manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.immediate(userId)),
             manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.backfill(userId)),
-        ) { immediate, backfill -> immediate + backfill }
-            .map { infos ->
-                val selected = selectCurrent(infos, SyncRuntimeStateStore(context).workMetadata(userId).workId)
+            manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.periodic(userId)),
+        ) { immediate, backfill, periodic ->
+            ObserverWorkSet(
+                active = immediate.filter { it.state in ACTIVE_STATES } +
+                    backfill.filter { it.state in ACTIVE_STATES } +
+                    periodic.filter { it.state == WorkInfo.State.RUNNING },
+                all = immediate + backfill + periodic,
+            )
+        }
+            .map { workSet ->
+                val metadata = state.workMetadata(userId)
+                val selected = selectCurrent(workSet.active, metadata.workId)
                 selected?.let {
                     val status = statusOf(it)
                     recordObserved(context, userId, it, status)
                     status
-                } ?: BackgroundRuntimeStatus.UP_TO_DATE
+                } ?: run {
+                    val preferredTerminal = workSet.all.firstOrNull {
+                        it.id.toString() == metadata.workId && it.state !in ACTIVE_STATES
+                    }
+                    val status = BackgroundWorkRecoveryPolicy.statusWithoutActiveWork(
+                        metadata.result,
+                        preferredTerminal?.let(::durableState),
+                    )
+                    if (preferredTerminal != null && status == BackgroundRuntimeStatus.RETRY_PENDING) {
+                        recordObserved(context, userId, preferredTerminal, status)
+                    }
+                    status
+                }
             }
             .distinctUntilChanged()
     }
 
     private suspend fun queryForegroundWork(manager: WorkManager, userId: String): List<WorkInfo> =
-        queryWork(manager, BackgroundWorkNames.immediate(userId)) + queryWork(manager, BackgroundWorkNames.backfill(userId))
+        queryWork(manager, BackgroundWorkNames.immediate(userId)).filter { it.state in ACTIVE_STATES } +
+            queryWork(manager, BackgroundWorkNames.backfill(userId)).filter { it.state in ACTIVE_STATES } +
+            queryWork(manager, BackgroundWorkNames.periodic(userId)).filter { it.state == WorkInfo.State.RUNNING }
 
     private suspend fun queryWork(manager: WorkManager, name: String): List<WorkInfo> = runCatching {
         withTimeout(WORK_QUERY_TIMEOUT_MS) { manager.getWorkInfosForUniqueWorkFlow(name).first() }
@@ -349,6 +459,8 @@ object BackgroundSyncScheduler {
         WorkInfo.State.CANCELLED -> DurableWorkState.CANCELLED
     }
 
+    private data class ObserverWorkSet(val active: List<WorkInfo>, val all: List<WorkInfo>)
+
     fun cancel(context: Context, userId: String?) {
         val manager = WorkManager.getInstance(context)
         userId?.let {
@@ -373,6 +485,11 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
     override suspend fun doWork(): Result {
         val state = SyncRuntimeStateStore(applicationContext)
         val health = HealthConnectGateway(applicationContext)
+        val mode = runCatching {
+            BackgroundSyncMode.valueOf(inputData.getString(BackgroundSyncScheduler.WORK_MODE).orEmpty())
+        }.getOrDefault(BackgroundSyncMode.INCREMENTAL)
+        var uploadStarted = false
+        var ingestionClient: IngestionClient? = null
         val auth = NativeGoogleAuth(
             applicationContext,
             BuildConfig.SUPABASE_URL,
@@ -389,37 +506,47 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         var session = try {
             withTimeout(SESSION_TIMEOUT_MS) { auth.restore() }
         } catch (_: TimeoutCancellationException) {
-            return retryOrFailWithoutSession()
+            val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
+                mode,
+                uploadStarted = mode == BackgroundSyncMode.BACKFILL,
+                checkpointIndex = 0,
+            )
+            return retryOrFailWithoutSession(maxAttempts)
         } ?: return Result.failure()
         if (BackgroundWorkNames.userKey(session.canonicalUserId) != expectedUserKey) {
-            state.recordTerminal(session.canonicalUserId, "FAILED_AUTH")
             return Result.failure()
         }
-        state.recordStarted(session.canonicalUserId, id.toString())
-        reportProgress(state, session.canonicalUserId, "PERMISSION")
-        val permissionReady = try {
-            withTimeout(PERMISSION_TIMEOUT_MS) {
-                health.availability == androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE &&
-                    health.hasAnyPermission() && health.backgroundReadState() == BackgroundHealthReadState.GRANTED
-            }
-        } catch (_: TimeoutCancellationException) {
-            state.recordTerminal(session.canonicalUserId, "RETRY_PENDING")
-            return retryOrFail()
-        }
-        if (!permissionReady) {
-            state.recordTerminal(session.canonicalUserId, "PERMISSION_REQUIRED")
-            return Result.failure()
-        }
+        val checkpoints = SyncCheckpointStore(applicationContext, session.canonicalUserId, mode)
         if (!AppSyncSingleFlight.gate.tryStart()) {
-            state.recordTerminal(session.canonicalUserId, "RETRY_PENDING")
+            // Another WorkManager request owns the sync. Do not claim RUNNING or
+            // overwrite its durable status; WorkManager will retry this contender.
             return Result.retry()
         }
         return try {
+            state.recordStarted(session.canonicalUserId, id.toString(), runAttemptCount)
+            reportProgress(state, session.canonicalUserId, "PERMISSION")
+            val permissionReady = try {
+                withTimeout(PERMISSION_TIMEOUT_MS) {
+                    health.availability == androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE &&
+                        health.hasAnyPermission() && health.backgroundReadState() == BackgroundHealthReadState.GRANTED
+                }
+            } catch (_: TimeoutCancellationException) {
+                val checkpoint = checkpoints.load()
+                val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
+                    mode,
+                    uploadStarted = false,
+                    checkpoint?.nextBatchIndex ?: 0,
+                    checkpoint?.reconciliationPass ?: 0,
+                )
+                state.recordTerminal(session.canonicalUserId, "RETRY_PENDING")
+                return retryOrFail(maxAttempts)
+            }
+            if (!permissionReady) {
+                state.recordTerminal(session.canonicalUserId, "PERMISSION_REQUIRED")
+                return Result.failure()
+            }
             withTimeout(BACKGROUND_DEADLINE_MS) {
-                val end = state.activeWindowEnd(session.canonicalUserId, Instant.now())
-                val mode = runCatching {
-                    BackgroundSyncMode.valueOf(inputData.getString(BackgroundSyncScheduler.WORK_MODE).orEmpty())
-                }.getOrDefault(BackgroundSyncMode.INCREMENTAL)
+                val end = state.activeWindowEnd(session.canonicalUserId, mode, Instant.now())
                 val window = if (mode == BackgroundSyncMode.BACKFILL) {
                     SyncWindowPolicy.backfill(end)
                 } else {
@@ -427,12 +554,16 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 }
                 reportProgress(state, session.canonicalUserId, "HEALTH_READ")
                 val read = withTimeout(HEALTH_READ_TIMEOUT_MS) { health.readBounded(window.start, window.end) }
-                val client = IngestionClient(BuildConfig.API_BASE_URL)
+                state.recordReadSummary(session.canonicalUserId, read.records)
+                val client = IngestionClient(BuildConfig.API_BASE_URL, onHttpResult = { result ->
+                    state.recordHttpResult(session.canonicalUserId, result)
+                }).also { ingestionClient = it }
                 reportProgress(state, session.canonicalUserId, "UPLOAD", 0)
-                try {
+                uploadStarted = true
+                val uploadSummary = try {
                     withTimeout(UPLOAD_TIMEOUT_MS) {
                         withContext(Dispatchers.IO) {
-                            client.upload(session, read.records, SyncCheckpointStore(applicationContext)) { done, _ ->
+                            client.upload(session, read.records, checkpoints) { done, _ ->
                                 state.recordProgress(session.canonicalUserId, "UPLOAD", done)
                             }
                         }
@@ -441,20 +572,29 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     reportProgress(state, session.canonicalUserId, "SESSION_REFRESH")
                     session = withTimeout(SESSION_TIMEOUT_MS) { auth.refresh() }
                     withTimeout(UPLOAD_TIMEOUT_MS) {
-                        withContext(Dispatchers.IO) { client.upload(session, read.records, SyncCheckpointStore(applicationContext)) }
+                        withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints) }
                     }
                 }
                 reportProgress(state, session.canonicalUserId, "CHECKPOINT")
-                val result = if (read.isPartial) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED"
+                val durablyComplete = SyncTerminalPolicy.isDurablyComplete(
+                    readPartial = read.isPartial,
+                    reconciliationPending = uploadSummary.reconciliationPending,
+                )
+                val needsFollowUp = !durablyComplete
+                val result = if (needsFollowUp) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED"
                 withContext(Dispatchers.IO) {
                     client.reportStatus(session, read.records, result, if (health.hasAllPermissions()) "GRANTED" else "PARTIAL")
                 }
-                if (mode == BackgroundSyncMode.BACKFILL) {
-                    if (read.isPartial) state.markHistoryPending(session.canonicalUserId) else state.markHistoryComplete(session.canonicalUserId)
+                if (needsFollowUp) {
+                    state.markHistoryPending(session.canonicalUserId)
+                    if (uploadSummary.reconciliationPending) throw BackfillCatchUpRequired()
+                    throw PartialHealthRead()
                 }
-                state.recordTerminal(session.canonicalUserId, if (read.isPartial) "PARTIAL" else "SUCCESS")
+                if (mode == BackgroundSyncMode.BACKFILL) state.markHistoryComplete(session.canonicalUserId)
+                state.recordTerminal(session.canonicalUserId, "SUCCESS")
                 state.saveLastSuccessfulSync(session.canonicalUserId)
-                state.clearActiveWindow(session.canonicalUserId)
+                checkpoints.clear()
+                state.clearActiveWindow(session.canonicalUserId, mode)
                 if (mode == BackgroundSyncMode.INCREMENTAL && state.isHistoryPending(session.canonicalUserId)) {
                     BackgroundSyncScheduler.enqueueBackfill(applicationContext, session.canonicalUserId)
                 }
@@ -467,15 +607,43 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
             state.recordTerminal(session.canonicalUserId, "FAILED_AUTH")
             Result.failure()
         } catch (_: TimeoutCancellationException) {
-            state.recordTerminal(session.canonicalUserId, if (runAttemptCount < MAX_RETRY_ATTEMPTS - 1) "RETRY_PENDING" else "TIMEOUT")
-            retryOrFail()
+            val checkpoint = checkpoints.load()
+            val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
+                mode,
+                uploadStarted,
+                checkpoint?.nextBatchIndex ?: 0,
+                checkpoint?.reconciliationPass ?: 0,
+            )
+            val retry = BackgroundContinuationPolicy.shouldRetry(runAttemptCount, maxAttempts)
+            state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "TIMEOUT")
+            retryOrFail(maxAttempts)
+        } catch (error: IOException) {
+            val checkpoint = checkpoints.load()
+            val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
+                mode,
+                uploadStarted,
+                checkpoint?.nextBatchIndex ?: 0,
+                checkpoint?.reconciliationPass ?: 0,
+            )
+            val retry = RetryPolicy.shouldRetryWorker(error, runAttemptCount, maxAttempts)
+            state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "FAILED")
+            if (retry) Result.retry() else Result.failure()
         } catch (cancelled: CancellationException) {
             state.recordTerminal(session.canonicalUserId, "RETRY_PENDING")
             throw cancelled
         } catch (_: Exception) {
-            state.recordTerminal(session.canonicalUserId, if (runAttemptCount < MAX_RETRY_ATTEMPTS - 1) "RETRY_PENDING" else "FAILED")
-            retryOrFail()
+            val checkpoint = checkpoints.load()
+            val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
+                mode,
+                uploadStarted,
+                checkpoint?.nextBatchIndex ?: 0,
+                checkpoint?.reconciliationPass ?: 0,
+            )
+            val retry = BackgroundContinuationPolicy.shouldRetry(runAttemptCount, maxAttempts)
+            state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "FAILED")
+            retryOrFail(maxAttempts)
         } finally {
+            ingestionClient?.close()
             AppSyncSingleFlight.gate.finish()
         }
     }
@@ -490,11 +658,12 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         ))
     }
 
-    private fun retryOrFail(): Result = if (runAttemptCount < MAX_RETRY_ATTEMPTS - 1) Result.retry() else Result.failure()
-    private fun retryOrFailWithoutSession(): Result = retryOrFail()
+    private fun retryOrFail(maxAttempts: Int = MAX_RETRY_ATTEMPTS): Result =
+        if (BackgroundContinuationPolicy.shouldRetry(runAttemptCount, maxAttempts)) Result.retry() else Result.failure()
+    private fun retryOrFailWithoutSession(maxAttempts: Int = MAX_RETRY_ATTEMPTS): Result = retryOrFail(maxAttempts)
 
     companion object {
-        const val MAX_RETRY_ATTEMPTS = 3
+        const val MAX_RETRY_ATTEMPTS = BackgroundContinuationPolicy.DEFAULT_MAX_ATTEMPTS
         const val BACKGROUND_DEADLINE_MS = 8 * 60_000L
         const val HEALTH_READ_TIMEOUT_MS = 3 * 60_000L
         const val UPLOAD_TIMEOUT_MS = 4 * 60_000L
@@ -502,3 +671,5 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         const val PERMISSION_TIMEOUT_MS = 30_000L
     }
 }
+
+private class PartialHealthRead : IOException("PARTIAL_HEALTH_READ")

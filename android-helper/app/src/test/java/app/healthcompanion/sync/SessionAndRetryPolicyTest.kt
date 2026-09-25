@@ -1,5 +1,6 @@
 package app.healthcompanion.sync
 
+import java.net.SocketTimeoutException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -23,5 +24,24 @@ class SessionAndRetryPolicyTest {
         assertEquals(RetryAction.RETRY, RetryPolicy.action(429, 1))
         assertEquals(RetryAction.RETRY, RetryPolicy.action(503, 2))
         assertEquals(RetryAction.FAIL, RetryPolicy.action(503, 3))
+    }
+
+    @Test fun partialReceiptIsNeverTreatedAsCompleteSuccess() {
+        assertEquals(RetryAction.FAIL, RetryPolicy.action(207, 1))
+    }
+
+    @Test fun transportTimeoutIsRetryableButPermanentFailuresAreNot() {
+        assertTrue(RetryPolicy.isRetryable(SocketTimeoutException("bounded timeout")))
+        assertFalse(RetryPolicy.isRetryable(AuthenticationRequired()))
+        assertFalse(RetryPolicy.isRetryable(BatchUploadFailed(400)))
+    }
+
+    @Test fun workManagerRetriesOnlyTransientFailuresAndRemainsBounded() {
+        assertTrue(RetryPolicy.shouldRetryWorker(SocketTimeoutException("bounded timeout"), 0, 3))
+        assertTrue(RetryPolicy.shouldRetryWorker(BatchUploadFailed(503), 0, 3))
+        assertFalse(RetryPolicy.shouldRetryWorker(BatchUploadFailed(503), 2, 3))
+        assertFalse(RetryPolicy.shouldRetryWorker(BatchUploadFailed(400), 0, 3))
+        assertFalse(RetryPolicy.shouldRetryWorker(BatchUploadFailed(207), 0, 3))
+        assertFalse(RetryPolicy.shouldRetryWorker(OversizedBatchRejected(), 0, 3))
     }
 }

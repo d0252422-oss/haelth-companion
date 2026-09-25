@@ -37,8 +37,8 @@ android {
         applicationId = "app.healthcompanion.sync.beta"
         minSdk = 28
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.1.0-beta.11"
+        versionCode = 17
+        versionName = "0.1.0-beta.17"
         buildConfigField("String", "API_BASE_URL", "\"${betaApiBaseUrl.get()}\"")
         buildConfigField("String", "AUTH_SETUP_URL", "\"${betaAuthSetupUrl.get()}\"")
         buildConfigField("String", "APP_LINK_HOST", "\"${betaAppLinkHost.get()}\"")
@@ -62,7 +62,20 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
-tasks.matching { it.name == "assembleDebug" }.configureEach { dependsOn(verifyBetaRuntimeConfiguration) }
+val betaArtifactEntryPoints = setOf(
+    "assembleDebug", "assembleRelease",
+    "bundleDebug", "bundleRelease",
+    "packageDebug", "packageRelease",
+    "packageDebugBundle", "packageReleaseBundle",
+    "packageDebugUniversalApk", "packageReleaseUniversalApk",
+    "makeApkFromBundleForDebug", "makeApkFromBundleForRelease",
+    "extractApksFromBundleForDebug", "extractApksFromBundleForRelease",
+    "zipApksForDebug", "zipApksForRelease",
+    "installDebug", "installRelease",
+)
+tasks.matching { it.name in betaArtifactEntryPoints }.configureEach {
+    dependsOn(verifyBetaRuntimeConfiguration)
+}
 
 dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
@@ -73,8 +86,10 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:3.2.6"))
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.ktor:ktor-client-android:3.3.1")
+    implementation("io.ktor:ktor-client-okhttp:3.3.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

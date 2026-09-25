@@ -9,6 +9,9 @@ object PaginationGuard {
 }
 
 object SyncTerminalPolicy {
+    fun isDurablyComplete(readPartial: Boolean, reconciliationPending: Boolean): Boolean =
+        !readPartial && !reconciliationPending
+
     fun state(hasData: Boolean, partial: Boolean, timedOut: Boolean): ConnectorUiState = when {
         timedOut -> ConnectorUiState.SYNC_TIMEOUT
         partial -> ConnectorUiState.SYNC_PARTIAL
@@ -51,6 +54,27 @@ object AppSyncSingleFlight {
 
 enum class BackgroundSyncMode { INCREMENTAL, BACKFILL }
 
+object BackgroundContinuationPolicy {
+    const val DEFAULT_MAX_ATTEMPTS = 3
+    const val BACKFILL_MAX_CONTINUATION_ATTEMPTS = 12
+    const val BACKFILL_RECONCILIATION_MAX_ATTEMPTS = 24
+
+    fun maxAttempts(
+        mode: BackgroundSyncMode,
+        uploadStarted: Boolean,
+        checkpointIndex: Int,
+        reconciliationPass: Int = 0,
+    ): Int = when {
+        mode != BackgroundSyncMode.BACKFILL -> DEFAULT_MAX_ATTEMPTS
+        reconciliationPass > 0 -> BACKFILL_RECONCILIATION_MAX_ATTEMPTS
+        uploadStarted || checkpointIndex > 0 -> BACKFILL_MAX_CONTINUATION_ATTEMPTS
+        else -> DEFAULT_MAX_ATTEMPTS
+    }
+
+    fun shouldRetry(runAttemptCount: Int, maxAttempts: Int): Boolean =
+        runAttemptCount < maxAttempts - 1
+}
+
 enum class DurableWorkState { ENQUEUED, RUNNING, BLOCKED, SUCCEEDED, FAILED, CANCELLED, UNKNOWN }
 enum class WorkRecoveryAction { KEEP, ENQUEUE, REPLACE_STALE }
 enum class BackgroundRuntimeStatus {
@@ -76,6 +100,22 @@ data class WorkRecoveryDecision(
 
 object BackgroundWorkRecoveryPolicy {
     const val STALE_AFTER_MINUTES = 8L
+
+    fun statusWithoutActiveWork(
+        localResult: String?,
+        preferredTerminalState: DurableWorkState? = null,
+    ): BackgroundRuntimeStatus = when {
+        localResult in setOf("FAILED", "FAILED_AUTH", "TIMEOUT", "PERMISSION_REQUIRED") ->
+            BackgroundRuntimeStatus.FAILED
+        localResult in setOf("PARTIAL", "RETRY_PENDING", "SYNCING") ->
+            BackgroundRuntimeStatus.RETRY_PENDING
+        preferredTerminalState in setOf(DurableWorkState.FAILED, DurableWorkState.CANCELLED) ->
+            BackgroundRuntimeStatus.RETRY_PENDING
+        preferredTerminalState == DurableWorkState.SUCCEEDED -> BackgroundRuntimeStatus.UP_TO_DATE
+        localResult in setOf("SUCCESS", "UP_TO_DATE") -> BackgroundRuntimeStatus.UP_TO_DATE
+        localResult in setOf("ENQUEUED", "STALE_RECOVERED") -> BackgroundRuntimeStatus.ENQUEUED
+        else -> BackgroundRuntimeStatus.ENQUEUED
+    }
 
     fun decide(
         localResult: String?,
@@ -110,7 +150,7 @@ object BackgroundWorkRecoveryPolicy {
 }
 
 object BackgroundWorkNames {
-    fun userKey(userId: String): String = CanonicalIdentity.sha256(userId).take(16)
+    fun userKey(userId: String): String = SyncStateNamespace.userKey(userId)
     fun immediate(userId: String): String = "health-sync-immediate-${userKey(userId)}"
     fun backfill(userId: String): String = "health-sync-backfill-${userKey(userId)}"
     fun periodic(userId: String): String = "health-sync-periodic-${userKey(userId)}"

@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.time.Instant
 
 class SyncPerformancePolicyTest {
@@ -19,6 +20,12 @@ class SyncPerformancePolicyTest {
         assertEquals(ConnectorUiState.SYNC_NO_DATA, SyncTerminalPolicy.state(hasData = false, partial = false, timedOut = false))
         assertEquals(ConnectorUiState.SYNC_PARTIAL, SyncTerminalPolicy.state(hasData = true, partial = true, timedOut = false))
         assertEquals(ConnectorUiState.SYNC_TIMEOUT, SyncTerminalPolicy.state(hasData = true, partial = false, timedOut = true))
+    }
+
+    @Test fun partialReadOrPendingReconciliationCannotAdvanceDurableSuccess() {
+        assertTrue(SyncTerminalPolicy.isDurablyComplete(readPartial = false, reconciliationPending = false))
+        assertFalse(SyncTerminalPolicy.isDurablyComplete(readPartial = true, reconciliationPending = false))
+        assertFalse(SyncTerminalPolicy.isDurablyComplete(readPartial = false, reconciliationPending = true))
     }
 
     @Test fun highVolumeTenThousandRecordsRemainBoundedAndComplete() {
@@ -52,6 +59,48 @@ class SyncPerformancePolicyTest {
         assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.backfill(now).start)
     }
 
+    @Test fun backfillWithDurableUploadCheckpointGetsBoundedContinuationAttempts() {
+        assertEquals(
+            BackgroundContinuationPolicy.BACKFILL_MAX_CONTINUATION_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(
+                BackgroundSyncMode.BACKFILL,
+                uploadStarted = true,
+                checkpointIndex = 130,
+            ),
+        )
+        assertTrue(
+            BackgroundContinuationPolicy.shouldRetry(
+                runAttemptCount = 2,
+                maxAttempts = BackgroundContinuationPolicy.BACKFILL_MAX_CONTINUATION_ATTEMPTS,
+            ),
+        )
+    }
+
+    @Test fun incrementalAndUnstartedBackfillKeepDefaultRetryBound() {
+        assertEquals(
+            BackgroundContinuationPolicy.DEFAULT_MAX_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(
+                BackgroundSyncMode.INCREMENTAL,
+                uploadStarted = true,
+                checkpointIndex = 130,
+            ),
+        )
+        assertEquals(
+            BackgroundContinuationPolicy.BACKFILL_MAX_CONTINUATION_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(
+                BackgroundSyncMode.BACKFILL,
+                uploadStarted = false,
+                checkpointIndex = 130,
+            ),
+        )
+        assertFalse(
+            BackgroundContinuationPolicy.shouldRetry(
+                runAttemptCount = 2,
+                maxAttempts = BackgroundContinuationPolicy.DEFAULT_MAX_ATTEMPTS,
+            ),
+        )
+    }
+
     @Test fun syncSingleFlightRejectsOverlapAndReopensAfterCompletion() {
         val gate = SyncSingleFlight()
         assertTrue(gate.tryStart())
@@ -64,6 +113,55 @@ class SyncPerformancePolicyTest {
         assertEquals(BackgroundWorkNames.immediate("user-a"), BackgroundWorkNames.immediate("user-a"))
         assertFalse(BackgroundWorkNames.immediate("user-a") == BackgroundWorkNames.immediate("user-b"))
         assertFalse(BackgroundWorkNames.periodic("user-a") == BackgroundWorkNames.immediate("user-a"))
+    }
+
+    @Test fun checkpointAndWindowKeysAreIsolatedByUserAndSyncMode() {
+        val backfillCheckpoint = SyncStateNamespace.modeKey("user-a", BackgroundSyncMode.BACKFILL, "plan_fingerprint")
+        val incrementalCheckpoint = SyncStateNamespace.modeKey("user-a", BackgroundSyncMode.INCREMENTAL, "plan_fingerprint")
+        val anotherUser = SyncStateNamespace.modeKey("user-b", BackgroundSyncMode.BACKFILL, "plan_fingerprint")
+        val backfillWindow = SyncStateNamespace.modeKey("user-a", BackgroundSyncMode.BACKFILL, "active_window_end")
+
+        assertEquals(4, setOf(backfillCheckpoint, incrementalCheckpoint, anotherUser, backfillWindow).size)
+        assertFalse(backfillCheckpoint.contains("user-a"))
+    }
+
+    @Test fun continuedBackfillIOExceptionUsesExtendedAttemptBound() {
+        val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
+            BackgroundSyncMode.BACKFILL,
+            uploadStarted = true,
+            checkpointIndex = 171,
+        )
+        assertTrue(RetryPolicy.shouldRetryWorker(IOException("network"), 9, maxAttempts))
+        assertTrue(RetryPolicy.shouldRetryWorker(IOException("network"), 10, maxAttempts))
+        assertFalse(RetryPolicy.shouldRetryWorker(IOException("network"), 11, maxAttempts))
+        assertFalse(
+            RetryPolicy.shouldRetryWorker(
+                IOException("network"),
+                2,
+                BackgroundContinuationPolicy.DEFAULT_MAX_ATTEMPTS,
+            ),
+        )
+        assertEquals(
+            BackgroundContinuationPolicy.BACKFILL_RECONCILIATION_MAX_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(
+                BackgroundSyncMode.BACKFILL,
+                uploadStarted = true,
+                checkpointIndex = 0,
+                reconciliationPass = 1,
+            ),
+        )
+        assertTrue(
+            RetryPolicy.shouldRetryWorker(
+                IOException("catch-up"),
+                11,
+                BackgroundContinuationPolicy.maxAttempts(
+                    BackgroundSyncMode.BACKFILL,
+                    uploadStarted = false,
+                    checkpointIndex = 0,
+                    reconciliationPass = 1,
+                ),
+            ),
+        )
     }
 
     @Test fun staleRunningMetadataIsReplacedEvenWhenWorkManagerStillSaysRunning() {
@@ -92,6 +190,30 @@ class SyncPerformancePolicyTest {
         assertEquals(
             WorkRecoveryAction.ENQUEUE,
             BackgroundWorkRecoveryPolicy.decide("SYNCING", now.minusSeconds(60), WorkRuntimeSnapshot(DurableWorkState.FAILED), now).action,
+        )
+    }
+
+    @Test fun observerDoesNotReportFailedTerminalWorkAsUpToDate() {
+        for (result in listOf("FAILED", "FAILED_AUTH", "TIMEOUT", "PERMISSION_REQUIRED")) {
+            assertEquals(BackgroundRuntimeStatus.FAILED, BackgroundWorkRecoveryPolicy.statusWithoutActiveWork(result))
+        }
+        assertEquals(BackgroundRuntimeStatus.RETRY_PENDING, BackgroundWorkRecoveryPolicy.statusWithoutActiveWork("PARTIAL"))
+        assertEquals(BackgroundRuntimeStatus.RETRY_PENDING, BackgroundWorkRecoveryPolicy.statusWithoutActiveWork("RETRY_PENDING"))
+        assertEquals(BackgroundRuntimeStatus.UP_TO_DATE, BackgroundWorkRecoveryPolicy.statusWithoutActiveWork("SUCCESS"))
+        assertEquals(BackgroundRuntimeStatus.ENQUEUED, BackgroundWorkRecoveryPolicy.statusWithoutActiveWork(null))
+    }
+
+    @Test fun persistedFailureWinsOverHistoricalSuccessfulWork() {
+        assertEquals(
+            BackgroundRuntimeStatus.FAILED,
+            BackgroundWorkRecoveryPolicy.statusWithoutActiveWork("FAILED", DurableWorkState.SUCCEEDED),
+        )
+    }
+
+    @Test fun currentTerminalFailureWithoutSessionMetadataRemainsRetryable() {
+        assertEquals(
+            BackgroundRuntimeStatus.RETRY_PENDING,
+            BackgroundWorkRecoveryPolicy.statusWithoutActiveWork("ENQUEUED", DurableWorkState.FAILED),
         )
     }
 
