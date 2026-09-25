@@ -79,9 +79,9 @@ async function saveObservation(remove=false){
 function activityPairStatus(text,error=false){const el=document.getElementById('activity-pair-status');el.textContent=text;el.setAttribute('role',error?'alert':'status');}
 function activityPairControls(locked){for(const id of ['activity-pair-date','activity-pair-steps','activity-pair-energy'])document.getElementById(id).disabled=locked;document.getElementById('activity-pair-save').disabled=locked;}
 function activityPairRecord(domain){return activityPairEditor?.records?.get(domain)||null;}
-async function openActivityPairEditor(){
+async function openActivityPairEditor(date=getLocalDateString()){
  if(!manualSqlEnabled())return toast('手動步數／總消耗僅在 SQL 模式提供；未切換其他資料來源。');
- const date=getLocalDateString();activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:date,records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null};
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>getLocalDateString())throw Error('INVALID_OBSERVATION_DATE');activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:date,records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null};
  document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=date;openSheet('activity-pair-form');activityPairEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
  void loadActivityPairDate();
 }
