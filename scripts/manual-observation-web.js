@@ -82,7 +82,7 @@ function activityPairRecord(domain){return activityPairEditor?.records?.get(doma
 async function openActivityPairEditor(date=getLocalDateString()){
  if(!manualSqlEnabled())return toast('手動步數／總消耗僅在 SQL 模式提供；未切換其他資料來源。');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>getLocalDateString())throw Error('INVALID_OBSERVATION_DATE');activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:date,records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null};
- document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=date;openSheet('activity-pair-form');activityPairEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
+ document.getElementById('activity-pair-form').reset();document.getElementById('activity-pair-date').value=date;document.getElementById('activity-pair-date').max=getLocalDateString();openSheet('activity-pair-form');activityPairEditor.sheetSerial=typeof openSheet==='function'?(openSheet.serial||0):null;
  void loadActivityPairDate();
 }
 async function loadActivityPairDate(){
