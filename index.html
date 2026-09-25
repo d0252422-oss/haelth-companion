@@ -2,9 +2,9 @@
 <html lang="zh-Hant">
  <head><meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="health-companion-build" content="20260925-e2e-closure-01">
+  <meta name="health-companion-build" content="20260925-score-convergence-01">
   <title>健康陪跑 Health Companion</title>
-  <script src="scripts/build-version.js?v=20260925-e2e-closure-01"></script>
+  <script src="scripts/build-version.js?v=20260925-score-convergence-01"></script>
   <script id="lucide-sdk" async src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <style>
@@ -717,11 +717,11 @@
    </div>
   </div>
   <div id="toast" class="toast" aria-live="polite"></div>
-  <script src="scripts/manual-sql-config.js?v=20260925-e2e-closure-01"></script>
-  <script src="scripts/core-ux-contract.js?v=20260925-e2e-closure-01"></script>
-  <script src="scripts/local-engine-web.js?v=20260925-e2e-closure-01"></script>
-  <script src="scripts/web-view-state.js?v=20260925-e2e-closure-01"></script>
-  <script src="scripts/manual-observation-web.js?v=20260925-e2e-closure-01"></script>
+  <script src="scripts/manual-sql-config.js?v=20260925-score-convergence-01"></script>
+  <script src="scripts/core-ux-contract.js?v=20260925-score-convergence-01"></script>
+  <script src="scripts/local-engine-web.js?v=20260925-score-convergence-01"></script>
+  <script src="scripts/web-view-state.js?v=20260925-score-convergence-01"></script>
+  <script src="scripts/manual-observation-web.js?v=20260925-score-convergence-01"></script>
   <script>
     const APP_STARTED_AT=performance.now();
     const PERF_DEBUG=new URLSearchParams(location.search).get("debugPerf")==="1";
@@ -781,7 +781,7 @@
     let sharedTrendMetrics=[];
     let sharedTrendVisible=false;
     let sharedTrendRenderKey="";
-    let dashboardRequestSequence=0,reportRequestSequence=0;
+     let dashboardRequestSequence=0,reportRequestSequence=0,scoreConvergenceSerial=0;
     const inFlightRequests=new Map();
     const sectionLoadKeys=new Map();
     const sectionDataKeys=new Map();
@@ -948,9 +948,12 @@ async function sessionPost(action,payload={}){
     function applyDashboardPayload(payload,{source="network",rangeKey=""}={}){if(Object.hasOwn(payload||{},"dashboard")){appState.dashboard=payload.dashboard||{};dashboardPayloadKeys.dashboard=rangeKey;}if(Object.hasOwn(payload||{},"timelineResponse")){appState.healthTimeline=normalizeHealthTimeline(payload.timelineResponse);dashboardPayloadKeys.timeline=rangeKey;selectedHealthDate=appState.healthTimeline.some(row=>row.date===selectedHealthDate)?selectedHealthDate:null;}renderDashboard();if(sharedTrendVisible)renderSharedHealthTrends(true);perfLog("dashboard-render",{source,days:appState.healthTimeline.length,elapsedMs:Math.round(performance.now()-APP_STARTED_AT)});}
     function settledDashboardPayload(results){const payload={},failures=[];if(results?.[0]?.status==="fulfilled")payload.dashboard=results[0].value;else failures.push({name:"dashboard",error:results?.[0]?.reason});if(results?.[1]?.status==="fulfilled")payload.timelineResponse=results[1].value;else failures.push({name:"timeline",error:results?.[1]?.reason});return {payload,failures,complete:failures.length===0,hasData:Object.keys(payload).length>0};}
     function dashboardFailurePresentation(settled,cached,rangeKey){const hasUsableData=settled.hasData||Boolean(cached)||dashboardHasCurrentRangeData(rangeKey),message=settled.hasData?"部分資料已載入；其餘資料暫時無法更新。":cached?"資料暫時無法更新；目前顯示上次成功資料。":hasUsableData?"背景更新未完成；目前顯示同一期間的上次資料。":"資料暫時無法更新";return {state:hasUsableData?"ready":"error",message};}
-    function dashboardFromTimeline(timelineResponse,date=getLocalDateString()){const timeline=Array.isArray(timelineResponse?.timeline)?timelineResponse.timeline:[];return {user:{userId:currentUser?.userId||""},today:timeline.find(row=>HealthCoreUX.recordLocalDate(row,CONFIG.TIMEZONE)===date)||null,experimental:true};}
-    function dashboardReadPromises(start,end){const userId=currentUser?.userId||"anonymous",timeline=dedupedRequest(`dashboard-timeline:${userId}:${start}:${end}`,()=>apiService.getHealthTimeline(start,end)),today=getLocalDateString(),canDerive=manualSqlEnabled()&&start<=today&&today<=end,dashboard=canDerive?timeline.then(response=>dashboardFromTimeline(response,today)):dedupedRequest(`dashboard-summary:${userId}:${today}`,()=>apiService.getDashboardData());return [dashboard,timeline];}
-    function nutritionDerivedReadPromises(range,date){const timeline=apiService.getHealthTimeline(range.start,range.end),summaryDate=manualSqlEnabled()?getLocalDateString():date,canDerive=manualSqlEnabled()&&range.start<=summaryDate&&summaryDate<=range.end,summary=canDerive?timeline.then(response=>dashboardFromTimeline(response,summaryDate)):apiService.getTodaySummary(summaryDate);return [summary,timeline];}
+     function dashboardFromTimeline(timelineResponse,date=getLocalDateString()){const timeline=Array.isArray(timelineResponse?.timeline)?timelineResponse.timeline:[];return {user:{userId:currentUser?.userId||""},today:timeline.find(row=>HealthCoreUX.recordLocalDate(row,CONFIG.TIMEZONE)===date)||null,experimental:true};}
+     function dashboardReadPromises(start,end){const userId=currentUser?.userId||"anonymous",timeline=dedupedRequest(`dashboard-timeline:${userId}:${start}:${end}`,()=>apiService.getHealthTimeline(start,end)),today=getLocalDateString(),canDerive=manualSqlEnabled()&&start<=today&&today<=end,dashboard=canDerive?timeline.then(response=>dashboardFromTimeline(response,today)):dedupedRequest(`dashboard-summary:${userId}:${today}`,()=>apiService.getDashboardData());return [dashboard,timeline];}
+     const SCORE_CONVERGENCE_POLL_DELAYS=[1000,2000,4000,8000];
+     function timelineNeedsScoreConvergence(response){return Array.isArray(response?.timeline)&&response.timeline.some(row=>row?.healthStaleReason==="RECOMPUTE_PENDING");}
+     async function convergeHealthScoreTimeline(start,end,{rangeKey,requestSequence,serial=++scoreConvergenceSerial,delays=SCORE_CONVERGENCE_POLL_DELAYS}={}){const identity=identitySnapshot(),current=()=>serial===scoreConvergenceSerial&&requestSequence===dashboardRequestSequence&&identitySnapshotCurrent(identity)&&rangeKey===dashboardWindowKey(start,end);for(const delayMs of delays){if(delayMs)await new Promise(resolve=>setTimeout(resolve,delayMs));if(!current())return {status:"CANCELLED"};let response;try{response=await apiService.getHealthTimeline(start,end);}catch(error){if(current())perfLog("score-convergence-read-failed",{message:readableError(error)});continue;}if(!current())return {status:"CANCELLED"};const today=getLocalDateString(),payload={timelineResponse:response};if(manualSqlEnabled()&&start<=today&&today<=end)payload.dashboard=dashboardFromTimeline(response,today);applyDashboardPayload(payload,{source:"score-convergence",rangeKey});writeDashboardCache(start,end,{dashboard:appState.dashboard,timelineResponse:response});if(!timelineNeedsScoreConvergence(response)){setDashboardDataState(HealthCoreUX.timelineReadState(appState.healthTimeline,appState.dashboard?.today));return {status:"READY"};}setDashboardDataState("updating","健康分析正在背景更新…");}if(current())setDashboardDataState("updating","資料已載入；健康分析仍在背景更新。");return {status:"DEFERRED"};}
+     function nutritionDerivedReadPromises(range,date){const timeline=apiService.getHealthTimeline(range.start,range.end),summaryDate=manualSqlEnabled()?getLocalDateString():date,canDerive=manualSqlEnabled()&&range.start<=summaryDate&&summaryDate<=range.end,summary=canDerive?timeline.then(response=>dashboardFromTimeline(response,summaryDate)):apiService.getTodaySummary(summaryDate);return [summary,timeline];}
     function latestTimelineValue(metric){for(let index=appState.healthTimeline.length-1;index>=0;index--){const value=num(appState.healthTimeline[index][metric]);if(value!==null)return {value,date:appState.healthTimeline[index].date};}return {value:null,date:null};}
     function metricRange(rows,metric){const values=rows.map(row=>num(row[metric])).filter(value=>value!==null);if(!values.length)return null;const rawMin=Math.min(...values),rawMax=Math.max(...values),span=rawMax-rawMin||Math.max(Math.abs(rawMax)*.08,1);return {min:rawMin-span*.16,max:rawMax+span*.16};}
     function sharedSegments(points){const result=[];let segment=[];points.forEach(point=>{if(point.value===null){if(segment.length>1)result.push(segment);segment=[];}else segment.push(point);});if(segment.length>1)result.push(segment);return result;}
@@ -1117,7 +1120,7 @@ async function sessionPost(action,payload={}){
       const fetchFresh=async()=>{
         const requests=dashboardReadPromises(start,end),results=await Promise.all(requests.map(async(request,index)=>{try{const value=await request,result={status:"fulfilled",value};if(sequence===dashboardRequestSequence&&rangeKey===dashboardWindowKey(start,end)){applyDashboardPayload(index===0?{dashboard:value}:{timelineResponse:value},{source:index===0?"progressive-dashboard":"progressive-timeline",rangeKey});setDashboardDataState("updating","部分資料已載入，其餘資料更新中…");}return result;}catch(reason){return {status:"rejected",reason};}})),settled=settledDashboardPayload(results);
         if(sequence!==dashboardRequestSequence)return settled.failures;
-        if(settled.complete){writeDashboardCache(start,end,settled.payload);setConnectionState("connected");setDashboardDataState(HealthCoreUX.timelineReadState(appState.healthTimeline,appState.dashboard?.today));document.getElementById("dashboard-error").innerHTML="";}
+         if(settled.complete){writeDashboardCache(start,end,settled.payload);setConnectionState("connected");const scorePending=manualSqlEnabled()&&timelineNeedsScoreConvergence(settled.payload.timelineResponse);setDashboardDataState(scorePending?"updating":HealthCoreUX.timelineReadState(appState.healthTimeline,appState.dashboard?.today),scorePending?"健康分析正在背景更新…":"");if(scorePending)void convergeHealthScoreTimeline(start,end,{rangeKey,requestSequence:sequence});document.getElementById("dashboard-error").innerHTML="";}
         else{const presentation=dashboardFailurePresentation(settled,cached,rangeKey);setConnectionState("error");setDashboardDataState(presentation.state,presentation.message);perfLog("dashboard-partial-refresh",{failures:settled.failures.map(item=>item.name),hasData:settled.hasData,retainedUsableData:presentation.state==="ready"});}
         return settled.failures;
       };
