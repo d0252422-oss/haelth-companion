@@ -1,5 +1,5 @@
 /* Shared manual SQL UI; local synthetic and hosted verified-session transports stay separate. */
-function hostedManualEnabled(){return typeof HOSTED_MANUAL_SQL_ENABLED!=='undefined'&&HOSTED_MANUAL_SQL_ENABLED;}
+function hostedManualEnabled(){return (typeof LOCAL_ENGINE_ENABLED==='undefined'||LOCAL_ENGINE_ENABLED!==true)&&typeof HOSTED_MANUAL_SQL_ENABLED!=='undefined'&&HOSTED_MANUAL_SQL_ENABLED;}
 function manualSqlEnabled(){return LOCAL_ENGINE_ENABLED||hostedManualEnabled();}
 let hostedManualBinding=null,hostedManualConfigFingerprint=null,hostedIdentityPending=null;
 const hostedManualActions=new Set(['getAccessState','getCurrentUser','getUserProfile','getManualProviderIdentity','getManualObservations','getManualObservationDaily','upsertManualObservation','deleteManualObservation','getObservationWriteStatus','getBodyRecords','addBodyRecord','upsertBodyRecord','deleteBodyRecord','getBodyWriteStatus','getNutritionRecords','getSleepRecords','getActivityRecords','upsertMealRecord','deleteMealRecord','getMealWriteStatus','localEngineSnapshot','getDashboardData','getTodaySummary','getHealthTimeline','refreshDailyNutrition','refreshDerivedData','getExerciseDatabase','getExerciseBodyParts','getWorkoutRecords','manageExercise','addWorkoutRecord','updateWorkoutSet','updateWorkoutSets','deleteWorkoutSet','getTrainingWriteStatus']);
@@ -169,7 +169,7 @@ function assertManualResponseShape(action,data,payload={}){
   if(action==='getExerciseBodyParts')valid=Array.isArray(data)&&data.every(r=>object(r)&&typeof r.bodyPartId==='string'&&typeof r.displayName==='string'&&['SYSTEM','USER'].includes(r.source));
   if(['getSleepRecords','getActivityRecords'].includes(action)){
     const keys=action==='getSleepRecords'?['totalSleepMinutes','sleepScore']:['steps','activeMinutes','activeCalories','totalCalories'];
-    const optional=action==='getActivityRecords'?['heartRate','hrv']:[];
+    const optional=action==='getActivityRecords'?['heartRate','hrv','weight','bodyFatPercentage','spo2']:[];
     valid=Array.isArray(data)&&data.every(r=>object(r)&&/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&['CURRENT','STALE'].includes(r.dataStatus)&&(!Object.hasOwn(r,'analysisDataStatus')||['CURRENT','STALE'].includes(r.analysisDataStatus))&&keys.every(k=>r[k]===null||r.dataStatus==='CURRENT'&&typeof r[k]==='number'&&Number.isFinite(r[k]))&&optional.every(k=>!Object.hasOwn(r,k)||r[k]===null||r.dataStatus==='CURRENT'&&typeof r[k]==='number'&&Number.isFinite(r[k])));
   }
   if(action==='getHealthTimeline')valid=object(data)&&Array.isArray(data.timeline)&&data.timeline.every(object);
@@ -296,9 +296,10 @@ async function localEngineRequest(action,payload={}){
   if(['upsertMealRecord','deleteMealRecord'].includes(action)){
     payload={...(action==='upsertMealRecord'?localMealMutationPayload(payload):localMealDeleteMutationPayload(payload)),clientRequestId:payload.clientRequestId||crypto.randomUUID()};
   }
-  let body,received=false;
+  let body,received=false,responseStatus=0;
   try{
     const response=await manualSqlFetch(action,payload);
+    responseStatus=Number(response.status)||0;
     received=true;
     try{body=await response.json();}catch{const error=Error('MALFORMED_RESPONSE');error.code='MALFORMED_RESPONSE';throw error;}
     if(!body||typeof body!=='object'||Array.isArray(body)||typeof body.ok!=='boolean')throw Object.assign(Error('MALFORMED_RESPONSE'),{code:'MALFORMED_RESPONSE'});
@@ -311,9 +312,16 @@ async function localEngineRequest(action,payload={}){
     }
     if(!body||typeof body.ok!=='boolean'){if(sourceCurrent()){recordManualSourceEvidence(action,{received,error:error.code});observeManualProvider(action,false);}throw error;}
   }
+  const ambiguousMutationFailure=body?.ok===false&&(bodyMutation||trainingMutation||observationMutation)&&(responseStatus>=500||['ENGINE_REQUEST_FAILED','HTTP_RESPONSE_CONTRACT_MISMATCH'].includes(body.error));
+  if(ambiguousMutationFailure&&epoch===localSessionEpoch){
+    try{
+      const status=await localEngineRequest(observationMutation?'getObservationWriteStatus':trainingMutation?'getTrainingWriteStatus':'getBodyWriteStatus',{clientRequestId:payload.clientRequestId});
+      if(status.exists){assertManualResponseShape(action,status,payload);body={ok:true,data:{...status,recovered:true}};}
+    }catch{ /* ambiguous failures retain the stable envelope for an explicit retry */ }
+  }
   if(epoch!==localSessionEpoch){const error=Error('IDENTITY_CHANGED');error.code='IDENTITY_CHANGED';throw error;}
   if(catalogSequence&&catalogSequence!==localCatalogReadSequence){const error=Error('STALE_CATALOG_RESPONSE');error.code='STALE_CATALOG_RESPONSE';throw error;}
-  if(!body.ok){if(sourceCurrent()){recordManualSourceEvidence(action,{received,error:body.error});observeManualProvider(action,false);}if(observationKey&&!body.retryable)localPendingObservationWrites.delete(observationKey);if(pendingKey&&!body.retryable)localPendingBodyWrites.delete(pendingKey);if(trainingKey&&!body.retryable){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);}const error=Error(body.error);error.code=body.error;error.retryable=body.retryable===true;if(sourceCurrent()&&typeof handleAccessError==='function')handleAccessError(error);throw error;}
+  if(!body.ok){if(sourceCurrent()){recordManualSourceEvidence(action,{received,error:body.error});observeManualProvider(action,false);}if(observationKey&&!body.retryable&&!ambiguousMutationFailure)localPendingObservationWrites.delete(observationKey);if(pendingKey&&!body.retryable&&!ambiguousMutationFailure)localPendingBodyWrites.delete(pendingKey);if(trainingKey&&!body.retryable&&!ambiguousMutationFailure){localPendingTrainingWrites.delete(trainingKey);if(action==='addWorkoutRecord')localTrainingDraftLock(false);}const error=Error(body.error);error.code=body.error;error.retryable=body.retryable===true||ambiguousMutationFailure;if(sourceCurrent()&&typeof handleAccessError==='function')handleAccessError(error);throw error;}
   if(sourceCurrent())recordManualSourceEvidence(action,{received:true,ok:true,data:body.data,payload,sequence:sourceSequence});
   observeManualProvider(action,true,body.data?.analysisStatus);
   if(observationMutation){localPendingObservationWrites.delete(observationKey);if(body.data.record)cacheLocalRevision(localObservationRecords,body.data.recordId,{...body.data.record,deleted:body.data.deleted===true});}

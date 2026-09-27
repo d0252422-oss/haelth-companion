@@ -178,8 +178,8 @@
       : ["healthScore", "recoveryScore", "fatigueScore", "activityScore", "trainingScore", "nutritionScore", "bodyCompositionScore"].includes(metric) ? "health"
       : "body";
     const reasonKey = `${domain}StaleReason`, statusKeys = domain === "sleep"
-      ? ["sleepDataStatus", "sleepAnalysisDataStatus"]
-      : domain === "activity" ? ["activityDataStatus", "activityAnalysisDataStatus"]
+      ? ["sleepDataStatus"]
+      : domain === "activity" ? ["activityDataStatus"]
       : domain === "nutrition" ? ["nutritionDataStatus"]
       : domain === "health" ? ["healthStatus"] : [];
     if (candidates.some((row) => terminalStaleReasons.has(row?.[reasonKey]))) return "error";
