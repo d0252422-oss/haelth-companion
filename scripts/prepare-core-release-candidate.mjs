@@ -85,7 +85,7 @@ async function verifySupabaseCliContract(){
   const version=execFileSync(REVIEWED_SUPABASE_CLI_EXECUTABLE,['--version'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   assert.equal(version,REVIEWED_SUPABASE_CLI_VERSION,'UNREVIEWED_SUPABASE_CLI_VERSION');
   const help=execFileSync(REVIEWED_SUPABASE_CLI_EXECUTABLE,['db','push','--help'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
-  for(const flag of ['--dry-run','--skip-vault','--project-ref','--workdir'])assert.match(help,new RegExp(flag.replaceAll('-','\\-'),'u'),`SUPABASE_CLI_FLAG_MISSING: ${flag}`);
+  for(const flag of ['--dry-run','--skip-vault','--project-ref','--workdir'])assert.ok(help.includes(flag),`SUPABASE_CLI_FLAG_MISSING: ${flag}`);
   return {version,executable:REVIEWED_SUPABASE_CLI_EXECUTABLE,sha256:REVIEWED_SUPABASE_CLI_SHA256,command:'supabase db push',requiredFlags:['--dry-run','--skip-vault','--project-ref','--workdir'],binaryDistribution:'OPERATOR_MUST_USE_REVIEWED_BINARY; binary is not bundled',operatorProfile:'MUST_BE_NAMED_IN_SEPARATE_AUTHORIZATION'};
 }
 
