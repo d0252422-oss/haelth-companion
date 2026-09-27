@@ -6,7 +6,12 @@ const vm = require('node:vm');
 const { randomUUID } = require('node:crypto');
 const source = fs.readFileSync('scripts/local-engine-web.js', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
+const HealthCoreUX = require('../scripts/core-ux-contract.js');
 const plain = value => JSON.parse(JSON.stringify(value));
+function memoryStorage(){const entries=new Map();return{getItem:key=>entries.has(key)?entries.get(key):null,setItem:(key,value)=>entries.set(key,String(value)),removeItem:key=>entries.delete(key),key:index=>[...entries.keys()][index]??null,get length(){return entries.size;}};}
+function htmlFunction(name){const start=html.indexOf(`function ${name}(`);assert.notEqual(start,-1,`missing ${name}`);const next=html.indexOf('\n    function ',start+1);return html.slice(start,next<0?html.length:next);}
+function htmlAsyncFunction(name){const start=html.indexOf(`async function ${name}(`);assert.notEqual(start,-1,`missing async ${name}`);const nextSync=html.indexOf('\n    function ',start+1),nextAsync=html.indexOf('\n    async function ',start+1),next=[nextSync,nextAsync].filter(index=>index>=0).sort((a,b)=>a-b)[0];return html.slice(start,next===undefined?html.length:next);}
+function htmlBetween(startMarker,endMarker){const start=html.indexOf(startMarker);assert.notEqual(start,-1,`missing ${startMarker}`);const end=html.indexOf(endMarker,start+startMarker.length);assert.notEqual(end,-1,`missing ${endMarker}`);return html.slice(start,end);}
 test('provider observation reports actual last response and clears on account reset',async()=>{
  const ctx=harness(async()=>({json:async()=>({ok:true,data:[]})}));
  await ctx.localEngineRequest('getBodyRecords');assert.match(ctx.document.getElementById('technical-provider-updated').textContent,/最近請求成功.*getBodyRecords/);
@@ -15,18 +20,32 @@ test('provider observation reports actual last response and clears on account re
 });
 function harness(fetch) {
   const elements = new Map();
+  const document={activeElement:null,querySelectorAll(){return [];},querySelector(selector){return this.getElementById(selector);},getElementById(id){if(!elements.has(id))elements.set(id,{value:'',checked:false,disabled:false,title:'',dataset:{},textContent:'',remove(){},replaceChildren(){},querySelector(){return null;},setAttribute(){},hasAttribute(){return false;},setCustomValidity(){},reportValidity(){return true;},focus(){document.activeElement=this;},style:{},classList:{add(){},remove(){}}});return elements.get(id);}};
+  const location={href:'https://example.invalid/?range=30d',search:'?range=30d',origin:'https://example.invalid'};
+  const history={state:{},replaceState(state,_title,url){this.state=state;location.href=String(url);location.search=new URL(location.href).search;},pushState(state,_title,url){this.state=state;if(url){location.href=String(url);location.search=new URL(location.href).search;}}};
   const ctx = vm.createContext({
     LOCAL_ENGINE_ENABLED: true, currentUser: { userId: 'synthetic-A' },
     appState: { body: [], mealsToday: [], nutrition: [], workouts: [] }, workoutSession:null, exerciseDatabase:[],
-    AbortSignal, structuredClone, crypto: { randomUUID }, fetch, Map, Set, Date, Promise,
-    queueMicrotask() {}, getLocalDateString: () => '2026-09-13',
-    document: { querySelectorAll(){return [];}, getElementById(id) { if (!elements.has(id)) elements.set(id, { value: '', checked: false, dataset: {}, textContent: '', remove(){}, replaceChildren(){}, setAttribute(){}, setCustomValidity(){}, reportValidity(){return true;}, style:{}, classList: { add() {}, remove() {} } }); return elements.get(id); } },
+    AbortSignal, structuredClone, crypto: { randomUUID }, fetch, Map, Set, Date, Promise, URL, URLSearchParams, HealthCoreUX,
+    CONFIG:{TIMEZONE:'Asia/Taipei'},location,history,
+    sessionStorage:memoryStorage(),localStorage:memoryStorage(),
+    queueMicrotask() {},requestAnimationFrame:callback=>callback(),getLocalDateString: () => '2026-09-13',document,
   });
   vm.runInContext(source, ctx);
   vm.runInContext(fs.readFileSync('scripts/web-view-state.js','utf8'), ctx);
+  vm.runInContext(htmlFunction('setFormLookupState'), ctx);
+  ctx.identityEpoch=0;ctx.sessionToken='synthetic-unit-token';
+  ctx.identitySnapshot=()=>({epoch:ctx.identityEpoch,userId:String(ctx.currentUser?.userId||''),token:ctx.sessionToken});
+  ctx.identitySnapshotCurrent=snapshot=>snapshot?.epoch===ctx.identityEpoch&&snapshot.userId===String(ctx.currentUser?.userId||'')&&snapshot.token===ctx.sessionToken;
   ctx.activeScreen='dashboard-screen'; ctx.globalDateRange={preset:'7d'};
   return ctx;
 }
+
+test('local synthetic transport overrides an enabled hosted Beta config',async()=>{
+ const calls=[];const ctx=harness(async(url)=>{calls.push(url);return{status:200,ok:true,json:async()=>({ok:true,data:{user:{userId:'synthetic-A'},access:{isAllowed:true}}})};});
+ ctx.HOSTED_MANUAL_SQL_ENABLED=true;ctx.HEALTH_MANUAL_SQL_CONFIG={enabled:true,release:'AB',schemaVersion:'manual-sql-v1',projectRef:'uavimjgccigpbwqmfkhh',endpoint:'https://uavimjgccigpbwqmfkhh.supabase.co/functions/v1/mobile-health-beta/v1/engine/web'};
+ assert.equal(ctx.hostedManualEnabled(),false);await ctx.localEngineRequest('getCurrentUser');assert.deepEqual(calls,['/v1/engine/web']);
+});
 
 test('ordinary workout draft survives navigation without a blank training screen',()=>{
  const ctx=harness(()=>{});ctx.workoutSession={startTime:'retained',exercises:[{exerciseId:'one',sets:[{weight:0,reps:10}]}]};const original=ctx.workoutSession;
@@ -46,7 +65,7 @@ test('ordinary draft start asks before replacement and missing draft never selec
 test('in-flight workout save cannot be discarded or replaced by another start',()=>{
  const ctx=harness(()=>{}),draft={saving:true,exercises:[{sets:[{weight:0,reps:1}]}]};ctx.workoutSession=draft;ctx.toast=()=>{};
  ctx.requestWorkoutStart();assert.equal(ctx.workoutSession,draft);
- const listener=html.split(/\r?\n/).find(line=>line.includes('getElementById("finish-workout").onclick='));
+ const listener=htmlBetween('document.getElementById("finish-workout").onclick=','document.querySelectorAll("[data-mode]")');
  assert.ok(listener.indexOf('workoutSession.saving=true')<listener.indexOf('await '));
  assert.match(listener,/if\(workoutSession!==savingDraft\|\|currentUser!==savingUser\)return/);
 });
@@ -60,6 +79,87 @@ test('manual date load rejects deletion while stale binding/error is present',as
  ctx.localEngineRequest=()=>Promise.reject(Error('SQL unavailable'));ctx.readableError=e=>e.message;
  await ctx.loadObservationDate();assert.equal(ctx.document.getElementById('observation-save').disabled,true);assert.equal(ctx.document.getElementById('observation-delete').disabled,true);
 });
+test('manual sleep create and edit clear stale lookup state without a date lookup',async()=>{
+ const ctx=harness(()=>{throw Error('sleep editor must not request remote context before input');});
+ vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ const form=ctx.document.getElementById('observation-form');form.reset=()=>{};
+ ctx.document.getElementById('observation-status').setAttribute=()=>{};
+ ctx.manualSqlEnabled=()=>true;ctx.openSheet=()=>true;
+ await ctx.openObservationEditor('sleep');
+ assert.equal(form.dataset.lookupState,'ready');
+ assert.equal(ctx.document.getElementById('observation-save').disabled,false);
+ assert.equal(ctx.document.getElementById('observation-delete').disabled,true);
+ assert.equal(ctx.document.getElementById('observation-start').disabled,false);
+ form.dataset.lookupState='error';
+ await ctx.openObservationEditor('sleep',{recordId:'sleep-1',date:'2026-09-13',revision:2,value:460,coverage:'SESSION'});
+ assert.equal(form.dataset.lookupState,'ready');
+ assert.equal(ctx.document.getElementById('observation-save').disabled,false);
+ assert.equal(ctx.document.getElementById('observation-delete').disabled,false);
+});
+test('manual observation publication state distinguishes pending, terminal failure and ready',()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ ctx.appState.healthTimeline=[{date:'2026-09-13',steps:8000,activityDataStatus:'STALE',activityStaleReason:'RECOMPUTE_PENDING'}];
+ assert.equal(ctx.manualObservationReadState('activity','2026-09-13'),'updating');
+ ctx.appState.healthTimeline[0].activityStaleReason='RECOMPUTE_FAILED';
+ assert.equal(ctx.manualObservationReadState('activity','2026-09-13'),'error');
+ ctx.appState.healthTimeline[0]={date:'2026-09-13',steps:8000,activityDataStatus:'CURRENT'};
+ assert.equal(ctx.manualObservationReadState('activity','2026-09-13'),'ready');
+ assert.match(ctx.manualObservationAnalysisText({reconciliationStatus:'AVAILABLE',analysisStatus:'ERROR',analysisReason:'RECOMPUTE_FAILED'}),/分析更新失敗，可重新整理後重試/u);
+ assert.doesNotMatch(ctx.manualObservationAnalysisText({reconciliationStatus:'AVAILABLE',analysisStatus:'ERROR',analysisReason:'RECOMPUTE_FAILED'}),/暫時無法確認/u);
+});
+test('manual observation readback preserves global terminal state and cancels after a range switch',async()=>{
+ const ctx=harness(()=>{}),states=[];let task;
+ vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ Object.assign(ctx,{setTimeout(callback){callback();return 1;},sectionLoadKeys:new Map(),sectionWindows:{activity:{start:'2026-09-01',end:'2026-09-30'}},clearDashboardCache(){},setDashboardDataState:(state,message='')=>states.push({state,message}),refreshInBackground(_label,callback){task=callback;},refreshAfterRecordMutation:async()=>{ctx.appState.healthTimeline=[{date:'2026-09-13',steps:8000,activityDataStatus:'CURRENT'},{date:'2026-09-12',healthStatus:'STALE',healthStaleReason:'RECOMPUTE_FAILED'}];}});
+ ctx.scheduleManualObservationReadback('activity','manual-observation-test','2026-09-13');await task();
+ assert.deepEqual(states.map(item=>item.state),['updating','error']);assert.match(states.at(-1).message,/更新失敗/);
+
+ const cancelled=harness(()=>{}),cancelledStates=[];let cancelledTask;
+ vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),cancelled);
+ Object.assign(cancelled,{setTimeout(callback){callback();return 1;},sectionLoadKeys:new Map(),sectionWindows:{activity:{start:'2026-09-01',end:'2026-09-30'}},clearDashboardCache(){},setDashboardDataState:(state,message='')=>cancelledStates.push({state,message}),refreshInBackground(_label,callback){cancelledTask=callback;},refreshAfterRecordMutation:async()=>{cancelled.sectionWindows.activity={start:'2026-09-08',end:'2026-09-14'};}});
+ cancelled.scheduleManualObservationReadback('activity','manual-observation-cancel','2026-09-13');await cancelledTask();
+ assert.deepEqual(cancelledStates.map(item=>item.state),['updating']);
+});
+test('manual observation without a scheduled analysis performs one canonical readback',async()=>{
+ const ctx=harness(()=>{});let task,reads=0;
+ vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ Object.assign(ctx,{sectionLoadKeys:new Map([['sleep','cached']]),sectionWindows:{sleep:{start:'2026-09-01',end:'2026-09-30'}},clearDashboardCache(){},setDashboardDataState(){},refreshInBackground(_label,callback){task=callback;},refreshAfterRecordMutation:async()=>{reads++;ctx.appState.healthTimeline=[{date:'2026-09-13',sleepDataStatus:'STALE',sleepStaleReason:'RECOMPUTE_PENDING'}];}});
+ ctx.scheduleManualObservationReadback('sleep','manual-observation-no-analysis','2026-09-13',{analysisJobScheduled:false});await task();
+ assert.equal(reads,1);assert.equal(ctx.sectionLoadKeys.has('sleep'),false);
+});
+
+test('combined activity editor deletes steps and energy independently with stable retry identity',async()=>{
+ const ctx=harness(()=>{}),calls=[],readbacks=[];ctx.window=ctx;ctx.confirm=()=>true;ctx.toast=()=>{};ctx.readableError=error=>error.message;
+ vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ ctx.scheduleManualObservationReadback=(section,label,date,result)=>readbacks.push({section,label,date,result});
+ ctx.localEngineRequest=async(action,payload)=>{calls.push({action,payload});return{record:{domain:'steps',date:'2026-09-13'},analysisJobScheduled:false};};
+ vm.runInContext("activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:'2026-09-13',lookupDate:'2026-09-13',records:new Map([['steps',{recordId:'steps-1',revision:3,date:'2026-09-13',domain:'steps'}],['total_energy',{recordId:'energy-1',revision:2,date:'2026-09-13',domain:'total_energy'}]]),pending:new Map(),pendingDeletes:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false,sheetSerial:null}",ctx);
+ ctx.document.getElementById('activity-pair-steps').value='8000';ctx.document.getElementById('activity-pair-energy').value='2250';
+ await ctx.deleteActivityPairDomain('steps');
+ assert.equal(calls.length,1);assert.equal(calls[0].action,'deleteManualObservation');assert.equal(calls[0].payload.recordId,'steps-1');assert.equal(calls[0].payload.revision,3);assert.match(calls[0].payload.clientRequestId,/^[0-9a-f-]{36}$/u);
+ assert.equal(ctx.activityPairRecord('steps'),null);assert.equal(ctx.activityPairRecord('total_energy').recordId,'energy-1');assert.equal(ctx.document.getElementById('activity-pair-steps').value,'');assert.equal(ctx.document.getElementById('activity-pair-energy').value,'2250');assert.equal(readbacks.length,1);
+});
+
+test('newer manual observation readback cancels an older polling generation',async()=>{
+ const ctx=harness(()=>{}),tasks=[];let reads=0,releaseFirst;
+ vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+ Object.assign(ctx,{sectionLoadKeys:new Map(),sectionWindows:{activity:{start:'2026-09-01',end:'2026-09-30'}},clearDashboardCache(){},setDashboardDataState(){},refreshInBackground(_label,callback){tasks.push(callback);},refreshAfterRecordMutation:async()=>{reads++;if(reads===1)await new Promise(resolve=>{releaseFirst=resolve;});ctx.appState.healthTimeline=[{date:'2026-09-13',activityDataStatus:'STALE',activityStaleReason:'RECOMPUTE_PENDING'}];}});
+ ctx.scheduleManualObservationReadback('activity','older','2026-09-13');const older=tasks[0]();while(!releaseFirst)await Promise.resolve();ctx.scheduleManualObservationReadback('activity','newer','2026-09-13',{analysisJobScheduled:false});releaseFirst();await Promise.all([older,tasks[1]()]);
+ assert.equal(reads,2,'old generation stops after its in-flight read; new generation owns the final readback');
+});
+
+test('mutation refresh preserves unaffected section load keys',async()=>{
+ const ctx=harness(()=>{}),calls=[];ctx.globalDateRange={preset:'30d'};ctx.sectionLoadKeys=new Map([['body','body-cache'],['training','training-cache']]);ctx.clearDashboardCache=()=>{};ctx.loadRange=async(range,options)=>calls.push({kind:'dashboard',range,options});ctx.ensureScreenData=async(screen,options)=>calls.push({kind:'section',screen,options});
+ vm.runInContext(htmlAsyncFunction('refreshDashboardAfterMutation'),ctx);vm.runInContext(htmlAsyncFunction('refreshAfterRecordMutation'),ctx);await ctx.refreshAfterRecordMutation('training');
+ assert.equal(ctx.sectionLoadKeys.get('body'),'body-cache');assert.equal(ctx.sectionLoadKeys.has('training'),false);assert.deepEqual(plain(calls[0].options),{force:true,preserveSectionLoads:true});assert.equal(calls[1].screen,'training-screen');
+});
+
+test('optional background refresh failure retains usable dashboard data',async()=>{
+ const states=[],connections=[],toasts=[],ctx=harness(()=>{});ctx.appState={dashboard:{today:{healthScore:80}},healthTimeline:[{date:'2026-09-13'}]};Object.assign(ctx,{isStaleIdentityError:()=>false,readableError:error=>error.message,perfLog(){},setConnectionState:state=>connections.push(state),setDashboardDataState:(state,message='')=>states.push({state,message}),toast:message=>toasts.push(message)});
+ vm.runInContext(htmlFunction('refreshInBackground'),ctx);await ctx.refreshInBackground('optional',async()=>{throw Error('network down');});
+ assert.equal(connections.length,0);assert.equal(states.at(-1).state,'ready');assert.match(states.at(-1).message,/上次資料/);assert.equal(toasts.length,1);
+ ctx.appState={dashboard:null,healthTimeline:[]};await ctx.refreshInBackground('cold',async()=>{throw Error('network down');});assert.equal(connections.at(-1),'error');assert.equal(states.at(-1).state,'error');
+});
 test('draft set validation matches SQL finite nonnegative load and positive integer reps',()=>{
  const ctx=harness(()=>{});for(const pair of [[0,1],[0,10],[12.5,3],[1000,10000]])assert.equal(ctx.validWorkoutSet(...pair),true);
  for(const pair of [[-1,10],[20,1.5],[20,0],[20,NaN],[Infinity,3],[null,3],['',3],[1001,3],[20,10001]])assert.equal(ctx.validWorkoutSet(...pair),false);
@@ -70,13 +170,52 @@ test('nutrition fields accept decimal macros and unknown calories remain optiona
 
 test('actual meal submit preserves blank kcal as null, explicit zero and decimal macros',async()=>{
  const ctx=harness(()=>{});let submit,payload;ctx.document.getElementById('meal-form').addEventListener=(type,fn)=>submit=fn;
- Object.assign(ctx,{performance:{now:()=>1},mealAnalysis:null,num:value=>value===''?null:Number(value),mutationRequestId:()=>randomUUID(),setMealSaveState(){},recordMutationMetric(){},completeMealSave(){},toast(){},readableError:e=>e.message,isWriteStatusUnknownError:()=>false,classifyRequestError:()=>'',apiService:{upsertMealRecord:async p=>{payload=p;return{};}}});
- vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('getElementById("meal-form").addEventListener("submit"')),ctx);
+ Object.assign(ctx,{performance:{now:()=>1},mealAnalysis:null,mealBridgeSession:null,num:value=>value===''?null:Number(value),mutationRequestId:form=>{form.dataset.clientRequestId=randomUUID();form.dataset.mutationUserId=String(ctx.currentUser.userId);return form.dataset.clientRequestId;},persistMealMutationEnvelope:()=>true,currentMealMutation:()=>true,setMealMutationState(){},recordMutationMetric(){},completeMealSave(){},toast(){},readableError:e=>e.message,isWriteStatusUnknownError:()=>false,classifyRequestError:()=>'',apiService:{upsertMealRecord:async p=>{payload=p;return{};}}});
+ vm.runInContext(`${htmlFunction('setMealMutationFieldsLocked')}\n${htmlFunction('mealMutationEnvelope')}`,ctx);
+ vm.runInContext(htmlBetween('document.getElementById("meal-form").addEventListener("submit"','document.getElementById("meal-delete").onclick='),ctx);
+ ctx.document.getElementById('meal-review-confirmed').checked=true;
  for(const [input,expected] of [['',null],['0',0],['12',12]]){
   ctx.document.getElementById('meal-calories').value=input;ctx.document.getElementById('meal-protein').value='12.5';
   await submit({preventDefault(){},currentTarget:ctx.document.getElementById('meal-form')});
   assert.equal(payload.calories,expected);assert.equal(payload.protein,12.5);assert.equal(payload.carbs,null);
  }
+});
+
+test('detached meal save and delete revalidate the same identity without closing a replacement editor',async()=>{
+ for(const operation of ['save','delete']){
+  const ctx=harness(()=>{});let finish,submit,readbacks=0,completed=0;
+  const request=()=>new Promise(resolve=>{finish=()=>resolve({recordId:'meal-1',record:{mealRecordId:'meal-1',revision:2}});});
+  const form=ctx.document.getElementById('meal-form');form.addEventListener=(_type,handler)=>submit=handler;
+  Object.assign(ctx,{performance:{now:()=>1},mealAnalysis:null,mealBridgeSession:null,num:Number,openSheet(){},persistMealMutationEnvelope:()=>true,settleDetachedMealMutation:()=>true,setMealMutationState(){},setSubmitting(){},recordMutationMetric(){},completeMealSave(){completed++;},completeMealDelete(){completed++;},scheduleNutritionReadback(){readbacks++;},toast(){},confirm:()=>true,readableError:error=>error.message,isWriteStatusUnknownError:()=>false,classifyRequestError:()=>'',apiService:{upsertMealRecord:request,deleteMealRecord:request}});ctx.openSheet.serial=1;
+  vm.runInContext(`${htmlFunction('setMealMutationFieldsLocked')}\n${htmlFunction('mealMutationEnvelope')}`,ctx);
+  ctx.mutationRequestId=target=>{target.dataset.clientRequestId=operation==='save'?'save-1':'unused';target.dataset.mutationUserId=String(ctx.currentUser.userId);return target.dataset.clientRequestId;};ctx.mutationRequestId(form);vm.runInContext(htmlFunction('currentMealMutation'),ctx);
+  vm.runInContext(htmlBetween('document.getElementById("meal-form").addEventListener("submit"','document.getElementById("checkin-form").addEventListener'),ctx);
+  ctx.document.getElementById('meal-review-confirmed').checked=true;ctx.document.getElementById('meal-record-id').value='meal-1';ctx.document.getElementById('meal-date').value='2026-09-13';
+  const pending=operation==='save'?submit({preventDefault(){},currentTarget:form}):ctx.document.getElementById('meal-delete').onclick();ctx.openSheet.serial=2;finish();await pending;
+  assert.equal(completed,0,operation);assert.equal(readbacks,1,operation);
+ }
+});
+
+test('nutrition revalidation ignores unrelated stale domains but respects explicit nutrition publication state',async()=>{
+ async function run(timelines){
+  const ctx=harness(()=>{}),states=[];ctx.sectionWindows={nutrition:{start:'2026-09-01',end:'2026-09-30'}};ctx.selectedHealthDate=null;ctx.sharedTrendVisible=false;ctx.performance={now:()=>1};ctx.appState={nutrition:[],mealsToday:[],healthTimeline:[],dashboard:null};
+  ctx.apiService={getNutritionRecords:async()=>[{mealRecordId:'meal-1',revision:1,date:'2026-09-13',includedInTotals:true}],getTodaySummary:async()=>({today:{}}),getHealthTimeline:async()=>({timeline:timelines.shift()})};
+  Object.assign(ctx,{normalizeHealthTimeline:value=>value.timeline||value,renderNutrition(){},renderDashboard(){},renderSharedHealthTrends(){},clearDashboardCache(){},writeDashboardCache(){},recordMutationMetric(){},setConnectionState(){},setDashboardDataState:(state,message='')=>states.push({state,message})});
+  vm.runInContext(htmlFunction('dashboardFromTimeline'),ctx);vm.runInContext(htmlFunction('nutritionDerivedReadPromises'),ctx);vm.runInContext(htmlAsyncFunction('revalidateNutritionDate'),ctx);const result=await ctx.revalidateNutritionDate('2026-09-13',{delays:[0]});return {result,states};
+ }
+ const unrelated=await run([[{date:'2026-09-13',activityDataStatus:'STALE',activityStaleReason:'PENDING'}]]);assert.equal(unrelated.result.state,'ready');assert.equal(unrelated.states.at(-1).state,'updating');
+ const converged=await run([[{date:'2026-09-13',healthStatus:'STALE',healthStaleReason:'RECOMPUTE_PENDING'}],[{date:'2026-09-13',healthStatus:'VALID',healthStaleReason:null,caloriesIntake:500}]]);assert.equal(converged.result.state,'ready');assert.equal(converged.states.at(-1).state,'ready');
+ const bounded=await run([[{date:'2026-09-13',healthStatus:'STALE',healthStaleReason:'RECOMPUTE_PENDING'}],[{date:'2026-09-13',healthStatus:'STALE',healthStaleReason:'RECOMPUTE_PENDING'}]]);assert.equal(bounded.result.state,'deferred');assert.equal(bounded.states.at(-1).state,'updating');assert.match(bounded.states.at(-1).message,/稍後更新/);
+ const terminal=await run([[{date:'2026-09-13',activityDataStatus:'STALE',activityStaleReason:'RECOMPUTE_FAILED'}]]);assert.equal(terminal.result.state,'ready');assert.equal(terminal.states.at(-1).state,'error');
+});
+
+test('nutrition SQL revalidation derives today summary from its bounded timeline request',async()=>{
+ const ctx=harness(()=>{}),calls={summary:0,timeline:0};ctx.manualSqlEnabled=()=>true;ctx.apiService={getTodaySummary:async()=>{calls.summary++;return{today:{}};},getHealthTimeline:async()=>{calls.timeline++;return{timeline:[{date:'2026-09-13',caloriesIntake:500}]};}};
+ vm.runInContext(htmlFunction('dashboardFromTimeline'),ctx);vm.runInContext(htmlFunction('nutritionDerivedReadPromises'),ctx);
+ const [summary,timeline]=await Promise.all(ctx.nutritionDerivedReadPromises({start:'2026-09-01',end:'2026-09-30'},'2026-09-13'));
+ assert.equal(calls.timeline,1);assert.equal(calls.summary,0);assert.equal(summary.today.caloriesIntake,500);assert.equal(timeline.timeline.length,1);
+ ctx.apiService.getHealthTimeline=async()=>{calls.timeline++;return{timeline:[]};};await Promise.all(ctx.nutritionDerivedReadPromises({start:'2026-08-01',end:'2026-08-31'},'2026-08-15'));
+ assert.equal(calls.timeline,2);assert.equal(calls.summary,1,'historical range still needs an independent current-day summary');
 });
 
 test('sleep reload uses exact stable record ID and newer revision; missing row cannot become create',async()=>{
@@ -103,6 +242,64 @@ test('merged steps and energy form keeps failed metric pending without resending
  await ctx.saveActivityPair();assert.deepEqual(calls,['steps','total_energy']);assert.equal(vm.runInContext("activityPairEditor.pending.has('steps')",ctx),false);assert.equal(vm.runInContext("activityPairEditor.pending.has('total_energy')",ctx),true);assert.match(ctx.document.getElementById('activity-pair-status').textContent,/已成功項目不會重送/);
  failEnergy=false;await ctx.saveActivityPair();assert.deepEqual(calls,['steps','total_energy','total_energy']);assert.equal(ctx.closed,true);
 });
+test('energy-only activity form writes total energy without creating a zero or blank steps record',async()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);const calls=[];
+ Object.assign(ctx,{manualSqlEnabled:()=>true,closeSheet(){ctx.closed=true;},toast(){},clearDashboardCache(){},sectionLoadKeys:new Map(),sectionWindows:{activity:{start:'2026-09-01',end:'2026-09-30'}},setDashboardDataState(){},refreshInBackground(){},refreshSectionRange:async()=>{}});
+ ctx.localEngineRequest=async(action,payload)=>{calls.push({action,payload});return{record:{...payload,recordId:randomUUID(),revision:1}};};
+ ctx.document.getElementById('activity-pair-date').value='2026-09-20';ctx.document.getElementById('activity-pair-steps').value='';ctx.document.getElementById('activity-pair-energy').value='2250';
+ vm.runInContext("activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:'2026-09-20',records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false}",ctx);
+ await ctx.saveActivityPair();assert.equal(ctx.closed,true);assert.equal(calls.length,1);assert.equal(calls[0].action,'upsertManualObservation');assert.equal(calls[0].payload.domain,'total_energy');assert.equal(calls[0].payload.value,2250);
+});
+test('durable observation saves release the active sheet before fallible readback setup',async()=>{
+ for(const flow of ['single','pair']){
+  const ctx=harness(()=>{}),events=[];let mutations=0;vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);
+  Object.assign(ctx,{closeSheet(){events.push('close');},toast(){events.push('toast');},clearDashboardCache(){events.push('readback');throw Error('synthetic cache failure');},sectionLoadKeys:new Map(),sectionWindows:{sleep:{start:'2026-09-01',end:'2026-09-30'},activity:{start:'2026-09-01',end:'2026-09-30'}},setDashboardDataState(){},refreshInBackground(){throw Error('must not be reached');}});
+  ctx.localEngineRequest=async(_action,payload)=>{mutations++;return{record:{...payload,recordId:randomUUID(),revision:1,date:'2026-09-13'},analysisJobScheduled:false};};
+  if(flow==='single'){
+   ctx.document.getElementById('observation-domain').value='sleep';ctx.document.getElementById('observation-date').value='2026-09-13';
+   vm.runInContext("observationEditor={user:currentUser,epoch:localSessionEpoch,record:null,pending:{action:'upsertManualObservation',payload:{domain:'sleep',date:'2026-09-13'}},loadedDate:'2026-09-13',loading:false,saving:false}",ctx);
+   await ctx.saveObservation();
+  }else{
+   ctx.document.getElementById('activity-pair-date').value='2026-09-13';ctx.document.getElementById('activity-pair-steps').value='8420';ctx.document.getElementById('activity-pair-energy').value='2180';
+   vm.runInContext("activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:'2026-09-13',records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false}",ctx);
+   await ctx.saveActivityPair();
+  }
+  assert.deepEqual(events,['close','toast','readback'],flow);assert.equal(mutations,flow==='single'?1:2,flow);assert.equal(vm.runInContext(flow==='single'?'observationEditor':'activityPairEditor',ctx),null,flow);
+ }
+});
+test('steps and energy lookup keeps inputs interactive and does not overwrite a typed draft',async()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);ctx.readableError=error=>error.message;
+ let resolveRead,rejectRead;ctx.localEngineRequest=()=>new Promise((resolve,reject)=>{resolveRead=resolve;rejectRead=reject;});
+ ctx.document.getElementById('activity-pair-status').setAttribute=()=>{};ctx.document.getElementById('activity-pair-date').value='2026-09-13';
+ vm.runInContext("activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:null,lookupDate:'2026-09-13',records:new Map(),pending:new Map(),completed:new Set(),dirty:new Set(),loading:false,saving:false}",ctx);
+ const pending=ctx.loadActivityPairDate();assert.equal(ctx.document.getElementById('activity-pair-steps').disabled,false);assert.equal(ctx.document.getElementById('activity-pair-energy').disabled,false);assert.equal(ctx.document.getElementById('activity-pair-save').disabled,true);
+ ctx.document.getElementById('activity-pair-steps').value='8420';vm.runInContext("activityPairEditor.dirty.add('steps')",ctx);resolveRead([{recordId:'steps-1',domain:'steps',date:'2026-09-13',value:7200,revision:1}]);await pending;
+ assert.equal(ctx.document.getElementById('activity-pair-steps').value,'8420');assert.equal(ctx.document.getElementById('activity-pair-save').disabled,false);assert.equal(vm.runInContext('activityPairEditor.records.get(\'steps\').recordId',ctx),'steps-1');
+ const failed=ctx.loadActivityPairDate();rejectRead(Error('SQL unavailable'));await failed;assert.equal(ctx.document.getElementById('activity-pair-steps').disabled,false);assert.equal(ctx.document.getElementById('activity-pair-save').disabled,true);assert.equal(vm.runInContext('activityPairEditor.date',ctx),null);
+});
+test('detached manual observation commit still schedules canonical readback without closing a replacement form',async()=>{
+ const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);let finish,closed=0,toasts=0,readbacks=0;
+ const old={user:ctx.currentUser,epoch:vm.runInContext('localSessionEpoch',ctx),record:null,serial:1,pending:{action:'upsertManualObservation',payload:{domain:'steps'}},loadedDate:'2026-09-13',loading:false,saving:false};
+ vm.runInContext('observationEditor=globalThis.oldObservation',Object.assign(ctx,{oldObservation:old}));ctx.document.getElementById('observation-domain').value='steps';ctx.document.getElementById('observation-date').value='2026-09-13';ctx.localEngineRequest=()=>new Promise(resolve=>{finish=()=>resolve({record:{domain:'steps'}});});ctx.closeSheet=()=>closed++;ctx.toast=()=>toasts++;ctx.refreshInBackground=()=>readbacks++;ctx.clearDashboardCache=()=>{};ctx.sectionLoadKeys=new Map();ctx.sectionWindows={activity:{start:'2026-09-01',end:'2026-09-30'}};ctx.setDashboardDataState=()=>{};
+ const pending=ctx.saveObservation();vm.runInContext("observationEditor={user:currentUser,epoch:localSessionEpoch,loadedDate:'2026-09-13'}",ctx);finish();await pending;
+ assert.equal(readbacks,1);assert.equal(closed,0);assert.equal(toasts,0);assert.match(fs.readFileSync('scripts/manual-observation-web.js','utf8'),/manual-observation-detached-check',date\)/u);
+});
+test('manual observation and activity-pair late success cannot close a newer sheet',async()=>{
+ for(const flow of ['single','pair']){
+  const ctx=harness(()=>{});vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'),ctx);let finish,closed=0,readbacks=0;
+  Object.assign(ctx,{openSheet(){},closeSheet(){closed++;},toast(){},clearDashboardCache(){},sectionLoadKeys:new Map(),sectionWindows:{sleep:{start:'2026-09-01',end:'2026-09-30'},activity:{start:'2026-09-01',end:'2026-09-30'}},setDashboardDataState(){},refreshInBackground(){readbacks++;}});ctx.openSheet.serial=1;
+  ctx.localEngineRequest=(_action,payload)=>new Promise(resolve=>{finish=()=>resolve({record:{...payload,recordId:randomUUID(),revision:1,date:'2026-09-13'}});});
+  let pending;
+  if(flow==='single'){
+   ctx.document.getElementById('observation-domain').value='steps';ctx.document.getElementById('observation-date').value='2026-09-13';
+   vm.runInContext("observationEditor={user:currentUser,epoch:localSessionEpoch,record:null,serial:1,pending:{action:'upsertManualObservation',payload:{domain:'steps',date:'2026-09-13'}},loadedDate:'2026-09-13',loading:false,saving:false,sheetSerial:1}",ctx);pending=ctx.saveObservation();
+  }else{
+   ctx.document.getElementById('activity-pair-date').value='2026-09-13';ctx.document.getElementById('activity-pair-steps').value='8000';ctx.document.getElementById('activity-pair-energy').value='';
+   vm.runInContext("activityPairEditor={user:currentUser,epoch:localSessionEpoch,date:'2026-09-13',records:new Map(),pending:new Map(),completed:new Set(),loading:false,saving:false,sheetSerial:1}",ctx);pending=ctx.saveActivityPair();
+  }
+  ctx.openSheet.serial=2;finish();await pending;assert.equal(closed,0,flow);assert.equal(readbacks,1,flow);
+ }
+});
 test('Quick Add V3 presents six compact merged items in canonical mobile order',()=>{
  const block=html.match(/<div class="quick-options">([\s\S]*?)<\/div>\s*<\/section>/)[1];
  const titles=[...block.matchAll(/<b[^>]*>([^<]+)<\/b>/g)].map(match=>match[1]);
@@ -113,11 +310,22 @@ test('Quick Add V3 presents six compact merged items in canonical mobile order',
  assert.match(html,/<section id="quick-sheet" data-ui-version="quick-add-v3">/);
  assert.match(html,/id="activity-pair-form"/);
  assert.match(html,/const SHEET_HISTORY_KEY="healthCompanionSheet"/);
- assert.match(html,/addEventListener\("popstate",\(\)=>\{const backdrop=document\.getElementById\("sheet-backdrop"\);if\(backdrop\.classList\.contains\("show"\)\)closeSheet\(\{fromHistory:true\}\);\}\)/);
+ assert.match(html,/addEventListener\("popstate",event=>\{const backdrop=document\.getElementById\("sheet-backdrop"\)/);
+ assert.match(html,/if\(backdrop\.classList\.contains\("show"\)\)\{closeSheet\(\{fromHistory:true\}\);return;\}/);
+});
+test('Quick Add capability matrix keeps six actions but disables unsupported provider writes',()=>{
+ const viewState=fs.readFileSync('scripts/web-view-state.js','utf8'),source=viewState.match(/function quickAddCapabilities\([^\n]+\n(?:.*\n)*?\}/u)?.[0];
+ assert.ok(source);const context=vm.createContext({Object});vm.runInContext(source,context);
+ assert.deepEqual(plain(context.quickAddCapabilities({sql:false,training:true})),{weight:true,workout:true,meal:true,sleep:false,activitypair:false,checkin:true});
+ assert.deepEqual(plain(context.quickAddCapabilities({sql:true,training:false})),{weight:true,workout:false,meal:true,sleep:true,activitypair:true,checkin:false});
+ assert.deepEqual(plain(context.quickAddCapabilities({sql:true,training:true})),{weight:true,workout:true,meal:true,sleep:true,activitypair:true,checkin:false});
+ assert.match(viewState,/button\.disabled=!available/u);
+ assert.match(viewState,/startWorkout\.disabled=!capabilities\.workout/u);
 });
 test('records preference keys isolate provider and user without changing date range',()=>{
  const ctx=harness(()=>{}),saved=new Map();let provider='local-A';ctx.dashboardProviderNamespace=()=>provider;ctx.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};ctx.navigate=screen=>ctx.screen=screen;
  const range=ctx.globalDateRange;ctx.selectRecordsView('training');assert.equal(ctx.selectedRecordsView(),'training');assert.equal(ctx.screen,'training-screen');assert.equal(ctx.globalDateRange,range);
+ ctx.location.search='?range=30d';ctx.location.href='https://example.invalid/?range=30d';
  ctx.currentUser={userId:'B'};assert.equal(ctx.selectedRecordsView(),'nutrition');ctx.currentUser={userId:'synthetic-A'};provider='beta-B';assert.equal(ctx.selectedRecordsView(),'nutrition');
 });
 test('metric-aware body drill-down and training overview do not erase drafts',()=>{
@@ -125,20 +333,29 @@ test('metric-aware body drill-down and training overview do not erase drafts',()
  ctx.openDashboardCard({dataset:{target:'body-screen',metric:'bodyFat'}});assert.equal(ctx.document.getElementById('body-metric-select').value,'bodyFat');assert.equal(ctx.screen,'body-screen');assert.equal(renders,1);
  const draft={sqlLocked:true};ctx.workoutSession=draft;ctx.openDashboardCard({dataset:{target:'training-screen'}});assert.equal(ctx.workoutSession,draft);assert.equal(ctx.document.getElementById('training-overview').hidden,false);
 });
-test('weight hydration rejects older dates/accounts and exposes persistent retry',async()=>{
+test('detail screens treat date-only projection rows as empty instead of successful data',()=>{
+ const ctx=harness(()=>{});ctx.num=value=>value===null||value===undefined||value===''?null:Number(value);ctx.bodyDisplayRows=()=>ctx.bodyRows||[];
+ vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function sectionHasMeaningfulData(')),ctx);
+ ctx.bodyRows=[{date:'2026-09-21',weight:null,bodyFat:null,fatMass:null,bmi:null}];assert.equal(ctx.sectionHasMeaningfulData('body'),false);ctx.bodyRows[0].weight=0;assert.equal(ctx.sectionHasMeaningfulData('body'),true);
+ ctx.appState.sleep=[{date:'2026-09-21',totalSleepMinutes:null,sleepScore:null}];assert.equal(ctx.sectionHasMeaningfulData('sleep'),false);ctx.appState.sleep[0].totalSleepMinutes=0;assert.equal(ctx.sectionHasMeaningfulData('sleep'),true);
+ ctx.appState.activity=[{date:'2026-09-21',steps:null,activeCalories:null,totalCalories:null,activeMinutes:null}];assert.equal(ctx.sectionHasMeaningfulData('activity'),false);ctx.appState.activity[0].steps=0;assert.equal(ctx.sectionHasMeaningfulData('activity'),true);
+ ctx.appState.workouts=[{deleted:true}];assert.equal(ctx.sectionHasMeaningfulData('training'),false);ctx.appState.workouts.push({deleted:false});assert.equal(ctx.sectionHasMeaningfulData('training'),true);
+});
+test('weight hydration stays input-interactive, preserves a typed draft and rejects older dates/accounts',async()=>{
  const ctx=harness(()=>{}),pending=[];ctx.apiService={getBodyRecords:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))};ctx.setValue=(id,v)=>ctx.document.getElementById(id).textContent=v;ctx.recordDateLabel=x=>x;ctx.readableError=e=>e.message;
  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('async function loadWeightFormDate(')),ctx);
- ctx.document.getElementById('weight-date').value='2026-09-12';const old=ctx.loadWeightFormDate('2026-09-12');assert.equal(ctx.document.getElementById('weight-input').disabled,true);
+ ctx.document.getElementById('weight-date').value='2026-09-12';const old=ctx.loadWeightFormDate('2026-09-12');assert.equal(ctx.document.getElementById('weight-input').disabled,false);assert.equal(ctx.document.getElementById('weight-save').disabled,true);
  ctx.document.getElementById('weight-date').value='2026-09-13';const fresh=ctx.loadWeightFormDate('2026-09-13');pending[1].resolve([{recordId:'new',date:'2026-09-13',weight:70,bodyFat:0}]);await fresh;pending[0].resolve([{recordId:'old',date:'2026-09-12',weight:90}]);await old;
  assert.equal(ctx.document.getElementById('weight-record-id').value,'new');assert.equal(ctx.document.getElementById('fat-input').value,0);assert.equal(ctx.loadWeightFormDate.binding.date,'2026-09-13');
- const failure=ctx.loadWeightFormDate('2026-09-13');pending[2].reject(Error('SQL unavailable'));await failure;assert.equal(ctx.document.getElementById('weight-save').disabled,true);assert.equal(ctx.document.getElementById('weight-load-retry').hidden,false);assert.equal(ctx.loadWeightFormDate.binding,null);
- const switched=ctx.loadWeightFormDate('2026-09-13');ctx.currentUser={userId:'B'};pending[3].resolve([{recordId:'secret-A',date:'2026-09-13',weight:80}]);await switched;assert.notEqual(ctx.document.getElementById('weight-record-id').value,'secret-A');
+ const dirty=ctx.loadWeightFormDate('2026-09-13');ctx.document.getElementById('weight-input').value='71.2';ctx.document.getElementById('weight-form').dataset.lookupDirty='true';pending[2].resolve([{recordId:'new',date:'2026-09-13',weight:70,bodyFat:0}]);await dirty;assert.equal(ctx.document.getElementById('weight-input').value,'71.2');assert.equal(ctx.document.getElementById('weight-save').disabled,false);
+ const failure=ctx.loadWeightFormDate('2026-09-13');pending[3].reject(Error('SQL unavailable'));await failure;assert.equal(ctx.document.getElementById('weight-input').disabled,false);assert.equal(ctx.document.getElementById('weight-save').disabled,true);assert.equal(ctx.document.getElementById('weight-load-retry').hidden,false);assert.equal(ctx.loadWeightFormDate.binding,null);
+ const switched=ctx.loadWeightFormDate('2026-09-13');ctx.currentUser={userId:'B'};pending[4].resolve([{recordId:'secret-A',date:'2026-09-13',weight:80}]);await switched;assert.notEqual(ctx.document.getElementById('weight-record-id').value,'secret-A');
 });
 
 test('blank/future/invalid date invalidates previous body record and prevents deletion',async()=>{
  const ctx=harness(()=>{});let deletes=0,reads=0;ctx.apiService={getBodyRecords:async()=>{reads++;return [{recordId:'previous-record',date:'2026-09-12',weight:70}];},deleteBodyRecord:async()=>deletes++};ctx.setValue=(id,v)=>ctx.document.getElementById(id).textContent=v;ctx.recordDateLabel=x=>x;ctx.readableError=e=>e.message;ctx.toast=()=>{};ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>{};ctx.refreshInBackground=()=>{};
  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('async function loadWeightFormDate(')),ctx);
- vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('weight-delete").onclick=')),ctx);
+ vm.runInContext(htmlBetween('document.getElementById("weight-delete").onclick=','document.getElementById("meal-form").addEventListener'),ctx);
  for(const date of ['', '2026-09-14', '2026-02-30', 'invalid']){
   ctx.document.getElementById('weight-date').value='2026-09-12';await ctx.loadWeightFormDate('2026-09-12');
   assert.equal(ctx.document.getElementById('weight-delete').disabled,false);
@@ -162,7 +379,7 @@ test('late body save/delete invalidates same-account cache without touching anot
   ctx.document.getElementById('weight-date').value='2026-09-12';ctx.document.getElementById('weight-record-id').value='old';
   ctx.document.getElementById('weight-input').value='70';
   if(operation==='save')vm.runInContext('let bodyAnalysisConvergenceSerial=0',ctx);
-  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes(operation==='delete'?'weight-delete").onclick=':'weight-form").addEventListener("submit"')),ctx);
+  vm.runInContext(operation==='delete'?htmlBetween('document.getElementById("weight-delete").onclick=','document.getElementById("meal-form").addEventListener'):html.split(/\r?\n/).find(line=>line.includes('weight-form").addEventListener("submit"')),ctx);
   const pending=operation==='delete'?ctx.document.getElementById('weight-delete').onclick():submit({preventDefault(){},currentTarget:ctx.document.getElementById('weight-form')});
   ctx.openSheet.serial=2;ctx.loadWeightFormDate.binding=null;ctx.document.getElementById('weight-date').disabled=false;ctx.document.getElementById('weight-save').disabled=true;
   if(outcome==='account-switch')ctx.currentUser={userId:'B'};
@@ -170,6 +387,101 @@ test('late body save/delete invalidates same-account cache without touching anot
   finish();await pending;assert.equal(closed,0);assert.equal(toasts,0);assert.equal(ctx.document.getElementById('weight-save').disabled,true);assert.equal(ctx.document.getElementById('weight-date').disabled,false);
   assert.equal(cacheClears,outcome==='resolve'?1:0,`${operation}/${outcome}`);
   assert.equal(ctx.sectionLoadKeys.has('body'),outcome!=='resolve',`${operation}/${outcome}`);
+ }
+});
+test('durable body save and delete release the active sheet before fallible readback setup',async()=>{
+ for(const operation of ['save','delete']){
+  const ctx=harness(()=>{}),events=[];let submit,mutations=0;
+  ctx.apiService={upsertBodyRecord:async()=>{mutations++;return{recordId:'body-1',record:{recordId:'body-1',revision:1},analysisJobScheduled:false};},deleteBodyRecord:async()=>{mutations++;return{recordId:'body-1',deleted:true};}};
+  ctx.sectionLoadKeys=new Map([['body','cached-range']]);ctx.clearDashboardCache=()=>{events.push('readback');throw Error('synthetic cache failure');};ctx.num=value=>value===''?null:Number(value);
+  ctx.document.getElementById('weight-form').addEventListener=(event,handler)=>submit=handler;ctx.loadWeightFormDate={binding:{user:ctx.currentUser,date:'2026-09-13',recordId:'body-1'}};
+  ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.toast=()=>events.push('toast');ctx.confirm=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.closeSheet=()=>events.push('close');ctx.refreshInBackground=()=>{throw Error('must not be reached');};ctx.setDashboardDataState=()=>{};ctx.readableError=e=>e.message;
+  ctx.document.getElementById('weight-date').value='2026-09-13';ctx.document.getElementById('weight-record-id').value='body-1';ctx.document.getElementById('weight-input').value='70';vm.runInContext('let bodyAnalysisConvergenceSerial=0',ctx);
+  vm.runInContext(operation==='delete'?htmlBetween('document.getElementById("weight-delete").onclick=','document.getElementById("meal-form").addEventListener'):html.split(/\r?\n/).find(line=>line.includes('weight-form").addEventListener("submit"')),ctx);
+  if(operation==='delete')await ctx.document.getElementById('weight-delete').onclick();else await submit({preventDefault(){},currentTarget:ctx.document.getElementById('weight-form')});
+  assert.deepEqual(events,['close','toast','readback'],operation);assert.equal(mutations,1,operation);
+ }
+});
+
+test('late workout edit, batch and delete responses cannot close or unlock a reopened sheet',async()=>{
+ for(const operation of ['edit','batch','delete']){
+  const ctx=harness(()=>{});let finish,closed=0,toasts=0,refreshed=0,submitEdit,submitBatch,payload;
+  const request=value=>new Promise(resolve=>{finish=()=>resolve(value);});
+  const old={recordId:'set-old',revision:3,date:'2026-09-12',exerciseId:'exercise-old',weight:20,reps:8};
+  const group={date:'2026-09-12',exerciseId:'exercise-old',records:[old]};
+  ctx.appState.workouts=[old];ctx.exerciseDatabase=[{exerciseId:'exercise-old'}];
+  ctx.apiService={
+   updateWorkoutSet:body=>{payload=body;return request({record:{...old,revision:4},recordId:old.recordId,deleted:false,status:'SAVED'});},
+   updateWorkoutSets:body=>{payload=body;return request({records:[{...old,revision:4}],updatedRecordIds:[old.recordId],status:'SAVED'});},
+   deleteWorkoutSet:body=>{payload=body;return request({record:{...old,revision:4},recordId:old.recordId,deleted:true,status:'SAVED'});},
+  };
+  ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.closeSheet=()=>closed++;ctx.toast=()=>toasts++;ctx.confirm=()=>true;ctx.readableError=error=>error.message;
+  ctx.num=Number;ctx.validWorkoutSet=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;ctx.refreshInBackground=()=>{};ctx.scheduleDetachedWorkoutReadback=()=>refreshed++;ctx.syncWorkoutGroupEditCount=()=>{};
+  ctx.openWorkoutGroupEditor=()=>{};ctx.openWorkoutGroupEditor.group=group;
+  for(const id of ['workout-edit-form','workout-group-edit-form','edit-workout-group-date','edit-workout-group-exercise'])ctx.document.getElementById(id).addEventListener=(_event,handler)=>{if(id==='workout-edit-form')submitEdit=handler;if(id==='workout-group-edit-form')submitBatch=handler;};
+  Object.assign(ctx.document.getElementById('edit-workout-record-id'),{value:old.recordId});
+  Object.assign(ctx.document.getElementById('edit-workout-date'),{value:old.date});
+  Object.assign(ctx.document.getElementById('edit-workout-exercise'),{value:old.exerciseId});
+  Object.assign(ctx.document.getElementById('edit-workout-weight'),{value:'20'});
+  Object.assign(ctx.document.getElementById('edit-workout-reps'),{value:'8'});
+  Object.assign(ctx.document.getElementById('edit-workout-group-key'),{value:'0'});
+  Object.assign(ctx.document.getElementById('edit-workout-group-date'),{value:old.date});
+  Object.assign(ctx.document.getElementById('edit-workout-group-exercise'),{value:old.exerciseId});
+  for(const name of ['resetWorkoutMutationClientState','workoutMutationRequestId','beginWorkoutEditorMutation','setWorkoutEditSubmitting'])vm.runInContext(htmlFunction(name),ctx);
+  vm.runInContext(htmlBetween('document.getElementById("workout-edit-form").addEventListener("submit"','document.getElementById("start-workout").onclick='),ctx);
+  const pending=operation==='edit'
+   ?submitEdit({preventDefault(){},currentTarget:ctx.document.getElementById('workout-edit-form')})
+   :operation==='batch'
+    ?submitBatch({preventDefault(){},currentTarget:ctx.document.getElementById('workout-group-edit-form')})
+    :ctx.document.getElementById('edit-workout-delete').onclick();
+  assert.match(payload.clientRequestId,/^[0-9a-f-]+$/i);if(operation!=='batch')assert.equal(payload.revision,3);
+  ctx.openSheet.serial=2;
+  if(operation==='batch'){ctx.document.getElementById('edit-workout-group-key').value='1';ctx.openWorkoutGroupEditor.group={...group};ctx.document.getElementById('edit-workout-group-save').disabled=true;}
+  else{ctx.document.getElementById('edit-workout-record-id').value='set-new';ctx.document.getElementById('edit-workout-save').disabled=true;ctx.document.getElementById('edit-workout-delete').disabled=true;}
+  finish();await pending;
+  assert.equal(closed,0,operation);assert.equal(toasts,0,operation);assert.equal(refreshed,1,operation);
+  if(operation==='batch')assert.equal(ctx.document.getElementById('edit-workout-group-save').disabled,true);else{assert.equal(ctx.document.getElementById('edit-workout-save').disabled,true);assert.equal(ctx.document.getElementById('edit-workout-delete').disabled,true);}
+ }
+});
+
+test('workout edit, batch and delete after account switch preserve the new form and acknowledge the commit',async()=>{
+ for(const operation of ['edit','batch','delete']){
+  const ctx=harness(()=>{});let resetCount=0,closed=0,refreshed=0,payload,submitEdit,submitBatch;
+  const old={recordId:'set-new-owner',revision:3,date:'2026-09-12',exerciseId:'exercise-1',weight:20,reps:8};
+  const group={date:old.date,exerciseId:old.exerciseId,records:[old]};
+  ctx.currentUser={userId:'account-B'};ctx.appState.workouts=[old];ctx.exerciseDatabase=[{exerciseId:old.exerciseId}];
+  ctx.apiService={
+   updateWorkoutSet:async body=>{payload=body;return{record:{...old,revision:4},recordId:old.recordId,status:'SAVED'};},
+   updateWorkoutSets:async body=>{payload=body;return{records:[{...old,revision:4}],status:'SAVED'};},
+   deleteWorkoutSet:async body=>{payload=body;return{recordId:old.recordId,deleted:true,status:'SAVED'};},
+  };
+  ctx.openSheet=()=>{};ctx.openSheet.serial=1;ctx.closeSheet=()=>closed++;ctx.toast=()=>{};ctx.confirm=()=>true;
+  ctx.num=Number;ctx.validWorkoutSet=()=>true;ctx.setSubmitting=(button,on)=>button.disabled=on;
+  ctx.refreshInBackground=()=>refreshed++;ctx.scheduleDetachedWorkoutReadback=()=>{throw Error('committed result must not detach');};
+  ctx.syncWorkoutGroupEditCount=()=>{};ctx.openWorkoutGroupEditor=()=>{};ctx.openWorkoutGroupEditor.group=group;
+  for(const id of ['workout-edit-form','workout-group-edit-form','edit-workout-group-date','edit-workout-group-exercise'])ctx.document.getElementById(id).addEventListener=(_event,handler)=>{if(id==='workout-edit-form')submitEdit=handler;if(id==='workout-group-edit-form')submitBatch=handler;};
+  Object.assign(ctx.document.getElementById('edit-workout-record-id'),{value:old.recordId});
+  Object.assign(ctx.document.getElementById('edit-workout-date'),{value:old.date});
+  Object.assign(ctx.document.getElementById('edit-workout-exercise'),{value:old.exerciseId});
+  Object.assign(ctx.document.getElementById('edit-workout-weight'),{value:'20'});
+  Object.assign(ctx.document.getElementById('edit-workout-reps'),{value:'8'});
+  Object.assign(ctx.document.getElementById('edit-workout-group-key'),{value:'0'});
+  Object.assign(ctx.document.getElementById('edit-workout-group-date'),{value:old.date});
+  Object.assign(ctx.document.getElementById('edit-workout-group-exercise'),{value:old.exerciseId});
+  const form=ctx.document.getElementById(operation==='batch'?'workout-group-edit-form':'workout-edit-form');
+  Object.assign(form.dataset,{mutationUserId:'account-A',clientRequestId:'old-request',workoutMutationAction:'UPDATE'});
+  form.reset=()=>{resetCount++;ctx.document.getElementById('edit-workout-weight').value='';ctx.document.getElementById('edit-workout-reps').value='';};
+  ctx.resetMealMutationClientState=()=>form.reset();
+  for(const name of ['resetWorkoutMutationClientState','workoutMutationRequestId','beginWorkoutEditorMutation','setWorkoutEditSubmitting'])vm.runInContext(htmlFunction(name),ctx);
+  vm.runInContext(htmlBetween('document.getElementById("workout-edit-form").addEventListener("submit"','document.getElementById("start-workout").onclick='),ctx);
+  if(operation==='edit')await submitEdit({preventDefault(){},currentTarget:form});
+  else if(operation==='batch')await submitBatch({preventDefault(){},currentTarget:form});
+  else await ctx.document.getElementById('edit-workout-delete').onclick();
+  assert.equal(resetCount,0,operation);assert.notEqual(payload.clientRequestId,'old-request',operation);
+  assert.equal(closed,1,operation);assert.equal(refreshed,1,operation);
+  if(operation==='edit'){assert.equal(payload.recordId,old.recordId);assert.equal(payload.weight,20);assert.equal(payload.reps,8);}
+  if(operation==='batch')assert.equal(ctx.document.getElementById('edit-workout-group-save').disabled,false);
+  else{assert.equal(ctx.document.getElementById('edit-workout-save').disabled,false);assert.equal(ctx.document.getElementById('edit-workout-delete').disabled,false);}
  }
 });
 
@@ -180,10 +492,31 @@ test('daily SQL read validates shape, preserves measured zero and marks unavaila
  assert.equal(ctx.manualSourceStatus().database,'CONNECTED');assert.equal(ctx.manualSourceStatus().dataPresent,'PRESENT');
  ctx.renderDailySqlReadNotice('activity',[row]);assert.match(ctx.document.getElementById('activity-active-note').textContent,/尚無活動熱量/);
  ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{...row,steps:null,dataStatus:'STALE'}]});assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
- ctx.renderDailySqlReadNotice('activity',[{...row,dataStatus:'STALE'}]);assert.match(ctx.document.getElementById('activity-steps-note').textContent,/結果待更新/);
+ ctx.renderDailySqlReadNotice('activity',[{...row,dataStatus:'STALE'}]);assert.match(ctx.document.getElementById('activity-steps-note').textContent,/自動／分析資料待更新/);
+ const manualPending={...row,source:'SQL_CANONICAL_MANUAL_AND_PUBLISHED',dataStatus:'CURRENT',analysisDataStatus:'STALE'};ctx.renderDailySqlReadNotice('activity',[manualPending]);assert.match(ctx.document.getElementById('activity-steps-note').textContent,/手動自行回報.*自動／分析資料待更新/);
+ const manualFailed={...manualPending,analysisStaleReason:'RECOMPUTE_FAILED'};ctx.renderDailySqlReadNotice('activity',[manualFailed]);assert.match(ctx.document.getElementById('activity-steps-note').textContent,/手動自行回報.*更新失敗/);assert.doesNotMatch(ctx.document.getElementById('activity-steps-note').textContent,/待更新/);
+ const mixed=[
+  {...row,date:'2026-09-20',steps:7180,stepsSource:'SQL_PUBLISHED_DAILY_METRICS'},
+  {...row,date:'2026-09-25',steps:null,totalCalories:2200,totalEnergySource:'SELF_REPORTED_UNKNOWN_QUALITY',source:'SQL_CANONICAL_MANUAL_AND_PUBLISHED',analysisDataStatus:'STALE',reconciliationFlags:['SOURCE_CONFLICT:total_energy']},
+ ];
+ ctx.renderDailySqlReadNotice('activity',mixed);
+ assert.match(ctx.document.getElementById('activity-steps-note').textContent,/2026-09-20 · 穿戴裝置同步 · 2026-09-25 自動／分析資料待更新/);
+ assert.doesNotMatch(ctx.document.getElementById('activity-steps-note').textContent,/手動自行回報|來源／時段衝突/);
+ assert.match(ctx.document.getElementById('activity-total-note').textContent,/2026-09-25 · 手動自行回報 · 來源／時段衝突/);
  assert.throws(()=>ctx.assertManualResponseShape('getActivityRecords',[{...row,steps:'0'}]),e=>e.code==='MALFORMED_RESPONSE');
  const sleep={date:row.date,dataStatus:'CURRENT',totalSleepMinutes:480,sleepScore:null};
  ctx.renderDailySqlReadNotice('sleep',[sleep]);assert.match(ctx.document.getElementById('sleep-score-note').textContent,/不替換為實驗分數/);
+});
+
+test('manual body analysis notice is never attached to a newer wearable weight',()=>{
+ const ctx=harness(()=>{}),note=ctx.document.getElementById('body-current-note');
+ ctx.appState.body=[{date:'2026-09-20',weight:87.8,analysisStatus:'INSUFFICIENT_DATA'}];
+ note.textContent='最近紀錄 9/25 · 穿戴裝置同步';
+ ctx.localManualBodyNotice({date:'2026-09-25',weight:87.7,weightSource:'SQL_PUBLISHED_DAILY_METRICS'});
+ assert.equal(note.textContent,'最近紀錄 9/25 · 穿戴裝置同步');
+ note.textContent='最近紀錄 9/20 · 手動輸入';
+ ctx.localManualBodyNotice({date:'2026-09-20',weight:87.8,weightSource:'MANUAL_WEB'});
+ assert.match(note.textContent,/手動輸入 · 紀錄已保存；身體分析資料不足/);
 });
 
 test('daily detail reads reject late account and range responses before touching UI state',async()=>{
@@ -199,6 +532,8 @@ test('daily stale or empty reads withdraw earlier snapshot analysis evidence',()
  const ctx=harness(()=>{}),out={domain:'activity',calculation_date:'2026-09-13',score:80,score_status:'VALID'};
  ctx.recordManualSourceEvidence('localEngineSnapshot',{ok:true,received:true,data:{meals:[],outputs:[out]}});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'UPDATED');
  ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{date:'2026-09-13',dataStatus:'STALE',steps:null,activeMinutes:null,activeCalories:null,totalCalories:null}]});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'STALE');
+ ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{date:'2026-09-13',dataStatus:'CURRENT',analysisDataStatus:'STALE',steps:8000,activeMinutes:null,activeCalories:null,totalCalories:null}]});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'STALE');
+ ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[{date:'2026-09-13',dataStatus:'CURRENT',analysisDataStatus:'STALE',analysisStaleReason:'RECOMPUTE_FAILED',steps:8000,activeMinutes:null,activeCalories:null,totalCalories:null}]});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'FAILED');
  ctx.recordManualSourceEvidence('getActivityRecords',{ok:true,received:true,data:[],payload:{date:'2026-09-12'}});assert.equal(ctx.manualSourceStatus().domains.activity.analysis,'UNKNOWN');assert.equal(ctx.manualSourceStatus().domains.activity.analysisDate,null);
 });
 
@@ -223,7 +558,7 @@ test('empty SQL SELECT proves database connectivity but not data presence or a c
  assert.match(ctx.document.getElementById('data-last-updated').textContent,/最近 SQL 讀寫確認/);
 });
 test('committed mutation is not optimistic presence; explicit zero score is not missing',()=>{
- const ctx=harness(()=>{});ctx.recordManualSourceEvidence('upsertBodyRecord',{received:true,ok:true,data:{status:'SAVED',recordId:'id',bodyScore:0,analysisStatus:'COMPUTED'}});const s=ctx.manualSourceStatus();assert.equal(s.database,'CONNECTED');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.domains.body.analysis,'UPDATED');assert.ok(s.analysisUpdatedAt);
+ const ctx=harness(()=>{});ctx.recordManualSourceEvidence('upsertBodyRecord',{received:true,ok:true,data:{status:'SAVED',recordId:'id',deleted:false,record:{recordId:'id',revision:1},bodyScore:0,analysisStatus:'COMPUTED'}});const s=ctx.manualSourceStatus();assert.equal(s.database,'CONNECTED');assert.equal(s.dataPresent,'UNKNOWN');assert.equal(s.domains.body.analysis,'UPDATED');assert.ok(s.analysisUpdatedAt);
  assert.equal(ctx.manualAnalysisState({score_status:'VALID',score:null}),'UNKNOWN');assert.equal(ctx.manualAnalysisState({score_status:'VALID',score:0}),'UPDATED');
 });
 test('SQL error after HTTP response keeps API/DB distinct and cache is not fresh evidence',async()=>{
@@ -261,11 +596,11 @@ test('body analysis convergence is bounded, re-reads final state and cancels on 
 });
 test('body refresh skips polling for default providers and settles the dashboard after timeout',async()=>{
  const ctx=harness(()=>{}),lines=html.split(/\r?\n/),calls=[];ctx.sectionWindows={body:{start:'2026-09-01',end:'2026-09-30'}};ctx.setTimeout=setTimeout;
- Object.assign(ctx,{refreshSectionRange:async()=>calls.push('refresh'),clearDashboardCache:()=>calls.push('clear'),setDashboardDataState:value=>calls.push(value),perfLog:event=>calls.push(event)});
+ Object.assign(ctx,{refreshSectionRange:async()=>calls.push('refresh'),refreshDashboardAfterMutation:async()=>calls.push('dashboard-refresh'),clearDashboardCache:()=>calls.push('clear'),setDashboardDataState:value=>calls.push(value),perfLog:event=>calls.push(event)});
  vm.runInContext(lines.find(line=>line.includes('const BODY_ANALYSIS_TERMINAL_STATES=')),ctx);vm.runInContext(lines.find(line=>line.includes('function bodyAnalysisNeedsConvergence(')),ctx);vm.runInContext(lines.find(line=>line.includes('async function convergeBodyAnalysis(')),ctx);vm.runInContext(lines.find(line=>line.includes('async function completeBodyAnalysisRefresh(')),ctx);
  let dbReads=0;ctx.apiService={getBodyRecords:async()=>{dbReads++;return[{date:'2026-09-13',analysisStatus:'ANALYSIS_PENDING'}];}};
- const defaultSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx);assert.equal((await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:undefined,serial:defaultSerial,current:()=>true,delays:[0]})).status,'NOT_SCHEDULED');assert.equal(dbReads,0);assert.deepEqual(calls,['refresh','clear','ready']);
- calls.length=0;const pendingSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),timeout=await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:{analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true},serial:pendingSerial,current:()=>true,delays:[0,0]});assert.equal(timeout.status,'TIMEOUT');assert.equal(dbReads,2);assert.deepEqual(calls,['refresh','clear','ready','body-analysis-convergence-timeout']);
+ const defaultSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx);assert.equal((await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:undefined,serial:defaultSerial,current:()=>true,delays:[0]})).status,'NOT_SCHEDULED');assert.equal(dbReads,0);assert.deepEqual(calls,['refresh','dashboard-refresh']);
+ calls.length=0;const pendingSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),timeout=await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:{analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true},serial:pendingSerial,current:()=>true,delays:[0,0]});assert.equal(timeout.status,'TIMEOUT');assert.equal(dbReads,2);assert.deepEqual(calls,['refresh','dashboard-refresh','body-analysis-convergence-timeout']);
  calls.length=0;ctx.apiService.getBodyRecords=async()=>{ctx.sectionWindows.body={start:'2026-08-01',end:'2026-08-31'};return[{date:'2026-09-13',analysisStatus:'COMPUTED'}];};const rangeSerial=vm.runInContext('++bodyAnalysisConvergenceSerial',ctx),cancelled=await ctx.completeBodyAnalysisRefresh({date:'2026-09-13',result:{analysisStatus:'ANALYSIS_PENDING',analysisJobScheduled:true},serial:rangeSerial,current:()=>true,delays:[0]});assert.equal(cancelled.status,'CANCELLED');assert.deepEqual(calls,['refresh']);
 });
 test('analysis snapshot uses latest domain date and does not flatten insufficient/stale to green',()=>{
@@ -278,8 +613,64 @@ test('HTTP failure cannot claim a successful SQL envelope',async()=>{
  const ctx=harness(async()=>({ok:false,json:async()=>({ok:true,data:[]})}));await assert.rejects(()=>ctx.localEngineRequest('getBodyRecords'),e=>e.code==='HTTP_RESPONSE_CONTRACT_MISMATCH');assert.notEqual(ctx.manualSourceStatus().database,'CONNECTED');
 });
 test('malformed response and late same-action read cannot invent fresh source evidence',async()=>{
- const broken=harness(async()=>({ok:true,json:async()=>null}));await assert.rejects(()=>broken.localEngineRequest('getBodyRecords'),e=>e.code==='MALFORMED_RESPONSE');assert.equal(broken.manualSourceStatus().database,'UNKNOWN');
- const replies=[],ctx=harness(()=>new Promise(r=>replies.push(r)));const old=ctx.localEngineRequest('getBodyRecords'),fresh=ctx.localEngineRequest('getBodyRecords');replies[1]({ok:true,json:async()=>({ok:true,data:[]})});await fresh;replies[0]({ok:true,json:async()=>({ok:true,data:[{recordId:'old',revision:1,weight:80,date:'2026-09-12'}]})});await old;assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
+  const broken=harness(async()=>({ok:true,json:async()=>null}));await assert.rejects(()=>broken.localEngineRequest('getBodyRecords'),e=>e.code==='MALFORMED_RESPONSE');assert.equal(broken.manualSourceStatus().database,'UNKNOWN');
+  const replies=[],ctx=harness(()=>new Promise(r=>replies.push(r)));const old=ctx.localEngineRequest('getBodyRecords'),fresh=ctx.localEngineRequest('getBodyRecords');replies[1]({ok:true,json:async()=>({ok:true,data:[]})});await fresh;replies[0]({ok:true,json:async()=>({ok:true,data:[{recordId:'old',revision:1,weight:80,date:'2026-09-12'}]})});await old;assert.equal(ctx.manualSourceStatus().dataPresent,'ABSENT');
+});
+test('mutation writes and reconciliation reject malformed or request-mismatched success payloads before UI success',async()=>{
+ const malformed=[
+  ['upsertBodyRecord',{}],
+  ['upsertManualObservation',{status:'SAVED',recordId:'obs-1',deleted:false,record:{recordId:'obs-1',revision:1,domain:'unknown',date:'2026-09-13'}}],
+  ['upsertMealRecord',{}],
+  ['upsertMealRecord',{recordId:'meal-1',status:'SAVED',operation:'UPSERT',deleted:false,record:{mealRecordId:'other',revision:1}}],
+  ['deleteMealRecord',{recordId:'meal-1',status:'SAVED',operation:'DELETE',deleted:false,record:{mealRecordId:'meal-1',revision:1}}],
+  ['getMealWriteStatus',{exists:true,recordId:'meal-1',status:'SAVED',operation:'UPSERT',deleted:false,record:{mealRecordId:'meal-1',revision:0}}],
+  ['manageExercise',{status:'SAVED',exerciseId:'exercise-1',revision:1,operation:'unknown'}],
+  ['addWorkoutRecord',{status:'SAVED',sessionId:'session-1',records:[]}],
+  ['updateWorkoutSets',{status:'SAVED',records:[{recordId:'set-1',revision:2}],updatedRecordIds:['other']}],
+  ['deleteWorkoutSet',{status:'SAVED',recordId:'set-1',deleted:false,record:{recordId:'set-1',revision:2}}],
+  ['getTrainingWriteStatus',{exists:true,status:'SAVED'}],
+ ];
+ for(const [action,data]of malformed){
+  const ctx=harness(async()=>({ok:true,json:async()=>({ok:true,data})}));
+  await assert.rejects(()=>ctx.localEngineRequest(action),error=>error.code==='MALFORMED_RESPONSE');
+  assert.notEqual(ctx.manualSourceStatus().database,'CONNECTED');
+ }
+ const valid={recordId:'meal-1',status:'SAVED',operation:'UPSERT',deleted:false,record:{mealRecordId:'meal-1',revision:1}};
+ const ctx=harness(()=>{});
+ assert.doesNotThrow(()=>ctx.assertManualResponseShape('upsertMealRecord',valid));
+ assert.doesNotThrow(()=>ctx.assertManualResponseShape('getMealWriteStatus',{exists:false}));
+ assert.doesNotThrow(()=>ctx.assertManualResponseShape('getMealWriteStatus',{exists:true,...valid}));
+ const workoutRecord=(recordId,exerciseId='exercise-1')=>({recordId,sessionId:'session-1',exerciseId,date:'2026-09-13',revision:2});
+ assert.throws(()=>ctx.assertManualResponseShape('addWorkoutRecord',{status:'SAVED',sessionId:'session-1',records:[workoutRecord('set-1')]},{date:'2026-09-13',exercises:[{exerciseId:'exercise-1',sets:[{},{}]}]}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('updateWorkoutSets',{status:'SAVED',records:[workoutRecord('set-other')],updatedRecordIds:['set-other']},{updates:[{recordId:'set-1'}]}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('updateWorkoutSet',{status:'SAVED',recordId:'set-other',deleted:false,record:workoutRecord('set-other')},{recordId:'set-1',date:'2026-09-13',exerciseId:'exercise-1'}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('deleteWorkoutSet',{status:'SAVED',recordId:'set-other',deleted:true,record:workoutRecord('set-other')},{recordId:'set-1'}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('upsertBodyRecord',{status:'SAVED',recordId:'body-1',deleted:false,record:{recordId:'body-1',date:'2026-09-13',weight:71,bodyFat:20,revision:1}},{recordId:'body-1',date:'2026-09-13',weight:70,bodyFat:20}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('upsertManualObservation',{status:'SAVED',recordId:'obs-1',deleted:false,record:{recordId:'obs-1',domain:'steps',date:'2026-09-13',value:7000,coverage:'FULL_DAY',cutoffTime:null,startedAt:null,endedAt:null,revision:1}},{recordId:'obs-1',domain:'steps',date:'2026-09-13',value:8000,coverage:'FULL_DAY',cutoffTime:null,startedAt:null,endedAt:null}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('upsertMealRecord',{status:'SAVED',operation:'UPSERT',recordId:'meal-1',deleted:false,record:{mealRecordId:'meal-1',date:'2026-09-13',time:'12:00',foodName:'午餐',calories:499,protein:20,carbs:30,fat:10,userConfirmed:true,revision:1}},{mealRecordId:'meal-1',date:'2026-09-13',time:'12:00',foodName:'午餐',calories:500,protein:20,carbs:30,fat:10,userConfirmed:true}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('upsertMealRecord',{status:'SAVED',operation:'UPSERT',recordId:'meal-1',deleted:false,record:{mealRecordId:'meal-1',date:'2026-09-13',time:'12:00',mealType:'晚餐',foodName:'午餐',calories:500,protein:20,carbs:30,fat:10,userConfirmed:true,revision:1}},{mealRecordId:'meal-1',date:'2026-09-13',time:'12:00',mealType:'午餐',foodName:'午餐',calories:500,protein:20,carbs:30,fat:10,userConfirmed:true}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('addWorkoutRecord',{status:'SAVED',sessionId:'session-1',records:[{...workoutRecord('set-1'),weight:21,reps:8}]},{date:'2026-09-13',exercises:[{exerciseId:'exercise-1',sets:[{weight:20,reps:8}]}]}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('updateWorkoutSets',{status:'SAVED',records:[{...workoutRecord('set-1'),weight:21,reps:8}],updatedRecordIds:['set-1']},{updates:[{recordId:'set-1',weight:20,reps:8}]}),error=>error.code==='MALFORMED_RESPONSE');
+ assert.throws(()=>ctx.assertManualResponseShape('updateWorkoutSet',{status:'SAVED',recordId:'set-1',deleted:false,record:{...workoutRecord('set-1'),weight:20,reps:9}},{recordId:'set-1',date:'2026-09-13',exerciseId:'exercise-1',weight:20,reps:8}),error=>error.code==='MALFORMED_RESPONSE');
+});
+test('timeout reconciliation rejects a receipt whose persisted values do not match the original request',async()=>{
+ let first=true;const ctx=harness(async(_url,init)=>{const request=JSON.parse(init.body);if(request.action==='upsertBodyRecord'&&first){first=false;throw Error('response lost');}if(request.action==='getBodyWriteStatus')return{json:async()=>({ok:true,data:{exists:true,status:'SAVED',recordId:'body-1',deleted:false,record:{recordId:'body-1',date:'2026-09-13',weight:71,bodyFat:null,revision:1}}})};throw Error('unexpected request');});
+ await assert.rejects(()=>ctx.localEngineRequest('upsertBodyRecord',{date:'2026-09-13',weight:70,bodyFat:null}),/response lost/);
+});
+test('existing meal calculation mode is immutable while a new meal remains selectable',()=>{
+ const ctx=harness(()=>{});ctx.manualSqlEnabled=()=>true;ctx.syncMealLabelFields=()=>{};
+ ctx.setupLocalMealFields({mealRecordId:'meal-1',labelMode:true,weightGrams:150,referenceSource:'label',labelValues:{calories:200}});
+ const mode=ctx.document.getElementById('meal-label-mode');assert.equal(mode.checked,true);assert.equal(mode.disabled,true);assert.match(mode.title,/不可切換/);
+ ctx.setupLocalMealFields(null);assert.equal(mode.checked,false);assert.equal(mode.disabled,false);assert.equal(mode.title,'');
+});
+test('label-mode lost-response reconciliation reuses the exact enriched mutation contract',()=>{
+ const ctx=harness(()=>{});ctx.document.getElementById('meal-label-mode').checked=true;ctx.document.getElementById('meal-weight-grams').value='150';ctx.document.getElementById('meal-reference-source').value='包裝標示';
+ const payload=ctx.localMealMutationPayload({date:'2026-09-13',time:'12:00',mealType:'午餐',foodName:'測試餐',calories:200,protein:10,carbs:20,fat:5,userConfirmed:true});
+ assert.equal(payload.labelMode,true);assert.equal(payload.weightGrams,'150');assert.equal(payload.referenceSource,'包裝標示');
+ const receipt={status:'SAVED',operation:'UPSERT',recordId:'meal-1',deleted:false,record:{mealRecordId:'meal-1',date:'2026-09-13',time:'12:00',mealType:'午餐',foodName:'測試餐',labelMode:true,weightGrams:150,referenceSource:'包裝標示',labelValues:{calories:200,protein:10,carbs:20,fat:5},calories:300,protein:15,carbs:30,fat:7.5,userConfirmed:true,revision:1}};
+ assert.doesNotThrow(()=>ctx.assertManualResponseShape('upsertMealRecord',receipt,payload));
+ assert.match(html,/manualPayloadLive=manualSqlEnabled\(\)&&typeof localMealMutationPayload==="function"\?localMealMutationPayload\(manualPayloadBase\):manualPayloadBase/u);
+ assert.match(html,/manualPayload=manualWrite\?mealMutationEnvelope\(form,manualPayloadLive\):manualPayloadLive/u);
 });
 test('source analysis uses actual PARTIAL_DATA enum and requires a finite numeric score',()=>{
  const ctx=harness(()=>{});assert.equal(ctx.manualAnalysisState({score_status:'PARTIAL_DATA',score:0}),'UPDATED');
@@ -310,13 +701,28 @@ test('late catalog response cannot downgrade a newer revision or revive archived
 });
 test('training uncertain response retains a deep immutable envelope while draft edits are locked',async()=>{
   const requests=[];let writes=0;
-  const ctx=harness(async(_url,init)=>{const request=JSON.parse(init.body);requests.push(request);if(request.action==='getTrainingWriteStatus')return{json:async()=>({ok:true,data:{exists:false}})};if(++writes===1)throw Error('transport lost');return{json:async()=>({ok:true,data:{records:[]}})};});
+  const ctx=harness(async(_url,init)=>{const request=JSON.parse(init.body);requests.push(request);if(request.action==='getTrainingWriteStatus')return{json:async()=>({ok:true,data:{exists:false}})};if(++writes===1)throw Error('transport lost');return{json:async()=>({ok:true,data:{status:'SAVED',sessionId:'session-1',records:[{recordId:'set-1',sessionId:'session-1',exerciseId:'A',date:'2026-09-13',weight:0,reps:10,revision:1}]}})};});
   const exercises=[{exerciseId:'A',sets:[{weight:0,reps:10}]}];ctx.workoutSession={exercises};
   const payload={date:'2026-09-13',startTime:'2026-09-13T00:00:00Z',endTime:'2026-09-13T00:20:00Z',exercises};
   await assert.rejects(()=>ctx.localEngineRequest('addWorkoutRecord',payload));assert.equal(ctx.workoutSession.sqlLocked,true);
   exercises[0].sets[0].weight=999; // Simulate a stale draft reference, even though real controls are locked.
   await ctx.localEngineRequest('addWorkoutRecord',{...payload,endTime:'2026-09-13T00:30:00Z'});
   const submitted=requests.filter(r=>r.action==='addWorkoutRecord');assert.deepEqual(submitted[0],submitted[1]);assert.equal(submitted[1].payload.exercises[0].sets[0].weight,0);assert.equal(ctx.workoutSession.sqlLocked,false);
+});
+test('training 5xx reconciles a committed receipt before reporting failure',async()=>{
+  const requests=[];const record={recordId:'set-1',sessionId:'session-1',exerciseId:'A',date:'2026-09-13',weight:0,reps:10,revision:1};
+  const ctx=harness(async(_url,init)=>{const request=JSON.parse(init.body);requests.push(request);if(request.action==='getTrainingWriteStatus')return{status:200,ok:true,json:async()=>({ok:true,data:{exists:true,status:'SAVED',sessionId:'session-1',records:[record]}})};return{status:500,ok:false,json:async()=>({ok:false,error:'ENGINE_REQUEST_FAILED',retryable:false})};});
+  const exercises=[{exerciseId:'A',sets:[{weight:0,reps:10}]}];ctx.workoutSession={exercises};
+  const result=await ctx.localEngineRequest('addWorkoutRecord',{date:'2026-09-13',startTime:'2026-09-13T00:00:00Z',endTime:'2026-09-13T00:20:00Z',exercises});
+  assert.equal(result.recovered,true);assert.equal(result.records.length,1);assert.equal(ctx.workoutSession.sqlLocked,false);
+  assert.deepEqual(requests.map(request=>request.action),['addWorkoutRecord','getTrainingWriteStatus']);
+});
+test('schema mismatch preserves the stable training envelope and draft for a same-id retry',async()=>{
+  const requests=[];const ctx=harness(async(_url,init)=>{const request=JSON.parse(init.body);requests.push(request);if(request.action==='getTrainingWriteStatus')return{status:200,ok:true,json:async()=>({ok:true,data:{exists:false}})};return{status:503,ok:false,json:async()=>({ok:false,error:'MANUAL_SCHEMA_OUT_OF_DATE',retryable:false})};});
+  const exercises=[{exerciseId:'A',sets:[{weight:0,reps:10}]}];ctx.workoutSession={exercises};
+  const payload={date:'2026-09-13',startTime:'2026-09-13T00:00:00Z',endTime:'2026-09-13T00:20:00Z',exercises};
+  await assert.rejects(()=>ctx.localEngineRequest('addWorkoutRecord',payload),error=>error.code==='MANUAL_SCHEMA_OUT_OF_DATE'&&error.retryable===true);
+  assert.equal(ctx.workoutSession.sqlLocked,true);assert.ok(ctx.workoutSession.sqlEnvelope);assert.equal(requests[0].payload.clientRequestId,requests[1].payload.clientRequestId);
 });
 test('account reset discards catalog, draft and hidden training-overview state',()=>{
   const ctx=harness(()=>{}),controls=Array.from({length:6},()=>({disabled:false}));ctx.document.querySelectorAll=()=>controls;
@@ -394,10 +800,12 @@ test('training summary zero state and 7d, 30d and custom responses remain cohere
 });
 test('training summary cards render new semantics including explicit zero days',()=>{
   const ctx=harness(()=>{}),values={};
-  Object.assign(ctx,{manualSqlEnabled:()=>true,setValue:(id,value)=>values[id]=value,exerciseCategoryLabel:value=>value,donut(){},dailyTrainingRows:()=>[],renderTrendChart(){},display:value=>String(value),valid:value=>value!==null&&value!==undefined,escapeHtml:value=>String(value)});
+  Object.assign(ctx,{manualSqlEnabled:()=>true,setValue:(id,value)=>values[id]=value,exerciseCategoryLabel:value=>value,donut(){},dailyTrainingRows:()=>[],fillDailyGaps:rows=>rows,sectionWindows:{training:{start:'2026-09-14',end:'2026-09-20'}},renderTrendChart(){},display:value=>String(value),valid:value=>value!==null&&value!==undefined,escapeHtml:value=>String(value)});
   vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function normalizeWorkouts(')),ctx);
-  vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function renderTraining(')),ctx);
+  vm.runInContext(htmlFunction('renderTraining'),ctx);
   ctx.renderTraining({records:[],totalSets:0,totalVolume:null,trainingDays:0,muscleDistribution:[]});
+  assert.equal(values['training-sets'],0);
+  assert.equal(values['muscle-total'],0);
   assert.equal(values['training-days'],'0 天');
   assert.equal(values['training-average-sets'],'—');
   const cards=html.slice(html.indexOf('<h2>訓練摘要</h2>'),html.indexOf('data-template-id="muscle-distribution-title"'));
@@ -409,14 +817,20 @@ test('workout response trainingDays, when present, must match its canonical reco
   assert.throws(()=>ctx.assertManualResponseShape('getWorkoutRecords',{records:[record],trainingDays:2}),error=>error.code==='MALFORMED_RESPONSE');
 });
 test('dashboard cache isolates actual provider, canonical user and dedicated database namespace',()=>{
-  const ctx=harness(()=>{});ctx.location={origin:'http://127.0.0.1:57841'};ctx.window={HEALTH_ENGINE_LOCAL_CONFIG:{databaseNamespace:'db-A'}};ctx.DASHBOARD_CACHE_SCHEMA='test';ctx.CONFIG={API_BASE_URL:'https://example.invalid'};
+  const ctx=harness(()=>{});ctx.location={origin:'http://127.0.0.1:57841'};ctx.window={HEALTH_ENGINE_LOCAL_CONFIG:{databaseNamespace:'db-A'}};ctx.DASHBOARD_CACHE_SCHEMA='test';ctx.CONFIG={API_BASE_URL:'https://example.invalid'};ctx.HOSTED_MANUAL_SQL_ENABLED=true;
   for(const name of ['dashboardProviderNamespace','dashboardCacheKey'])vm.runInContext(html.split(/\r?\n/).find(line=>line.includes('function '+name+'(')),ctx);
-  const original=ctx.dashboardCacheKey('a','b');ctx.window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='db-B';assert.notEqual(ctx.dashboardCacheKey('a','b'),original);ctx.window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='db-A';ctx.currentUser={userId:'B'};assert.notEqual(ctx.dashboardCacheKey('a','b'),original);ctx.LOCAL_ENGINE_ENABLED=false;assert.notEqual(ctx.dashboardCacheKey('a','b'),original);
+ assert.match(ctx.dashboardProviderNamespace(),/^local-sql:/,'local synthetic transport must win when a hosted flag also exists');
+  const original=ctx.dashboardCacheKey('a','b');ctx.window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='db-B';assert.notEqual(ctx.dashboardCacheKey('a','b'),original);ctx.window.HEALTH_ENGINE_LOCAL_CONFIG.databaseNamespace='db-A';ctx.currentUser={userId:'B'};assert.notEqual(ctx.dashboardCacheKey('a','b'),original);ctx.hostedManualNamespace=()=> 'hosted-sql:test';ctx.LOCAL_ENGINE_ENABLED=false;assert.notEqual(ctx.dashboardCacheKey('a','b'),original);
+});
+test('provider diagnostics use the same local-first precedence as transport and cache',()=>{
+ const line=html.split(/\r?\n/).find(value=>value.includes('function setConnectionState('));assert.match(line,/LOCAL_ENGINE_ENABLED\?'PostgreSQL · 本機/);assert.match(line,/:HOSTED_MANUAL_SQL_ENABLED\?'PostgreSQL · Hosted/);
 });
 
 test('manual SQL local route remains default-off and does not replace Apps Script authentication', async () => {
   assert.match(html, /HEALTH_ENGINE_LOCAL_CONFIG\?\.enabled===true/);
-  assert.match(html, /if\(LOCAL_ENGINE_ENABLED\)return localEngineRequest\(action,payload\)/);
+  assert.match(html, /if\(LOCAL_ENGINE_ENABLED\|\|HOSTED_MANUAL_SQL_ENABLED/);
+  assert.match(html, /await localEngineRequest\(action,payload\)/);
+  assert.match(html, /identitySnapshotCurrent\(identity\)/);
   assert.match(html, /createSession\(response\.credential\)/);
   const ctx = harness(() => { throw Error('must not fetch'); });
   ctx.LOCAL_ENGINE_ENABLED = false;
@@ -430,7 +844,8 @@ test('manual body retry after unresolved timeout keeps one request ID', async ()
     const request = JSON.parse(init.body); requests.push(request);
     if (request.action === 'getBodyWriteStatus') return { ok: true, json: async () => ({ ok: true, data: { exists: false } }) };
     if (++mutations === 1) { const error = Error('synthetic timeout'); error.name = 'TimeoutError'; throw error; }
-    return { ok: true, json: async () => ({ ok: true, data: { status: 'SAVED', record: { ...request.payload, recordId: randomUUID(), revision: 1, source: 'MANUAL_WEB', analysisStatus: 'ANALYSIS_PENDING' } } }) };
+    const record={...request.payload,recordId:randomUUID(),revision:1,source:'MANUAL_WEB',analysisStatus:'ANALYSIS_PENDING'};
+    return { ok: true, json: async () => ({ ok: true, data: { status:'SAVED',recordId:record.recordId,deleted:false,record } }) };
   });
   const input = { date: '2026-09-13', weight: 70, bodyFat: null, source: 'manual' };
   await assert.rejects(() => ctx.localEngineRequest('upsertBodyRecord', input), error => error.code === 'REQUEST_TIMEOUT');
@@ -447,7 +862,7 @@ test('manual body adapter carries stored revision and preserves zero/null reads'
   const id = randomUUID(), requests = [], rows = [{ recordId: id, date: '2026-09-13', weight: 70, bodyFat: 0, revision: 4, source: 'MANUAL_WEB', analysisStatus: 'ANALYSIS_PENDING' }];
   const ctx = harness(async (_url, init) => {
     const request = JSON.parse(init.body); requests.push(request);
-    return { ok: true, json: async () => ({ ok: true, data: request.action === 'getBodyRecords' ? rows : { status: 'SAVED', record: { ...rows[0], revision: 5 } } }) };
+    return { ok: true, json: async () => ({ ok: true, data: request.action === 'getBodyRecords' ? rows : { status:'SAVED',recordId:id,deleted:false,record:{...rows[0],weight:71,bodyFat:null,revision:5} } }) };
   });
   const result = await ctx.localEngineRequest('getBodyRecords', { startDate: '2026-09-13', endDate: '2026-09-13' });
   ctx.appState.body = result;
@@ -472,7 +887,7 @@ test('local body lost response resolves through receipt, without another write',
     const req = JSON.parse(init.body); calls.push(req.action);
     if (req.action === 'upsertBodyRecord') { const error = Error('lost response'); error.name = 'TimeoutError'; throw error; }
     assert.equal(req.action, 'getBodyWriteStatus');
-    return { ok: true, json: async () => ({ ok: true, data: { exists: true, recordId: id, record: { recordId: id, date: '2026-09-13', weight: 70, bodyFat: null, revision: 1 }, status: 'SAVED' } }) };
+    return { ok: true, json: async () => ({ ok: true, data: { exists:true,recordId:id,deleted:false,record:{recordId:id,date:'2026-09-13',weight:70,bodyFat:null,revision:1},status:'SAVED' } }) };
   });
   const result = await ctx.localEngineRequest('upsertBodyRecord', { date: '2026-09-13', weight: 70 });
   assert.equal(result.recordId, id);
@@ -496,7 +911,7 @@ test('retryable SQL timeout retains the exact manual body envelope for retry', a
     const request = JSON.parse(init.body); requests.push(request);
     return { ok: requests.length > 1, json: async () => requests.length === 1
       ? { ok: false, error: 'DB_TIMEOUT_RETRYABLE', retryable: true }
-      : { ok: true, data: { status: 'SAVED', record: { ...request.payload, recordId: randomUUID(), revision: 1 } } } };
+      : (()=>{const record={...request.payload,recordId:randomUUID(),revision:1};return{ok:true,data:{status:'SAVED',recordId:record.recordId,deleted:false,record}};})() };
   });
   const input = { date: '2026-09-13', weight: 70, bodyFat: null };
   await assert.rejects(() => ctx.localEngineRequest('upsertBodyRecord', input), error => error.code === 'DB_TIMEOUT_RETRYABLE' && error.retryable === true);
@@ -510,6 +925,7 @@ for (const section of ['body', 'nutrition']) test(`late ${section} range R1 resp
   const pending = [], renders = [];
   ctx.sectionWindows = { [section]: { start: '2026-08-01', end: '2026-08-01' } };
   ctx.apiService = { [section === 'body' ? 'getBodyRecords' : 'getNutritionRecords']: () => new Promise(resolve => pending.push(resolve)) };
+  if(section==='body'){ctx.apiService.getHealthTimeline=()=>Promise.resolve({timeline:[]});ctx.normalizeHealthTimeline=()=>[];}
   ctx.renderBody = () => renders.push('body'); ctx.renderNutrition = () => renders.push('nutrition');
   const actualFunction = html.split('\n').find(line => line.includes('async function refreshSectionRange('));
   assert.ok(actualFunction, 'Exercise actual existing Web refreshSectionRange implementation');
@@ -546,11 +962,11 @@ test('actual nutrition render and daily rows distinguish all missing, explicit z
   }
 });
 
-test('meals explicitly excluded from totals remain visible without poisoning confirmed daily totals',()=>{
+test('meals explicitly excluded from totals remain visible but do not poison confirmed daily totals',()=>{
  const ctx=harness(()=>{});vm.runInContext(html.split('\n').find(line=>line.includes('function dailyNutritionRows(')),ctx);
  const rows=[{date:'2026-09-13',userConfirmed:true,includedInTotals:true,nutritionCompleteness:'COMPLETE',calories:200,protein:20,carbs:20,fat:5},{date:'2026-09-13',userConfirmed:true,includedInTotals:false,nutritionCompleteness:'INCOMPLETE',calories:null,protein:null,carbs:null,fat:null}];
  const totals=ctx.dailyNutritionRows(rows)[0];assert.deepEqual(plain(totals),{date:'2026-09-13',calories:200,protein:20,carbs:20,fat:5});
- assert.equal(rows.length,2);
+ assert.equal(HealthCoreUX.visibleMeals(rows).length,2);
  assert.equal(ctx.localManualTotal([rows[0]],'calories'),200);
 });
 
@@ -565,7 +981,8 @@ for (const kind of ['body', 'meal']) {
     const ctx = harness(async (_url, init) => {
       const request = JSON.parse(init.body); requests.push(request);
       if (request.action === readAction) return await new Promise(resolve => pending.push(resolve));
-      return { ok: true, json: async () => ({ ok: true, data: { record: { [idKey]: id, revision: 3 }, recordId: id, status: 'SAVED' } }) };
+       const data=kind==='meal'?{record:{mealRecordId:id,date:'2026-09-13',revision:3},recordId:id,status:'SAVED',operation:'UPSERT',deleted:false}:{record:{recordId:id,date:'2026-09-13',weight:71,revision:3},recordId:id,status:'SAVED',deleted:false};
+       return { ok: true, json: async () => ({ ok: true, data }) };
     });
     const oldRead = ctx.localEngineRequest(readAction, { date: '2026-09-13' });
     const newRead = ctx.localEngineRequest(readAction, { date: '2026-09-13' });
@@ -587,8 +1004,8 @@ for (const kind of ['body', 'meal']) {
         return { ok: true, json: async () => ({ ok: true, data: [record] }) };
       }
       assert.equal(request.action, deleteAction);
-      // Actual meal deletion has no deleted:true field; only body does.
-      return { ok: true, json: async () => ({ ok: true, data: { record: { ...record, revision: 3 }, recordId: id, status: kind === 'body' ? 'SAVED' : 'QUEUED', ...(kind === 'body' ? { deleted: true } : {}) } }) };
+       const data=kind==='meal'?{record:{...record,revision:3},recordId:id,status:'QUEUED',operation:'DELETE',deleted:true}:{record:{...record,revision:3},recordId:id,status:'SAVED',deleted:true};
+       return { ok: true, json: async () => ({ ok: true, data }) };
     });
     await ctx.localEngineRequest(readAction, { date: '2026-09-13' });
     const late = ctx.localEngineRequest(readAction, { date: '2026-09-13' });

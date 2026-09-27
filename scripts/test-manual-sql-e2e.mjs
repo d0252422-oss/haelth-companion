@@ -38,7 +38,7 @@ const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'n
 const shift = n => new Date(Date.parse(day) + n * 86400000).toISOString().slice(0, 10);
 const gitRead = args => execFileSync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'diff.autoRefreshIndex=false', ...args], { encoding: 'utf8', timeout: 15000 }).trim();
 const report = { source_revision: gitRead(['rev-parse', 'HEAD']), working_tree: gitRead(['status', '--short']), command: 'node scripts/test-manual-sql-e2e.mjs --implementation-ready', started_at: now(), runtime_classification: 'LOCAL_DENO_NATIVE_POSTGRES_SYNTHETIC_SIGNED_AUTH_NOT_EDGE_OR_GOOGLE_OAUTH', synthetic_only: true, mocks: { api: false, engine: false, persistence: false, authorization: false }, source_hashes: {}, steps: [], http: [], console: [], page_errors: [], blocked_external_requests: [], dialogs: [], errors: [], tools: { node: process.version, playwright: requireInstalled('playwright/package.json').version, browser_executable: browserPath, deno_cache: process.env.DENO_DIR }, gates: [] };
-for (const file of ['index.html', 'scripts/local-engine-web.js', 'scripts/local-engine-server.ts', 'scripts/local-engine-auth.ts', 'fixtures/engine-local-identities.json', 'supabase/functions/mobile-health-beta/index.ts', 'supabase/functions/mobile-health-beta/local-engine-runtime.ts', 'supabase/functions/mobile-health-beta/manual-body-local.ts', 'supabase/functions/mobile-health-beta/engine-portable.ts', 'scripts/test-manual-sql-e2e.mjs', 'config/engine-local.deno.json', 'config/engine-local.deno.lock', 'package-lock.json']) report.source_hashes[file] = hash(await readFile(file));
+for (const file of ['index.html', 'scripts/build-version.js', 'scripts/core-ux-contract.js', 'scripts/local-engine-web.js', 'scripts/local-engine-server.ts', 'scripts/local-engine-auth.ts', 'fixtures/engine-local-identities.json', 'supabase/functions/mobile-health-beta/index.ts', 'supabase/functions/mobile-health-beta/local-engine-runtime.ts', 'supabase/functions/mobile-health-beta/manual-body-local.ts', 'supabase/functions/mobile-health-beta/engine-portable.ts', 'scripts/test-manual-sql-e2e.mjs', 'config/engine-local.deno.json', 'config/engine-local.deno.lock', 'package-lock.json']) report.source_hashes[file] = hash(await readFile(file));
 for (const file of (await readdir('supabase/migrations')).filter(name => name.endsWith('.sql')).sort()) report.source_hashes['supabase/migrations/' + file] = hash(await readFile('supabase/migrations/' + file));
 for (const file of ['supabase/functions/mobile-health-beta/manual-training-local.ts','supabase/functions/mobile-health-beta/local-manual-bootstrap.ts','supabase/functions/mobile-health-beta/manual-web-identity.ts','supabase/functions/mobile-health-beta/bounded-auth-fetch.ts','scripts/exercise-release-gates.mjs','scripts/check-manual-web-revocation.ts']) report.source_hashes[file]=hash(await readFile(file));
 report.source_hashes['supabase/functions/mobile-health-beta/manual-daily-read.ts']=hash(await readFile('supabase/functions/mobile-health-beta/manual-daily-read.ts'));
@@ -124,7 +124,7 @@ async function bodyScreen(p) {
 async function weightEditor(p, date = day) {
   await p.locator('#quick-open').click(); await p.locator('.quick-option[data-action="weight"]').click(); await p.locator('#weight-form').waitFor({ state: 'visible' });
   if (date !== day) { await p.locator('#weight-date').fill(date); await p.locator('#weight-date').dispatchEvent('change'); }
-  await p.waitForFunction(() => !document.getElementById('weight-date-note').textContent.includes('載入紀錄中'));
+  await p.waitForFunction(() => document.getElementById('weight-form')?.dataset.lookupState === 'ready' && !document.getElementById('weight-save')?.disabled);
 }
 async function expectedDialog(p, kind, action, expectedId) {
   const idField = kind === 'body' ? '#weight-record-id' : '#meal-record-id', button = kind === 'body' ? '#weight-delete' : '#meal-delete';
@@ -275,8 +275,9 @@ try {
   await gate('browser_nutrition_history_crud', async () => {
     const date = shift(-40), food = 'MANUAL SQL SYNTHETIC LABEL ' + runId.slice(0, 8);
     ({ context, page } = await browserContext('A')); await customRange(page, date, date); await page.locator('.mobile-nav-btn[data-screen="records-center"]').click(); await page.locator('#add-meal').click();
-    await page.locator('#meal-date').fill(date); await page.locator('#meal-food').fill(food); await page.locator('#meal-time').fill('12:00'); await page.locator('#meal-label-mode').check(); await page.locator('#meal-weight-grams').fill('150'); await page.locator('#meal-reference-source').fill('SYNTHETIC LABEL v1; arithmetic only');
+    await page.locator('#meal-date').fill(date); await page.locator('#meal-food').fill(food); await page.locator('#meal-time').fill('12:00'); await page.locator('#meal-label-details').evaluate(node => { node.open = true; }); await page.locator('#meal-label-mode').check(); await page.locator('#meal-weight-grams').fill('150'); await page.locator('#meal-reference-source').fill('SYNTHETIC LABEL v1; arithmetic only');
     for (const [name, value] of Object.entries({ calories: 200, protein: 10, carbs: 20, fat: 5 })) await page.locator('#meal-' + name).fill(String(value));
+    await page.locator('#meal-review-confirmed').check();
     await page.locator('#meal-save').click(); await page.locator('#meal-form').waitFor({ state: 'hidden' });
     let row = await until(async () => (await meals()).find(r => r.body.foodName === food), 'historical-meal-created'); const id = row.meal_id;
     assert.equal(row.body.calories, 300); assert.equal(row.body.date, date); assert.equal(row.body.userConfirmed, true);
@@ -311,6 +312,7 @@ try {
     for(const [label,calories,protein]of[['UNKNOWN',null,null],['EXPLICIT ZERO',0,12.5]]){
       const food='SYNTHETIC '+label+' '+runId.slice(0,8);await page.locator('#add-meal').click();await page.locator('#meal-date').fill(date);await page.locator('#meal-food').fill(food);
       if(calories!==null)await page.locator('#meal-calories').fill(String(calories));if(protein!==null)await page.locator('#meal-protein').fill(String(protein));
+      await page.locator('#meal-review-confirmed').check();
       await page.locator('#meal-save').click();await page.locator('#meal-form').waitFor({state:'hidden'});
       const row=await until(async()=> (await meals()).find(r=>r.body.foodName===food),'incomplete meal persisted');
       assert.equal(row.body.calories,calories);assert.equal(row.body.protein,protein);assert.equal(row.body.carbs,null);assert.equal(row.body.fat,null);
@@ -362,8 +364,9 @@ try {
       await pg.admin`select public.beta_ingest_health_mutation(${subjects.A.canonical},'android',${domain},'synthetic-non-device',${id},1,${now()},${fingerprint},'UPSERT',${fingerprint},${pg.admin.json(canonical)},array[${date}::date])`;
     }
     const cookie=await loginCookie('A',account.startsWith('WEB')?{kind:'web'}:{});assert.equal((await http(cookie,'refreshDerivedData',{recordType:'nutrition',date})).ok,true);
-    const visit=async(who,section)=>{
+    const visit=async(who,section,beforeRead=null)=>{
       ({context,page}=await browserContext(who));await page.setViewportSize({width:1280,height:900});await customRange(page,date,date);
+      if(beforeRead)await beforeRead();
       const action=section==='sleep'?'getSleepRecords':'getActivityRecords';
       const response=page.waitForResponse(r=>r.url().endsWith('/v1/engine/web')&&r.request().postDataJSON()?.action===action);
       await page.locator(`.side-btn[data-screen="${section}-screen"]`).click();const result=await(await response).json();assert.equal(result.ok,true);return result.data;
@@ -373,10 +376,9 @@ try {
     const activity=await visit(account,'activity');assert.equal(activity[0].steps,0);assert.equal(activity[0].activeMinutes,null);assert.equal(activity[0].activeCalories,null);assert.equal(activity[0].totalCalories,null);
     await until(async()=>await page.locator('#activity-steps').textContent()==='0','activity-zero');await page.screenshot({path:path.join(evidence,'sql-daily-activity.png')});
     assert.ok((await visit(other,'sleep')).every(r=>r.totalSleepMinutes===null));assert.notEqual(await page.locator('#sleep-last').textContent(),'8 hr');
-    await pg.admin`update private.beta_score_recompute_queue set engine_published_generation=0 where canonical_user_id=${subjects.A.canonical} and score_date=${date}`;
-    const stale=await visit(account,'activity');assert.equal(stale[0].dataStatus,'STALE');assert.equal(stale[0].steps,null);
-    await until(async()=>/結果待更新/.test(await page.locator('#activity-steps-note').textContent()),'stale-notice');
-    report.daily_read={seed:'SYNTHETIC_NATIVE_CONTRACT_NOT_DEVICE_DATA',real_SQL_and_published_engine:true,new_browser_contexts:true,legacy_sleep_score_mapping:'NOT_CONNECTED',energy_active_total_mapping:'NOT_CONNECTED',stale_values:'SUPPRESSED'};
+    const stale=await visit(account,'activity',()=>pg.admin`update private.beta_score_recompute_queue set engine_published_generation=0 where canonical_user_id=${subjects.A.canonical} and score_date=${date}`);assert.equal(stale[0].dataStatus,'CURRENT');assert.equal(stale[0].analysisDataStatus,'STALE');assert.equal(stale[0].analysisStaleReason,'PUBLICATION_GENERATION_NOT_VERIFIED');assert.equal(stale[0].steps,0);assert.equal(stale[0].source,'SQL_CANONICAL_AUTOMATIC_FALLBACK');
+    await until(async()=>/自動／分析資料待更新/.test(await page.locator('#activity-steps-note').textContent()),'stale-notice');
+    report.daily_read={seed:'SYNTHETIC_NATIVE_CONTRACT_NOT_DEVICE_DATA',real_SQL_and_published_engine:true,new_browser_contexts:true,legacy_sleep_score_mapping:'NOT_CONNECTED',energy_active_total_mapping:'NOT_CONNECTED',raw_canonical_values:'PRESERVED_WHILE_ANALYSIS_STALE'};
   });
   if(releaseExercise)await (await import('./manual-ux-browser-gates.mjs')).runManualUxGates({pg,subjects,gate,http,loginCookie,browserContext,until,record,evidence,day,shift,base,report,customRange,weightEditor,bodyScreen,setPage:value=>{page=value;}});
   await (await import('./manual-observation-pg-gates.mjs')).runManualObservationPgGates({pg,subjects,gate,http,loginCookie,day,shift,until,report});

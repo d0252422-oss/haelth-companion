@@ -78,6 +78,10 @@ async function setup(name: string) {
       return {lease,jobs};
     };
     const current = async () => {
+      // Manual mutations are commit-first. Derived publication is deliberately
+      // non-blocking, so acceptance explicitly drains before asserting the
+      // final generation instead of requiring the write response to wait.
+      await runtime.drain(canonical);
       const value = await state();
       assert.ok(value.queue.length > 0);
       assert.ok(value.queue.every((q: Json) => q.status === 'COMPLETE' && BigInt(q.generation) > 0n && q.generation === q.engine_published_generation));
@@ -102,7 +106,7 @@ Deno.test('actual PG observation: full-day steps publish current frozen/portable
     const rows = await c.api('getManualObservations',{date:day,domain:'steps'});
     assert.equal(rows.length,1); assert.equal(rows[0].recordId,saved.recordId);
     assert.equal(rows[0].source,'manual'); assert.equal(rows[0].sourceQuality,'UNKNOWN');
-    assert.equal(rows[0].analysisStatus,'COMPUTED'); assert.equal(rows[0].analysisJobScheduled,false);
+    assert.equal(rows[0].analysisStatus,'ANALYSIS_PENDING'); assert.equal(rows[0].analysisJobScheduled,true);
     const published = await c.current();
     assert.equal(published.queue.length,1); assert.equal(published.heads.length,7); assert.equal(published.scores.length,8);
     const frozen = scoreRow(published.scores,'activity');
@@ -171,7 +175,7 @@ Deno.test('actual PG observation: tombstone clears scores and receipt replay can
   } finally {await c.close();}
 });
 
-Deno.test('actual PG observation: duration-only sleep feeds existing duration score without fabricated portable interval',async()=>{
+Deno.test('actual PG observation: duration-only sleep publishes existing frozen duration score without fabricating portable interval',async()=>{
   const c = await setup('sleep-duration-and-timed');
   try {
     const saved = await c.api('upsertManualObservation',observation('sleep',420));

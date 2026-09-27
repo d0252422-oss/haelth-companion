@@ -4,7 +4,7 @@ import {pathToFileURL,fileURLToPath} from 'node:url';import assert from 'node:as
 import {assertDDirectory} from './beta-cutover-driver.mjs';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),output=process.argv[2];
 assertDDirectory(path.dirname(output));await fs.mkdir(output,{recursive:false});
-const allowed=new Set(['/index.html','/scripts/local-engine-web.js','/scripts/manual-observation-web.js','/scripts/web-view-state.js','/scripts/manual-sql-config.js']);
+const allowed=new Set(['/index.html','/build.json','/scripts/build-version.js','/scripts/core-ux-contract.js','/scripts/local-engine-web.js','/scripts/manual-observation-web.js','/scripts/web-view-state.js','/scripts/manual-sql-config.js']);
 const server=http.createServer(async(req,res)=>{const p=new URL(req.url,'http://localhost').pathname,name=p==='/'?'/index.html':p;if(!allowed.has(name)){res.writeHead(404);return res.end();}try{res.setHeader('Content-Type',name.endsWith('.html')?'text/html; charset=utf-8':'application/javascript');res.end(await fs.readFile(path.join(repo,name.slice(1))));}catch{res.writeHead(500);res.end();}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
 const report={status:'RUNNING',kind:'LOCAL_UI_FIXTURE_ONLY',cases:[],remote_requests:0,sql_auth:'NOT_TESTED'};let browser;
@@ -31,8 +31,9 @@ try{
   await page.locator('#quick-open').click();await page.waitForFunction(()=>document.getElementById('sheet-backdrop').contains(document.activeElement));
   await page.evaluate(()=>openSheet('weight-form'));await overflow('manual-form');
   await page.evaluate(()=>{apiService.getBodyRecords=()=>new Promise(resolve=>window.__resolveWeightFixture=resolve);document.getElementById('weight-date').value=getLocalDateString();window.__pendingWeightFixture=loadWeightFormDate(getLocalDateString());});
-  assert.equal(await page.locator('#weight-save').isDisabled(),true);
-  await page.evaluate(async()=>{window.__resolveWeightFixture([]);await window.__pendingWeightFixture;});assert.equal(await page.locator('#weight-save').isDisabled(),false);assert.equal(await page.locator('#weight-record-id').inputValue(),'');
+  assert.equal(await page.locator('#weight-input').isDisabled(),false);assert.equal(await page.locator('#fat-input').isDisabled(),false);assert.equal(await page.locator('#weight-save').isDisabled(),true);
+  await page.locator('#weight-input').fill('64.5');
+  await page.evaluate(async()=>{window.__resolveWeightFixture([]);await window.__pendingWeightFixture;});assert.equal(await page.locator('#weight-save').isDisabled(),false);assert.equal(await page.locator('#weight-record-id').inputValue(),'');assert.equal(await page.locator('#weight-input').inputValue(),'64.5');
   await page.evaluate(async()=>{apiService.getBodyRecords=async()=>{throw Error('Synthetic local read unavailable');};document.getElementById('weight-date').value=getLocalDateString();await loadWeightFormDate(getLocalDateString());});
   assert.equal(await page.locator('#weight-save').isDisabled(),true);await page.locator('#weight-load-retry').waitFor({state:'visible'});
   await page.screenshot({path:path.join(output,`${width}-${theme}-error.png`)});

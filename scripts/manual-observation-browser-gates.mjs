@@ -31,7 +31,7 @@ export async function runManualObservationBrowserGates(h) {
   const endpoint = base + '/v1/engine/web';
   const proof = report.manual_observation_browser = {
     classification: report.actual_edge?'EXISTING_BROWSER_ACTUAL_EDGE_POSTGRES_SYNTHETIC_AUTH_NOT_DEVICE':'EXISTING_BROWSER_REAL_HTTP_POSTGRES_SYNTHETIC_AUTH_NOT_EDGE_OR_DEVICE',
-    dates: {cumulative: shift(-10), duration: shift(-11), timed: shift(-12), timedStart: shift(-13), raceOld: shift(-14), raceNew: shift(-15), responseLoss: shift(-16)},
+    dates: {cumulative: shift(-10), duration: shift(-11), timed: shift(-12), timedStart: shift(-13), raceOld: shift(-14), raceNew: shift(-15), responseLoss: shift(-16), energyOnly: shift(-17)},
     mutations: 'ORIGINAL_QUICK_FORM_AND_RECORD_EDIT_DELETE_CONTROLS',
     mocks: {engine: false, persistence: false, authorization: false, response_data: false},
     assertions: [], barriers: [],
@@ -86,7 +86,7 @@ export async function runManualObservationBrowserGates(h) {
   }
   async function showRecords(p, section, first, last = first) {
     await p.locator('.mobile-nav-btn[data-screen="dashboard-screen"]').click();
-    await p.locator(`${section==='activity'?'.score-domain':'.kpi-card'}[data-target="${section}-screen"]`).click();
+    await p.locator(`${['activity','sleep'].includes(section)?'.score-domain':'.kpi-card'}[data-target="${section}-screen"]`).click();
     await customRange(p, first, last);
     await until(async () => {
       const state = await p.locator('#' + section + '-screen').getAttribute('data-read-state');
@@ -145,7 +145,7 @@ export async function runManualObservationBrowserGates(h) {
         await p.locator('#sheet-backdrop').waitFor({state:'hidden'});
         assert.equal(p.url(), beforeBack, 'Android/browser back closes Quick Add without navigating away');
       }
-      await p.locator('#quick-open').click();await p.locator('[data-observation-add="sleep"]').click();
+      await p.locator('#quick-open').click();await p.locator('.quick-option[data-observation-add="sleep"]').click();
       const wakeDate = proof.dates.duration, startDate = shift(-12);
       await p.locator('#observation-date').fill(wakeDate);await p.locator('#observation-date').dispatchEvent('change');
       await p.locator('#observation-start').fill(startDate+'T23:30');await p.locator('#observation-end').fill(wakeDate+'T07:10');
@@ -216,6 +216,40 @@ export async function runManualObservationBrowserGates(h) {
     await card(restarted, first.record_id).waitFor({state: 'visible'});
     await restarted.screenshot({path: path.join(evidence, 'observation-cumulative-zero-persistence.png'), fullPage: true});
     proof.assertions.push({gate: 'cumulative_zero_isolation', date, steps: 8000, totalEnergy: 0, sleep: null, revision: 2, same_record: true, fresh_browser_context: true, different_canonical_users: true});
+  });
+
+  await gate('manual_activity_pair_energy_only_does_not_create_steps', async () => {
+    const date = proof.dates.energyOnly, {page: p} = await browser('A'), mutationDomains = [];
+    assert.equal((await live(A, date)).length, 0, 'reserved energy-only fixture date must be empty');
+    const observeRequest = request => {
+      if (request.url() !== endpoint) return;
+      const input = request.postDataJSON();
+      if (input?.action === 'upsertManualObservation') mutationDomains.push(input.payload?.domain);
+    };
+    p.on('request', observeRequest);
+    try {
+      await p.locator('#quick-open').click();
+      await p.locator('.quick-option[data-action="activitypair"]').click();
+      await p.locator('#activity-pair-form').waitFor({state: 'visible'});
+      await p.locator('#activity-pair-date').fill(date);
+      await p.locator('#activity-pair-date').dispatchEvent('change');
+      await until(() => p.locator('#activity-pair-save').isEnabled(), 'energy-only activity pair date read');
+      assert.equal(await p.locator('#activity-pair-steps').inputValue(), '');
+      await p.locator('#activity-pair-energy').fill('2180');
+      await p.locator('#activity-pair-save').click();
+      await sheetClosed(p);
+    } finally {p.off('request', observeRequest);}
+    assert.deepEqual(mutationDomains, ['total_energy'], 'blank steps must not create or update a steps row');
+    const rows = await live(A, date);
+    assert.equal(rows.length, 1);assert.equal(rows[0].domain, 'total_energy');assert.equal(rows[0].body.value, 2180);
+    assert.equal((await live(A, date, 'steps')).length, 0);
+    const {page: restarted} = await browser('A');
+    await showRecords(restarted, 'activity', date);
+    const cards = restarted.locator('#activity-manual-records [data-observation-id]');
+    assert.equal(await cards.count(), 1);
+    const text = await cards.first().innerText();
+    assert.match(text, /總消耗熱量 2180 kcal/u);assert.doesNotMatch(text, /步數/u);
+    proof.assertions.push({gate: 'merged_activity_energy_only', date, total_energy: 2180, steps_rows: 0, requests: mutationDomains, fresh_browser_context: true});
   });
 
   await gate('manual_observation_browser_sleep_duration_cross_midnight_sessions_edit_delete', async () => {

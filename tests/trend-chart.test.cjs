@@ -108,7 +108,7 @@ assert.match(html, /renderExerciseOptions\(groupSelect\.value\)/);
 assert.match(html, /id="workout-date"/);
 assert.match(html, /id="workout-edit-form"/);
 assert.match(html, /updateWorkoutSet:data=>apiPost\("updateWorkoutSet",data\)/);
-assert.match(html, /deleteWorkoutSet:recordId=>apiPost\("deleteWorkoutSet",\{recordId\}\)/);
+assert.match(html, /deleteWorkoutSet:data=>apiPost\("deleteWorkoutSet",typeof data==="string"\?\{recordId:data\}:data\)/);
 assert.match(html, /class="workout-edit-button secondary-button"/);
 assert.match(html, /date:workoutDate/);
 assert.match(html, /查看較舊資料/);
@@ -129,6 +129,7 @@ const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .find(value => value.trim());
 // Match the existing page's shared external script dependency before its inline app.
+vm.runInContext(fs.readFileSync('scripts/core-ux-contract.js','utf8'), context, { filename:'core-ux-contract.js' });
 vm.runInContext(fs.readFileSync('scripts/local-engine-web.js','utf8'), context, { filename:'local-engine-web.js' });
 vm.runInContext(fs.readFileSync('scripts/web-view-state.js','utf8'), context, { filename:'web-view-state.js' });
 vm.runInContext(fs.readFileSync('scripts/manual-observation-web.js','utf8'), context, { filename:'manual-observation-web.js' });
@@ -155,13 +156,15 @@ assert.strictEqual((new Date(`${sevenDayRange.endDate}T12:00:00Z`) - new Date(`$
 assert.deepStrictEqual(JSON.parse(JSON.stringify(evaluate('resolveDateRange("custom",{startDate:"2026-08-01",endDate:"2026-08-12"})'))), { startDate: '2026-08-01', endDate: '2026-08-12' });
 
 const timeline = evaluate(`normalizeHealthTimeline({timeline:[
-  {date:"2026-08-14",weight:86.5,bodyFatPercentage:28,sleepHours:null,trainingSets:0,caloriesIntake:null},
-  {date:"2026-08-15",weight:86.4,bodyFatPercentage:28.5,sleepHours:7.5,trainingSets:12,caloriesIntake:1900}
+  {date:"2026-08-14",weight:86.5,bodyFatPercentage:28,bodySource:"MANUAL_WEB",sleepHours:null,trainingSets:0,caloriesIntake:null,fatigueIndex:17},
+  {date:"2026-08-15",weight:86.4,bodyFatPercentage:28.5,bodySource:"MANUAL_WEB",sleepHours:7.5,trainingSets:12,caloriesIntake:1900,fatigueIndex:19,fatigueScore:88}
 ]})`);
 assert.strictEqual(timeline.length, 2);
 assert.strictEqual(timeline[0].fatMass, 24.22);
 assert.strictEqual(timeline[0].trainingSets, 0);
 assert.strictEqual(timeline[0].caloriesIntake, null);
+assert.strictEqual(timeline[0].fatigueScore, 17);
+assert.strictEqual(timeline[1].fatigueScore, 19);
 context.__timeline = timeline;
 evaluate('appState.healthTimeline=__timeline;selectedHealthDate="2026-08-15";sharedTrendMetrics=["weight","sleepHours","trainingSets","caloriesIntake"];renderSharedHealthTrends(true)');
 assert.match(document.getElementById('shared-health-trends').innerHTML, /data-metric="weight"/);

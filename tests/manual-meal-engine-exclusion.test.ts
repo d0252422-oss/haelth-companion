@@ -9,6 +9,7 @@ function meal(id: string, includedInTotals: boolean, calories: number) {
     body: {
       userConfirmed: true,
       includedInTotals,
+      mealType: "午餐",
       calories,
       protein: 20,
       carbs: 40,
@@ -43,13 +44,13 @@ function meal(id: string, includedInTotals: boolean, calories: number) {
 function fakeSql(meals: ReturnType<typeof meal>[]) {
   const sql: any = (strings: TemplateStringsArray) => {
     const query = strings.join("?");
-    if (query.includes("from public.engine_meals")) {
-      assert.match(query, /select body,canonical_record/);
-      return Promise.resolve(meals);
-    }
+    if (query.includes("from public.engine_meals")) return Promise.resolve(meals);
     return Promise.resolve([]);
   };
-  sql.begin = async (...args: any[]) => await args.at(-1)(sql);
+  sql.begin = async (...args: any[]) => {
+    const callback = args.at(-1);
+    return await callback(sql);
+  };
   return sql;
 }
 
@@ -76,4 +77,24 @@ Deno.test("explicitly excluded complete meals never enter nutrition or overall e
   const withExcluded = await compute([included, excluded]);
   assert.deepEqual(withoutCalculationTime(withExcluded), withoutCalculationTime(includedOnly));
   assert.equal(withExcluded.outputs.nutrition.metrics.meal_count, 1);
+});
+
+Deno.test("legacy PostgreSQL meal timestamps normalize at the adapter boundary", async () => {
+  const canonical = meal("legacy", true, 500);
+  const legacy = structuredClone(canonical);
+  legacy.canonical_record.recorded_at = `${day}T04:00:00+00`;
+  legacy.canonical_record.updated_at = `${day} 04:01:00.123456+00`;
+  legacy.canonical_record.payload.meal_time = `${day}T04:00:00+00`;
+  const [projected] = manualMealEngineRecords([legacy]);
+  assert.equal(projected.recorded_at, `${day}T04:00:00+00:00`);
+  assert.equal(projected.updated_at, `${day}T04:01:00.123456+00:00`);
+  assert.equal(projected.payload.meal_time, `${day}T04:00:00+00:00`);
+  const output = await compute([legacy]);
+  assert.equal(output.outputs.nutrition.metrics.meal_count, 1);
+});
+
+Deno.test("malformed persisted meal timestamps still fail closed", () => {
+  const invalid = meal("invalid-time", true, 500);
+  invalid.canonical_record.updated_at = "not-a-timestamp";
+  assert.throws(() => manualMealEngineRecords([invalid]), /INVALID_MEAL_RECORD/);
 });

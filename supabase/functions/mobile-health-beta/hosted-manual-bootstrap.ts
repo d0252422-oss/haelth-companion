@@ -6,6 +6,38 @@ import {scopedManualSql} from './manual-sql-context.ts';
 import {HOSTED_DATABASE_CA} from './hosted-database-ca.ts';
 export {scopedManualSql} from './manual-sql-context.ts';
 type Env=(name:string)=>string|undefined;
+export type HostedScoreIdentityContext={webSubjectHash:string;emailHash:string};
+export function hostedScoreIdentityContext(value:unknown):HostedScoreIdentityContext{
+  const candidate=value as Partial<HostedScoreIdentityContext>|null;
+  if(!candidate||![candidate.webSubjectHash,candidate.emailHash].every(v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)))throw Error('VERIFIED_IDENTITY_CONTEXT_REQUIRED');
+  return {webSubjectHash:candidate.webSubjectHash!,emailHash:candidate.emailHash!};
+}
+
+// Native Supabase Auth and the Web verifier can represent the same verified
+// Google account with different provider subject values.  The verified email
+// hash is the existing cross-provider bridge.  Resolve the stored Web subject
+// under the non-privileged RLS context, then require the result to map to the
+// already verified canonical user before any queue row is claimed.
+export async function resolveHostedScoreIdentityContext(sql:any,canonicalUserId:string,identity:unknown):Promise<HostedScoreIdentityContext>{
+  if(!/^[0-9a-f-]{36}$/i.test(canonicalUserId))throw Error('INVALID_SCORE_SCOPE');
+  const seed=hostedScoreIdentityContext(identity);
+  return await sql.withWeb(seed,async()=>{
+    const rows=await sql.begin('isolation level repeatable read read only',(tx:any)=>tx`
+      select a.web_subject_hash,a.verified_email_hash,a.canonical_user_id,u.status
+      from private.beta_web_identity_aliases a
+      join public.users u on u.id=a.canonical_user_id
+      where a.verified_email_hash=${seed.emailHash}
+        and a.provider='google' and a.environment='beta'
+      limit 2`);
+    if(rows.length!==1||rows[0].status!=='ACTIVE'
+      ||String(rows[0].canonical_user_id).toLowerCase()!==canonicalUserId.toLowerCase()
+      ||rows[0].verified_email_hash!==seed.emailHash
+      ||typeof rows[0].web_subject_hash!=='string'||!/^[a-f0-9]{64}$/.test(rows[0].web_subject_hash)){
+      throw Error('VERIFIED_IDENTITY_CONTEXT_MISMATCH');
+    }
+    return {webSubjectHash:rows[0].web_subject_hash,emailHash:seed.emailHash};
+  });
+}
 export function validateHostedManualConfig(env:Env){
   if(env('HEALTH_MANUAL_SQL_HOSTED_ENABLED')!=='1')return null;
   const reject=()=>{throw Error('MANUAL_PROVIDER_NOT_CONFIGURED');};
@@ -42,10 +74,29 @@ async function configuredRuntime(config:NonNullable<ReturnType<typeof validateHo
 }
 // Internal only: index.ts verifies worker secret/native session before claiming.
 // No test issuer, second queue, re-claim or silent legacy fallback when enabled.
-export async function processHostedClaimedScoreJob(job:Record<string,any>,token:string){
+async function withHostedScoreIdentity<T>(canonicalUserId:string,identity:unknown,work:(runtime:LocalEngineRuntime)=>Promise<T>):Promise<T>{
+  if(!/^[0-9a-f-]{36}$/i.test(canonicalUserId))throw Error('INVALID_SCORE_SCOPE');
   const config=validateHostedManualConfig(name=>Deno.env.get(name));
   if(!config)throw Error('MANUAL_PROVIDER_DISABLED');
-  return await(await configuredRuntime(config)).processClaimedJob(job,token);
+  const runtime=await configuredRuntime(config);
+  const context=await resolveHostedScoreIdentityContext(runtime.sql,canonicalUserId,identity);
+  return await runtime.sql.withWeb(context,async()=>{
+    const [mapped]=await runtime.sql.begin('isolation level repeatable read read only',
+      (tx:any)=>tx`select private.manual_context_user()::text as canonical_user_id`);
+    if(!mapped?.canonical_user_id||String(mapped.canonical_user_id).toLowerCase()!==canonicalUserId.toLowerCase())throw Error('VERIFIED_IDENTITY_CONTEXT_MISMATCH');
+    return await work(runtime);
+  });
+}
+// Validate the server-derived Google identity before the service-role queue
+// claim. A missing/mismatched Web alias must not consume a retry attempt.
+export async function validateHostedManualScoreContext(canonicalUserId:string,identity:unknown){
+  return await withHostedScoreIdentity(canonicalUserId,identity,async()=>true);
+}
+export async function processHostedClaimedScoreJob(job:Record<string,any>,token:string,identity?:unknown){
+  const config=validateHostedManualConfig(name=>Deno.env.get(name));
+  if(!config)throw Error('MANUAL_PROVIDER_DISABLED');
+  return await withHostedScoreIdentity(String(job.canonical_user_id||''),identity,
+    runtime=>runtime.processClaimedJob(job,token));
 }
 export async function hostedManualBootstrap(request:Request):Promise<Response>{
   let config:ReturnType<typeof validateHostedManualConfig>;

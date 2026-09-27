@@ -2,7 +2,7 @@
 // No native ingestion impersonation, score fabrication, alternate storage or dual write.
 import {localReadRange, localToday, manualDate, rejectClientIdentity} from './manual-body-local.ts';
 import {manualPrivilegedRead, prepareManualRead, prepareManualWrite} from './manual-web-identity.ts';
-import {observationReadState, observationPublishedAnalysis, projectManualObservationDay, timedSleepOverlaps} from './manual-observation-projection.ts';
+import {observationAnalysisPlan, observationReadState, observationPublishedAnalysis, projectManualObservationDay, timedSleepOverlaps} from './manual-observation-projection.ts';
 type Json = Record<string, any>;
 const domains = ['sleep', 'steps', 'total_energy'];
 const maximumValues: Record<string, number> = {sleep: 1440, steps: 200000, total_energy: 30000};
@@ -10,6 +10,7 @@ const own = (o: Json, key: string) => Object.prototype.hasOwnProperty.call(o, ke
 const uuid = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const sha = async (input: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input))))).map(b => b.toString(16).padStart(2, '0')).join('');
 const dayString = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+export const storedObservationLocalDate = (value: unknown) => manualDate(dayString(value));
 const timeInTaipei = (value: string) => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(value));
 function note(value: unknown, bound: number) {
   if (value === null) return null;
@@ -80,9 +81,9 @@ export class ManualObservationsLocalStore {
       const {rows, automatic, queue, scores} = await this.rawAndAutomatic(tx, identity, range), projections = new Map<string, ReturnType<typeof projectManualObservationDay>>();
       for (const row of rows) { const date = dayString(row.local_date); if (!projections.has(date)) projections.set(date, projectManualObservationDay(rows, automatic, date)); }
       return rows.filter((r: Json) => dayString(r.local_date)>=range.start && dayString(r.local_date)<=range.end && (input.domain === undefined || r.domain === input.domain)).map((r: Json) => {
-        const date=dayString(r.local_date),projection=projections.get(date)!;
-        return {...r.body, revision:Number(r.revision),...observationReadState(r.body,projection),
-          ...observationPublishedAnalysis(r.body,projection,queue.find((q:Json)=>dayString(q.score_date)===date),scores.filter((q:Json)=>dayString(q.score_date)===date))};
+        const date=dayString(r.local_date),projection=projections.get(date)!,body={...r.body,date};
+        return {...body,revision:Number(r.revision),...observationReadState(body,projection),
+          ...observationPublishedAnalysis(body,projection,queue.find((q:Json)=>dayString(q.score_date)===date),scores.filter((q:Json)=>dayString(q.score_date)===date))};
       });
     }, true);
   }
@@ -109,30 +110,31 @@ export class ManualObservationsLocalStore {
       if (input.recordId && !old) throw Error('OBSERVATION_NOT_FOUND');
       if (old?.deleted) throw Error('OBSERVATION_DELETED');
       if (old && (!Number.isSafeInteger(input.revision) || input.revision !== Number(old.revision)) || !old && input.revision !== undefined) throw Error('STALE_REVISION');
-      const normalized = remove ? old.body : normalizeManualObservation(input, old?.body);
+      const previousDate=old?storedObservationLocalDate(old.local_date):null,previousBody=old?{...old.body,date:previousDate}:undefined;
+      const normalized = remove ? previousBody : normalizeManualObservation(input, previousBody);
       if (!remove && normalized.domain !== 'sleep') {
         const collision = await tx`select record_id from public.engine_manual_observations where canonical_user_id=${identity.canonical} and domain=${normalized.domain}
           and local_date=${normalized.date} and not deleted and record_id<>${id} limit 1`;
         if (collision.length) throw Error('OBSERVATION_DATE_CONFLICT');
       }
       const revision = old ? Number(old.revision) + 1 : 1, now = new Date().toISOString();
-      const body = {...normalized, recordId: id, revision, createdAt: old?.body.createdAt ?? now, updatedAt: now, deleted: remove};
+      const body = {...normalized, recordId: id, revision, createdAt: previousBody?.createdAt ?? now, updatedAt: now, deleted: remove};
       await tx`insert into public.engine_manual_observations(canonical_user_id,record_id,domain,local_date,timezone,source,revision,deleted,body)
         values(${identity.canonical},${id},${body.domain},${body.date},${body.timezone},'manual',${revision},${remove},${tx.json(body)})
         on conflict(canonical_user_id,record_id) do update set local_date=excluded.local_date,revision=excluded.revision,deleted=excluded.deleted,body=excluded.body,updated_at=now()`;
-      const invalidatedDates: string[] = [...new Set<string>([old?.body.date, body.date].filter(Boolean))];
-      if(body.domain==='sleep'&&(body.startedAt||old?.body.startedAt)){
-        const neighbors=await tx`select body from public.engine_manual_observations where canonical_user_id=${identity.canonical}
+      const invalidatedDates: string[] = [...new Set<string>([previousDate, body.date].filter((date): date is string=>Boolean(date)))];
+      if(body.domain==='sleep'&&(body.startedAt||previousBody?.startedAt)){
+        const neighbors=await tx`select body,local_date from public.engine_manual_observations where canonical_user_id=${identity.canonical}
           and domain='sleep' and not deleted and record_id<>${id} and
-          (local_date between ${body.date}::date-1 and ${body.date}::date+1 or local_date between ${old?.body.date??body.date}::date-1 and ${old?.body.date??body.date}::date+1) limit 5001`;
+          (local_date between ${body.date}::date-1 and ${body.date}::date+1 or local_date between ${previousDate??body.date}::date-1 and ${previousDate??body.date}::date+1) limit 5001`;
         if(neighbors.length>5000)throw Error('READ_BOUND_EXCEEDED');
-        for(const neighbor of neighbors)if(timedSleepOverlaps(body,neighbor.body)||old&&timedSleepOverlaps(old.body,neighbor.body)){
-          if(!invalidatedDates.includes(neighbor.body.date))invalidatedDates.push(neighbor.body.date);
+        for(const neighbor of neighbors){const neighborDate=storedObservationLocalDate(neighbor.local_date),neighborBody={...neighbor.body,date:neighborDate};if(timedSleepOverlaps(body,neighborBody)||previousBody&&timedSleepOverlaps(previousBody,neighborBody)){
+          if(!invalidatedDates.includes(neighborDate))invalidatedDates.push(neighborDate);
+        }
         }
       }
       const result = {record: body, recordId: id, deleted: remove, status: 'SAVED', recomputeScheduled: true,
-        invalidatedDates, analysisStatus: 'ANALYSIS_NOT_ENABLED',
-        analysisReason: 'MANUAL_OBSERVATION_SCORE_ADAPTER_NOT_CONNECTED', analysisJobScheduled: false};
+        invalidatedDates, ...observationAnalysisPlan(body)};
       await tx`insert into private.engine_observation_receipts(canonical_user_id,request_id,input_hash,response) values(${identity.canonical},${input.clientRequestId},${inputHash},${tx.json(result)})`;
       return result;
     });

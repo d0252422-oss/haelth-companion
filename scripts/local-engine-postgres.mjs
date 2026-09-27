@@ -5,6 +5,7 @@ import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import postgres from 'postgres';
 import subjects from '../fixtures/engine-local-identities.json' with {type:'json'};
+import {manualReleaseIncludesMigration} from './manual-release-migrations.mjs';
 
 export {subjects};
 export async function createLocalPostgres({port=57483,release=process.env.LOCAL_ENGINE_RELEASE||'AB',beforeMigration}={}){
@@ -36,7 +37,7 @@ export async function createLocalPostgres({port=57483,release=process.env.LOCAL_
       grant usage on schema public,auth to anon,authenticated,service_role;
       grant execute on function auth.uid() to authenticated;grant authenticated to service_role;`);
     for(const filename of (await readdir('supabase/migrations')).filter(n=>n.endsWith('.sql')).sort()){
-      if(release==='A'&&/(manual_exercise_|global_exercise_library)/.test(filename)){evidence.omitted_migrations.push(filename);continue;}
+      if(!manualReleaseIncludesMigration(filename,release)){evidence.omitted_migrations.push(filename);continue;}
       if(beforeMigration)await beforeMigration({filename,admin,evidence});
       let source=await readFile('supabase/migrations/'+filename,'utf8');
       const digest=createHash('sha256').update(source).digest('hex');

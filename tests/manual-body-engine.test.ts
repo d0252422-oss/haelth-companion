@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import {manualBodyEngineRecords} from '../supabase/functions/mobile-health-beta/manual-body-engine.ts';
 import {PortableEngineRuntime} from '../supabase/functions/mobile-health-beta/engine-portable.ts';
 import {exerciseCategory} from '../supabase/functions/mobile-health-beta/manual-training-local.ts';
+import {storedBodyLocalDate} from '../supabase/functions/mobile-health-beta/manual-body-local.ts';
 const user='11111111-1111-4111-8111-111111111111';
 const row=(date:string,weight=80,fat:number|null=20)=>({record_id:'record-'+date,revision:2,updated_at:'2026-09-13T00:00:00Z',body:{date,weight,bodyFat:fat}});
+Deno.test('body deletion uses the relational local date instead of mutable JSON body date',async()=>{
+ assert.equal(storedBodyLocalDate('2026-09-13T00:00:00Z'),'2026-09-13');
+ assert.equal(storedBodyLocalDate(new Date('2026-09-13T00:00:00Z')),'2026-09-13');
+ const source=await Deno.readTextFile(new URL('../supabase/functions/mobile-health-beta/manual-body-local.ts',import.meta.url));
+ assert.match(source,/remove \? storedBodyLocalDate\(old\.local_date\) : manualDate\(input\.date\)/u);
+});
 Deno.test('manual body adapter keeps source/units/date/revision; fat mass is same-row percentage arithmetic',()=>{
  const records=manualBodyEngineRecords([row('2026-09-13')],user);
  assert.deepEqual(records.map(r=>[r.domain,r.unit,r.value]),[['weight','kg',80],['body_fat','percent',20],['fat_mass','kg',16]]);

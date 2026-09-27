@@ -56,10 +56,11 @@ test('ingestion queues scores and durable processor performs bounded recompute',
   const dirtyDates = read('supabase/migrations/20260924131500_beta_score_recompute_old_dates_durable.sql');
   assert.match(edge, /beta_ingest_health_mutation_batch/u);
   assert.match(edge, /beta_claim_score_recompute/u);
-  assert.match(edge, /processScoreQueue\(admin, userId, 3\)/u);
+  assert.match(edge, /processScoreQueuePages\(admin, userId, identityContext\)/u);
+  assert.match(edge, /for\(let page=0;page<2;page\+\+\)[\s\S]*processScoreQueue\(admin,userId,5,identityContext\)/u);
   assert.doesNotMatch(androidIngest, /recomputeDates|recomputeBetaScore/u);
   assert.match(edge, /EdgeRuntime\.waitUntil/u);
-  assert.match(edge, /scheduleScoreRecompute\(admin, String\(session\.canonical_user_id\)\)/u);
+  assert.match(edge, /scheduleScoreRecompute\(admin, String\(session\.canonical_user_id\), scoreWorkerIdentityContext\(session\)\)/u);
   assert.match(edge, /SCORE_BACKGROUND_RECOMPUTE_FAILED/u);
   assert.match(edge, /Math\.min\(Math\.max\(Number\(body\.limit\), 1\), 5\)/u);
   assert.match(edge, /resolveCanonicalWebIdentity\(request, admin\)/u);

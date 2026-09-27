@@ -137,7 +137,13 @@ const server = Deno.serve(
         headers: { ...headers, "content-type": "text/html; charset=utf-8" },
       });
     }
-    if (["/scripts/local-engine-web.js","/scripts/web-view-state.js","/scripts/manual-observation-web.js","/scripts/manual-sql-config.js"].includes(url.pathname)) {
+    if (url.pathname === "/build.json") {
+      return new Response(
+        await Deno.readTextFile("build.json"),
+        { headers: { ...headers, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } },
+      );
+    }
+    if (["/scripts/build-version.js","/scripts/core-ux-contract.js","/scripts/local-engine-web.js","/scripts/web-view-state.js","/scripts/manual-observation-web.js","/scripts/manual-sql-config.js"].includes(url.pathname)) {
       return new Response(
         await Deno.readTextFile(url.pathname.slice(1)),
         { headers: { ...headers, "content-type": "text/javascript" } },

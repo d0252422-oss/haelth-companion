@@ -64,7 +64,7 @@ export class ManualTrainingLocalStore {
     const {start,end}=localReadRange(input);
     return await this.sql.begin(async(tx:any)=>{
       await prepareManualRead(tx,identity);
-      const rows=await tx`select s.body,s.revision,s.local_date::text as local_training_date,snapshot_part.body_part_id,
+      const rows=await tx`select s.body,s.record_id,s.exercise_id,s.session_id,s.set_order,s.revision,s.local_date::text as local_training_date,snapshot_part.body_part_id,
         snapshot_part.display_name as body_part_display_name,
         snapshot_part.canonical_key as body_part_canonical_key
         from public.manual_workout_sets s
@@ -90,11 +90,13 @@ export class ManualTrainingLocalStore {
           limit 1
         ) snapshot_part on true
         where s.canonical_user_id=${identity.canonical}
-        and not deleted and local_date between ${start}::date and ${end}::date order by local_date,record_id limit 5001`;
+        and not deleted and local_date between ${start}::date and ${end}::date
+        order by local_date,session_id,set_order nulls last,exercise_id,record_id limit 5001`;
       if(rows.length>5000)throw Error('READ_BOUND_EXCEEDED');
-      const records=rows.map((r:Json)=>({...r.body,date:r.local_training_date,bodyPartId:r.body.bodyPartId??r.body_part_id,
-        bodyPartName:r.body.bodyPartName??r.body_part_display_name,
-        bodyPartKey:r.body.bodyPartKey??r.body_part_canonical_key??null,revision:Number(r.revision)}));
+      const records=rows.map((r:Json)=>({...r.body,recordId:r.record_id,exerciseId:r.exercise_id,sessionId:r.session_id,
+        setOrder:r.set_order??null,setNumber:r.body.setNumber??null,date:r.local_training_date,bodyPartId:r.body_part_id??r.body.bodyPartId,
+        bodyPartName:r.body_part_display_name??r.body.bodyPartName,
+        bodyPartKey:r.body_part_canonical_key??r.body.bodyPartKey??null,revision:Number(r.revision)}));
       const sessions=new Map<string,number>(),trainingDates=new Set<string>(),muscles=new Map<string,Json>();
       for(const r of records){
         trainingDates.add(r.date);
@@ -239,25 +241,85 @@ export class ManualTrainingLocalStore {
           if(seen.has(exercise.exerciseId))throw Error('DUPLICATE_EXERCISE_ID');seen.add(exercise.exerciseId);
            const selected=await this.selected(tx,user,exercise.exerciseId);
           if(!Array.isArray(exercise.sets))throw Error('INVALID_WORKOUT_SET');
-          for(const set of exercise.sets){rejectClientIdentity(set);records.push({recordId:crypto.randomUUID(),sessionId,date,exerciseId:selected.exercise_id,
+          for(const [setIndex,set] of exercise.sets.entries()){rejectClientIdentity(set);const setOrder=records.length+1;records.push({recordId:crypto.randomUUID(),sessionId,date,exerciseId:selected.exercise_id,
             exerciseName:selected.alias??selected.exercise_name,muscleGroup:selected.muscle_group,bodyPartId:selected.body_part_id,
             bodyPartName:selected.body_part_display_name,bodyPartKey:selected.body_part_canonical_key??null,
-            ...setValues(set),durationMinutes,revision:1,source:'MANUAL_WEB',...analysis});}
+            ...setValues(set),setOrder,setNumber:setIndex+1,durationMinutes,revision:1,source:'MANUAL_WEB',...analysis});}
         }
         if(!records.length||records.length>200)throw Error('WORKOUT_SET_BOUND_EXCEEDED');
-        for(const body of records) await tx`insert into public.manual_workout_sets(canonical_user_id,record_id,exercise_id,session_id,local_date,revision,body)
-          values(${user},${body.recordId},${body.exerciseId},${sessionId},${date},1,${tx.json(body)})`;
+        for(const body of records) await tx`insert into public.manual_workout_sets(canonical_user_id,record_id,exercise_id,session_id,local_date,set_order,revision,body)
+          values(${user},${body.recordId},${body.exerciseId},${sessionId},${date},${body.setOrder},1,${tx.json(body)})`;
         result={records,sessionId,status:'SAVED',...analysis};
+      } else if(action==='updateWorkoutSets') {
+        if(!Array.isArray(input.updates)||!input.updates.length||input.updates.length>200)throw Error('WORKOUT_BATCH_BOUND_EXCEEDED');
+        const allowed=new Set(['recordId','revision','date','exerciseId','weight','reps']),ids=new Set<string>();
+        const patches=input.updates.map((update:Json)=>{
+          if(!update||typeof update!=='object'||Array.isArray(update))throw Error('INVALID_WORKOUT_BATCH_PATCH');
+          rejectClientIdentity(update);
+          if(Object.keys(update).some(key=>!allowed.has(key)))throw Error('INVALID_WORKOUT_BATCH_PATCH');
+          if(!uuid(update.recordId)||ids.has(update.recordId))throw Error('INVALID_WORKOUT_BATCH_PATCH');
+          ids.add(update.recordId);
+          if(!Number.isSafeInteger(update.revision)||update.revision<1)throw Error('INVALID_WORKOUT_BATCH_PATCH');
+          if(!['date','exerciseId','weight','reps'].some(key=>key in update))throw Error('INVALID_WORKOUT_BATCH_PATCH');
+          return update;
+        }).sort((a:Json,b:Json)=>a.recordId.localeCompare(b.recordId));
+        const patchById=new Map(patches.map((patch:Json)=>[patch.recordId,patch]));
+        const prepared:Json[]=[];
+        for(const patch of patches){
+          const old=(await tx`select *,local_date::text as local_training_date from public.manual_workout_sets
+            where canonical_user_id=${user} and record_id=${patch.recordId} for update`)[0];
+          if(!old)throw Error('WORKOUT_NOT_FOUND');
+          if(old.deleted)throw Error('WORKOUT_DELETED');
+          if(patch.revision!==Number(old.revision))throw Error('STALE_REVISION');
+          const date='date' in patch?manualDate(patch.date):old.local_training_date;
+          if(date>localToday())throw Error('FUTURE_WORKOUT_UNSUPPORTED');
+          const exerciseId='exerciseId' in patch?patch.exerciseId:old.exercise_id;
+          if(typeof exerciseId!=='string'||!exerciseId)throw Error('INVALID_EXERCISE_ID');
+          const exerciseChanged=exerciseId!==old.exercise_id;
+          const selected=exerciseChanged?await this.selected(tx,user,exerciseId):null;
+          const revision=Number(old.revision)+1;
+          let body={...old.body,recordId:old.record_id,sessionId:old.session_id,setOrder:old.set_order??old.body.setOrder??null,
+            date,exerciseId,revision,...setValues({...old.body,...patch})};
+          if(exerciseChanged)body={...body,exerciseName:selected.alias??selected.exercise_name,
+            muscleGroup:selected.muscle_group,bodyPartId:selected.body_part_id,
+            bodyPartName:selected.body_part_display_name,bodyPartKey:selected.body_part_canonical_key??null};
+          prepared.push({old,body,revision,date,exerciseId});
+        }
+        const sessionDateTargets=new Map<string,string>();
+        for(const item of prepared)if(item.date!==item.old.local_training_date){
+          const previous=sessionDateTargets.get(item.old.session_id);
+          if(previous&&previous!==item.date)throw Error('INCONSISTENT_SESSION_DATE');
+          sessionDateTargets.set(item.old.session_id,item.date);
+        }
+        for(const [sessionId,targetDate] of sessionDateTargets){
+          const peers=await tx`select record_id from public.manual_workout_sets
+            where canonical_user_id=${user} and session_id=${sessionId} and not deleted
+            order by record_id for update`;
+          if(peers.length>200)throw Error('WORKOUT_BATCH_BOUND_EXCEEDED');
+          for(const peer of peers){
+            const patch=patchById.get(peer.record_id);
+            if(!patch||!('date' in patch)||manualDate(patch.date)!==targetDate)throw Error('PARTIAL_SESSION_DATE_CHANGE');
+          }
+        }
+        for(const item of prepared)await tx`update public.manual_workout_sets
+          set exercise_id=${item.exerciseId},local_date=${item.date},revision=${item.revision},body=${tx.json(item.body)},updated_at=now()
+          where canonical_user_id=${user} and record_id=${item.old.record_id}`;
+        result={records:prepared.map(item=>item.body),updatedRecordIds:prepared.map(item=>item.old.record_id),status:'SAVED',
+          invalidatedDates:[...new Set(prepared.flatMap(item=>[item.old.local_training_date,item.date]))],...analysis};
       } else if(action==='updateWorkoutSet'||action==='deleteWorkoutSet') {
         if(!uuid(input.recordId))throw Error('INVALID_MUTATION_ID');
-        const old=(await tx`select * from public.manual_workout_sets where canonical_user_id=${user} and record_id=${input.recordId} for update`)[0];
+        const old=(await tx`select *,local_date::text as local_training_date from public.manual_workout_sets where canonical_user_id=${user} and record_id=${input.recordId} for update`)[0];
         if(!old)throw Error('WORKOUT_NOT_FOUND');
         if(old.deleted)throw Error('WORKOUT_DELETED');
         if(!Number.isSafeInteger(input.revision)||input.revision!==Number(old.revision))throw Error('STALE_REVISION');
         const remove=action==='deleteWorkoutSet',revision=Number(old.revision)+1;
-        let body={...old.body,revision};
+        let body={...old.body,recordId:old.record_id,sessionId:old.session_id,setOrder:old.set_order??old.body.setOrder??null,
+          date:old.local_training_date,exerciseId:old.exercise_id,revision};
         if(!remove){
           const date=manualDate(input.date);if(date>localToday())throw Error('FUTURE_WORKOUT_UNSUPPORTED');
+          if(date!==old.local_training_date&&(await tx`select 1 from public.manual_workout_sets
+            where canonical_user_id=${user} and session_id=${old.session_id} and not deleted and record_id<>${old.record_id}
+            limit 1`).length)throw Error('SESSION_DATE_REQUIRES_BATCH');
           const exerciseId=input.exerciseId??old.exercise_id;
           const selected=await this.selected(tx,user,exerciseId,exerciseId===old.exercise_id);
           body={...body,date,...setValues(input),exerciseId};
@@ -268,7 +330,7 @@ export class ManualTrainingLocalStore {
         }
         await tx`update public.manual_workout_sets set exercise_id=${body.exerciseId},local_date=${body.date},revision=${revision},deleted=${remove},body=${tx.json(body)},updated_at=now()
           where canonical_user_id=${user} and record_id=${input.recordId}`;
-        result={record:body,recordId:input.recordId,deleted:remove,status:'SAVED',invalidatedDates:[...new Set([old.body.date,body.date])],...analysis};
+        result={record:body,recordId:input.recordId,deleted:remove,status:'SAVED',invalidatedDates:[...new Set([old.local_training_date,body.date])],...analysis};
       } else throw Error('INVALID_TRAINING_ACTION');
       await tx`insert into private.manual_training_receipts values(${user},${input.clientRequestId},${hash},${tx.json(result)})`;
       return result;

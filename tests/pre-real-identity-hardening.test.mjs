@@ -9,9 +9,12 @@ test('workout completion exposes bounded save states and releases UI only after 
   for(const metric of ['workout_click_to_request_start','workout_request_to_api_response','workout_api_response_to_ui_ready','workout_background_recompute','workout_training_range_refresh'])assert.match(html,new RegExp(metric));
   assert.match(training,/manual_training_receipts/);assert.match(training,/timing:\{requestId:input\.clientRequestId,dbCommitMs:/);
   assert.match(transport,/getTrainingWriteStatus/);assert.match(transport,/workoutSession\.sqlEnvelope/);assert.match(transport,/structuredClone/);
-  const handler=html.split(/\r?\n/).find(line=>line.includes('getElementById("finish-workout").onclick='));
-  assert.ok(handler.indexOf('await apiService.addWorkoutRecord')<handler.indexOf('workoutSession=null'));
-  assert.ok(handler.indexOf('workoutSession=null')<handler.indexOf('refreshInBackground("workout-create"'));
+  const handlerStart=html.indexOf('document.getElementById("finish-workout").onclick=');
+  const handlerEnd=html.indexOf('document.querySelectorAll("[data-mode]")',handlerStart);
+  assert.ok(handlerStart>=0&&handlerEnd>handlerStart,'bounded workout completion handler not found');
+  const handler=html.slice(handlerStart,handlerEnd);
+  const write=handler.indexOf('await apiService.addWorkoutRecord'),release=handler.indexOf('workoutSession=null'),refresh=handler.indexOf('refreshInBackground("workout-create"');
+  assert.ok(write>=0&&release>write&&refresh>release,'workout durable-write, UI-release and background-refresh order drifted');
 });
 
 test('entitlement admin tooling is Beta-only, exact-canonical, secretless and read-after-write',()=>{

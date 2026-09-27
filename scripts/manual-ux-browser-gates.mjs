@@ -10,22 +10,23 @@ export async function runManualUxGates(h) {
   const home=()=>p.locator('.mobile-nav-btn[data-screen="dashboard-screen"]').click();
   for(const width of [320,360,393,430]) {
    await p.setViewportSize({width,height:900});await home();
-   for(const [selector,screen,metric] of [
-    ['.kpi-card[data-metric="weight"]','body-screen','weight'],
-    ['.kpi-card[data-metric="bodyFat"]','body-screen','bodyFat'],
-    ['.kpi-card[data-target="sleep-screen"]','sleep-screen'],
-    ['.kpi-card[data-target="training-screen"]','training-screen'],
-    ['.kpi-card[data-target="health-score-screen"]','health-score-screen']]){
+    for(const [selector,screen,metric] of [
+     ['.kpi-card[data-metric="weight"]','metric-detail-screen','weight'],
+     ['.kpi-card[data-metric="bodyFatPercentage"]','metric-detail-screen','bodyFatPercentage'],
+     ['.kpi-card[data-metric="sleepHours"]','metric-detail-screen','sleepHours'],
+     ['.kpi-card[data-target="training-screen"]','training-screen'],
+     ['.kpi-card[data-metric="healthScore"]','metric-detail-screen','healthScore']]){
      await home();const card=p.locator(selector);assert.equal(await card.getAttribute('role'),'button');await p.keyboard.press('Tab');await card.focus();
      const accessibility=await card.evaluate(el=>{const bounds=el.getBoundingClientRect(),style=getComputedStyle(el);return {width:bounds.width,height:bounds.height,outline:parseFloat(style.outlineWidth),outlineStyle:style.outlineStyle,label:el.getAttribute('aria-label')};});
      assert.ok(accessibility.width>=44&&accessibility.height>=44,`${width}px KPI touch target`);assert.ok(accessibility.label);assert.ok(accessibility.outline>=2&&accessibility.outlineStyle!=='none',`${width}px KPI focus-visible`);
      await p.keyboard.press('Enter');
-     await p.locator('#'+screen+'.active').waitFor();if(metric)assert.equal(await p.locator('#body-metric-select').inputValue(),metric);
+      await p.locator('#'+screen+'.active').waitFor();if(metric)assert.equal(new URL(p.url()).searchParams.get('metric'),metric);
      if(screen==='training-screen')assert.equal(await p.locator('#training-screen').getAttribute('data-training-view'),'overview');
      assert.equal(await p.locator('#'+screen).evaluate(el=>el.getBoundingClientRect().height>80),true);
     }
    await home();await p.locator('.mobile-nav-btn[data-screen="records-center"]').click();
-   await p.locator('#nutrition-screen [data-record-view]').selectOption('training');await p.locator('#training-screen.active').waitFor();
+   if(await p.locator('#training-screen.active').count())await p.locator('#training-screen.active [data-record-view]').selectOption('nutrition');
+   await p.locator('#nutrition-screen.active').waitFor();await p.locator('#nutrition-screen.active [data-record-view]').selectOption('training');await p.locator('#training-screen.active').waitFor();
    await p.locator('#training-overview [data-record-view]').selectOption('nutrition');await p.locator('#nutrition-screen.active').waitFor();
    for(const mode of ['dark','light']){
     await p.locator('.mobile-nav-btn[data-screen="settings-screen"]').click();await p.locator(`[data-mode="${mode}"]`).click();await home();
@@ -59,9 +60,10 @@ export async function runManualUxGates(h) {
   let release,seen;const blocked=new Promise(resolve=>seen=resolve),barrier=new Promise(resolve=>release=resolve);
   await context.route(base+'/v1/engine/web',async route=>{const input=route.request().postDataJSON();if(input.action==='getBodyRecords'&&input.payload.startDate===d1&&input.payload.endDate===d1){const response=await route.fetch();seen();await bounded(barrier,'WEIGHT_RESPONSE_RELEASE_TIMEOUT');await route.fulfill({response});}else await route.continue();});
   await p.locator('#weight-date').fill(d1);await p.locator('#weight-date').dispatchEvent('change');await bounded(blocked,'WEIGHT_RESPONSE_BARRIER_TIMEOUT');
-  assert.equal(await p.locator('#weight-input').isDisabled(),true);await p.locator('#weight-date').fill(d2);await p.locator('#weight-date').dispatchEvent('change');
-  await until(async()=>await p.locator('#weight-input').inputValue()==='72','new date value');release();await context.unroute(base+'/v1/engine/web');
-  await until(async()=>await p.locator('#weight-save').isEnabled(),'new date ready');assert.equal(await p.locator('#weight-input').inputValue(),'72');
+  assert.equal(await p.locator('#weight-input').isDisabled(),false);assert.equal(await p.locator('#fat-input').isDisabled(),false);assert.equal(await p.locator('#weight-save').isDisabled(),true);
+  await p.locator('#weight-input').fill('64.5');release();await until(async()=>await p.locator('#weight-save').isEnabled(),'delayed date ready');assert.equal(await p.locator('#weight-input').inputValue(),'64.5','late hydration must preserve the typed draft');
+  await context.unroute(base+'/v1/engine/web');await p.locator('#weight-date').fill(d2);await p.locator('#weight-date').dispatchEvent('change');
+  await until(async()=>await p.locator('#weight-input').inputValue()==='72','new date value');await until(async()=>await p.locator('#weight-save').isEnabled(),'new date ready');assert.equal(await p.locator('#weight-input').inputValue(),'72');
   const id=await p.locator('#weight-record-id').inputValue();assert.equal((await pg.admin`select local_date::text as date from public.engine_manual_body_records where canonical_user_id=${subjects.A.canonical} and record_id=${id}`)[0].date,d2);
   // Abort the real read only, then retry through the real handler and DB.
   await context.route(base+'/v1/engine/web',route=>route.request().postDataJSON().action==='getBodyRecords'?route.abort('failed'):route.continue());

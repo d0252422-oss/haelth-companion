@@ -14,6 +14,7 @@ const labels = [...quick.matchAll(/<b(?: [^>]*)?>([^<]+)<\/b>/g)].map(match => m
 assert.match(quick, /data-ui-version="quick-add-v3"/);
 assert.deepEqual(labels, ['新增體重 / 體脂', '新增訓練', '新增飲食', '新增睡眠', '新增步數 / 總消耗', '新增身體狀態']);
 assert.equal((quick.match(/class="quick-option"/g) || []).length, 6);
+assert.deepEqual([...quick.matchAll(/data-quick-capability="([^"]+)"/g)].map(match => match[1]), ['weight', 'workout', 'meal', 'sleep', 'activitypair', 'checkin']);
 assert.doesNotMatch(quick, />新增體脂</);
 assert.doesNotMatch(quick, />新增步數</);
 assert.doesNotMatch(quick, />新增總消耗</);

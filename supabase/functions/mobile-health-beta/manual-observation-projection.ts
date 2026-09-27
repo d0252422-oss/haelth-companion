@@ -18,6 +18,18 @@ function hasAutomatic(rows: Json[], day: string, domain: ObservationDomain) {
     && (Array.isArray(row.affected_local_dates) ? row.affected_local_dates.map(dayString).includes(day) : dayString(row.local_date ?? row.date) === day));
 }
 
+// A durable queue invalidation exists for every observation mutation. The
+// existing frozen sleep score consumes the reported duration even when timing is
+// absent or differs from time-in-bed; exact timing is only required by the
+// portable interval projection below. Keep write/read status aligned with the
+// analysis that is actually published instead of claiming every queue row is a
+// domain-specific analysis job.
+export function observationAnalysisPlan(body: Json) {
+  if (body.domain === 'total_energy') return {analysisStatus: 'ANALYSIS_NOT_ENABLED', analysisReason: 'TOTAL_ENERGY_SCORE_NOT_DEFINED', analysisJobScheduled: false};
+  if (body.coverage === 'PARTIAL_DAY') return {analysisStatus: 'ANALYSIS_NOT_ENABLED', analysisReason: 'PARTIAL_DAY_NOT_FULL_DAY_SCORE', analysisJobScheduled: false};
+  return {analysisStatus: 'ANALYSIS_PENDING', analysisReason: 'DURABLE_QUEUE_PENDING', analysisJobScheduled: true};
+}
+
 export function projectManualObservationDay(rows: Json[], automaticRows: Json[], day: string) {
   const sleep = emptyMetric('minute'), steps = emptyMetric('count'), totalEnergy = emptyMetric('kcal');
   const flags: string[] = [];
@@ -53,27 +65,30 @@ export function projectManualObservationDay(rows: Json[], automaticRows: Json[],
     }
     if (!['AVAILABLE', 'MISSING', 'PARTIAL_DAY'].includes(target.status)) flags.push(`${target.status}:${domain}`);
   }
+  // Analysis is domain- and publication-specific. Do not attach one aggregate
+  // state to this mixed-domain raw projection; callers use
+  // observationPublishedAnalysis for the selected record/domain instead.
   return {date: day, timezone: 'Asia/Taipei', source: 'manual', sourceChannel: 'MANUAL_WEB', sourceQuality: 'UNKNOWN',
-    sleep, steps, totalEnergy, flags,
-    // A queued shared recomputation is not proof that these new raw-input contracts
-    // are already consumed by every legacy/portable score adapter.
-    analysisStatus: 'ANALYSIS_NOT_ENABLED', analysisReason: 'MANUAL_OBSERVATION_SCORE_ADAPTER_NOT_CONNECTED', analysisJobScheduled: false};
+    sleep, steps, totalEnergy, flags};
 }
 
 export function observationReadState(body: Json, projection: ReturnType<typeof projectManualObservationDay>) {
   const metric = body.domain === 'sleep' ? projection.sleep : body.domain === 'steps' ? projection.steps : projection.totalEnergy;
   return {reconciliationStatus: metric.status, reconciliationFlags: projection.flags.filter(flag => flag.endsWith(':' + body.domain)),
-    analysisStatus: projection.analysisStatus, analysisReason: projection.analysisReason, analysisJobScheduled: false};
+    ...observationAnalysisPlan(body)};
 }
 
 // Read actual publication/queue evidence independently of raw-record persistence.
 export function observationPublishedAnalysis(body:Json,projection:ReturnType<typeof projectManualObservationDay>,queue:Json|undefined,scores:Json[]) {
   const metric=body.domain==='sleep'?projection.sleep:body.domain==='steps'?projection.steps:projection.totalEnergy;
-  const inactive={analysisStatus:'ANALYSIS_NOT_ENABLED',analysisReason:body.domain==='total_energy'?'TOTAL_ENERGY_SCORE_NOT_DEFINED':'PARTIAL_DAY_NOT_FULL_DAY_SCORE',analysisJobScheduled:false,score:null};
-  if(body.domain==='total_energy'||body.coverage==='PARTIAL_DAY')return inactive;
+  // Read state reflects actual queue evidence, not write-time eligibility.
+  // Only DIRTY/PROCESSING proves a currently scheduled analysis job.
+  const plan=observationAnalysisPlan(body),inactive={...plan,analysisJobScheduled:false,score:null};
+  if(!plan.analysisJobScheduled)return inactive;
   if(metric.status!=='AVAILABLE')return {...inactive,analysisStatus:'INSUFFICIENT_DATA',analysisReason:metric.status};
   if(!queue)return {...inactive,analysisStatus:'ANALYSIS_UNAVAILABLE',analysisReason:'PUBLICATION_NOT_FOUND'};
   if(queue.status==='DIRTY'||queue.status==='PROCESSING')return {...inactive,analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true};
+  if(queue.status==='FAILED')return {...inactive,analysisStatus:'ERROR',analysisReason:'RECOMPUTE_FAILED',analysisJobScheduled:false};
   if(queue.status!=='COMPLETE'||Number(queue.engine_published_generation)<=0||String(queue.engine_published_generation)!==String(queue.generation))return {...inactive,analysisStatus:'ANALYSIS_UNAVAILABLE',analysisReason:'PUBLICATION_GENERATION_NOT_VERIFIED'};
   const result=scores.find(r=>r.score_type===(body.domain==='sleep'?'sleep':'activity'));
   if(!result)return {...inactive,analysisStatus:'ANALYSIS_UNAVAILABLE',analysisReason:'PUBLISHED_SCORE_NOT_FOUND'};
@@ -81,9 +96,10 @@ export function observationPublishedAnalysis(body:Json,projection:ReturnType<typ
     score:result.score===null?null:Number(result.score),algorithmVersion:result.algorithm_version};
 }
 
-// Only explicit, unambiguous FULL_DAY steps and exact timed sleep can currently
-// enter the unchanged aggregation contract. Duration-only sleep and total energy
-// remain persisted/displayable, without fabricated intervals or generic-energy mapping.
+// Only explicit, unambiguous FULL_DAY steps and exact timed sleep can enter this
+// portable interval projection. The existing frozen daily score adapter can use
+// reported sleep duration separately; total energy remains raw/displayable without
+// fabricated intervals or generic-energy mapping.
 // Caller MUST use blockedDomains to suppress conflicting same-day automatic inputs;
 // merely appending the returned records would leave a misleading automatic score.
 export function observationEngineProjection(rows: Json[], automaticRows: Json[], user: string, day: string) {

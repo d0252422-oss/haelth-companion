@@ -2,6 +2,10 @@
 // Reference: aggregation.py, nutrition.py (empty-catalog runtime), domain_engines.py.
 import "../../../fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js";
 type J = Record<string, any>;
+// One authoritative bound for the hosted loader and the pure engine. Keeping
+// a smaller legacy bound here rejected valid 28-day Health Connect histories
+// after the loader had already accepted them.
+export const CANONICAL_ENGINE_INPUT_LIMIT = 20_000;
 const frozen = (globalThis as any).HEALTH_SCORE_V1_RUNTIME;
 const nutrients = [
   "calories",
@@ -347,7 +351,10 @@ function validateMeal(input: J) {
   return m;
 }
 function recordsFor(inputs: any[], subject: string) {
-  if (!subject || !Array.isArray(inputs) || inputs.length > 5000) {
+  if (
+    !subject || !Array.isArray(inputs) ||
+    inputs.length > CANONICAL_ENGINE_INPUT_LIMIT
+  ) {
     throw Error("INVALID_CANONICAL_INPUTS");
   }
   const map = new Map<string, J>();

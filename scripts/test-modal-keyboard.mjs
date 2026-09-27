@@ -5,7 +5,7 @@ const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),outpu
 assert.ok(output&&path.isAbsolute(output)&&/^D:[\\/]/i.test(output),'D_OUTPUT_REQUIRED');
 assert.ok(process.env.ENGINE_PLAYWRIGHT_MODULE,'EXISTING_PLAYWRIGHT_REQUIRED');
 await fs.mkdir(output,{recursive:false});
-const allowed=new Set(['/index.html','/scripts/local-engine-web.js','/scripts/manual-observation-web.js','/scripts/web-view-state.js','/scripts/manual-sql-config.js']);
+const allowed=new Set(['/index.html','/build.json','/scripts/build-version.js','/scripts/core-ux-contract.js','/scripts/local-engine-web.js','/scripts/manual-observation-web.js','/scripts/web-view-state.js','/scripts/manual-sql-config.js']);
 const server=http.createServer(async(req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const name=pathname==='/'?'/index.html':pathname;if(!allowed.has(name)){res.writeHead(404);return res.end();}try{res.setHeader('Content-Type',name.endsWith('.html')?'text/html; charset=utf-8':'application/javascript');res.end(await fs.readFile(path.join(repo,name.slice(1))));}catch{res.writeHead(500);res.end();}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
 let browser;const report={status:'RUNNING',classification:'LOCAL_UI_KEYBOARD_ONLY',viewport:{width:393,height:852},remote_requests:0,checks:[],external_libraries:'Lucide icon renderer stub only; external scripts/fonts blocked',api_db_auth:'NOT_TESTED'};

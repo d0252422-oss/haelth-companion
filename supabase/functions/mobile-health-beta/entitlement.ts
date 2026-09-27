@@ -6,7 +6,7 @@ export function resolveUserEntitlement(row:Row|undefined,now=new Date()):Entitle
  const status=row?.access_status||'MISSING',starts=row?.starts_at?new Date(row.starts_at):null,expires=row?.expires_at?new Date(row.expires_at):null,grace=row?.grace_until?new Date(row.grace_until):null;
  const validDates=!!starts&&!Number.isNaN(starts.valueOf())&&starts<=now&&(!expires||!Number.isNaN(expires.valueOf())&&expires>now);
  const beta=status==='BETA'&&validDates;
- let reason=beta?'ACCESS_GRANTED':status==='MISSING'?'ACCESS_NOT_GRANTED':status==='SUSPENDED'?'ACCESS_SUSPENDED':status==='REVOKED'?'ACCESS_REVOKED':status==='EXPIRED'||expires&&expires<=now?'ACCESS_EXPIRED':starts&&starts>now?'ACCESS_NOT_STARTED':'ACCESS_PLAN_NOT_ENABLED';
+ const reason=beta?'ACCESS_GRANTED':status==='MISSING'?'ACCESS_NOT_GRANTED':status==='SUSPENDED'?'ACCESS_SUSPENDED':status==='REVOKED'?'ACCESS_REVOKED':status==='EXPIRED'||expires&&expires<=now?'ACCESS_EXPIRED':starts&&starts>now?'ACCESS_NOT_STARTED':'ACCESS_PLAN_NOT_ENABLED';
  return {status,plan:row?.plan_code||null,isAllowed:beta,reason,expiresAt:expires?.toISOString()||null,graceUntil:grace?.toISOString()||null,capabilities:beta?Object.fromEntries(FULL.map(name=>[name,true])):empty()};
 }
 export async function readUserEntitlement(sql:any):Promise<Entitlement>{

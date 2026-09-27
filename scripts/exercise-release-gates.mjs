@@ -42,7 +42,13 @@ export async function runExerciseReleaseGates(h){
     const before=await pg.admin`select canonical_user_id,score_date,score_type,score,algorithm_version from public.beta_health_scores order by canonical_user_id,score_date,score_type`;
     const initial=await catalog();assert.equal(initial.some(e=>e.exerciseId==='custom-B'),false);
     const body=session('custom-A'),created=await invoke(a,'addWorkoutRecord',body);assert.equal(created.records.length,2);
+    assert.deepEqual(created.records.map(row=>row.setOrder),[1,2]);
+    const persistedOrder=await pg.admin`select set_order from public.manual_workout_sets
+      where canonical_user_id=${A} and session_id=${created.sessionId} order by set_order`;
+    assert.deepEqual(persistedOrder.map(row=>row.set_order),[1,2]);
     const replay=await invoke(a,'addWorkoutRecord',body);assert.equal(replay.replayed,true);assert.deepEqual(replay.records,created.records);
+    assert.equal((await pg.admin`select count(*)::int as n from public.manual_workout_sets
+      where canonical_user_id=${A} and session_id=${created.sessionId}`)[0].n,2);
     assert.equal((await http(a,'addWorkoutRecord',{...body,exercises:[{exerciseId:'custom-A',sets:[{weight:22,reps:2}]}]})).error,'REQUEST_ID_CONFLICT');
     await manage('custom-A','rename',{name:'SYNTHETIC A 新名稱'});
     let row=(await catalog()).find(e=>e.exerciseId==='custom-A');assert.equal(row.exerciseName,'SYNTHETIC A 新名稱');
@@ -62,15 +68,18 @@ export async function runExerciseReleaseGates(h){
     await manage('custom-A','archive');assert.equal((await http(a,'addWorkoutRecord',session('custom-A'))).error,'EXERCISE_ARCHIVED');
     await assert.rejects(()=>pg.admin.begin(async tx=>{await tx.unsafe('set local role service_role');await tx`update public.manual_exercise_catalog set owner_user_id=${B} where exercise_id='custom-A'`;}),e=>e.code==='42501');
     await assert.rejects(()=>pg.admin.begin(async tx=>{await tx.unsafe('set local role service_role');await tx`insert into public.manual_workout_sets(canonical_user_id,record_id,exercise_id,session_id,local_date,revision,body) values(${A},${randomUUID()},'custom-A',${randomUUID()},${day},1,${tx.json({source:'MANUAL_WEB'})})`;}),/EXERCISE_ARCHIVED/);
-    const old=records[0],updated=await invoke(a,'updateWorkoutSet',{recordId:old.recordId,revision:old.revision,date:shift(-1),exerciseId:'custom-A',weight:15,reps:2,clientRequestId:randomUUID()});
-    assert.equal(updated.record.exerciseName,old.exerciseName);assert.equal(updated.record.exerciseId,old.exerciseId);assert.deepEqual(updated.invalidatedDates,[day,shift(-1)]);
-    assert.equal((await invoke(a,'getWorkoutRecords',{date:day})).records.length,1);assert.equal((await invoke(a,'getWorkoutRecords',{date:shift(-1)})).records.length,1);
+    const old=records[0],updated=await invoke(a,'updateWorkoutSet',{recordId:old.recordId,revision:old.revision,date:day,exerciseId:'custom-A',weight:15,reps:2,clientRequestId:randomUUID()});
+    assert.equal(updated.record.exerciseName,old.exerciseName);assert.equal(updated.record.exerciseId,old.exerciseId);assert.equal(updated.record.setOrder,old.setOrder);assert.deepEqual(updated.invalidatedDates,[day]);
+    const beforeMove=(await invoke(a,'getWorkoutRecords',{date:day})).records;
+    const moved=await invoke(a,'updateWorkoutSets',{updates:beforeMove.map(row=>({recordId:row.recordId,revision:row.revision,date:shift(-1),exerciseId:row.exerciseId,weight:row.weight,reps:row.reps})),clientRequestId:randomUUID()});
+    assert.equal(moved.records.length,2);assert.deepEqual(moved.records.map(row=>row.setOrder).sort((x,y)=>x-y),[1,2]);assert.deepEqual(moved.invalidatedDates,[day,shift(-1)]);
+    assert.equal((await invoke(a,'getWorkoutRecords',{date:day})).records.length,0);assert.equal((await invoke(a,'getWorkoutRecords',{date:shift(-1)})).records.length,2);
     await pg.admin`update public.manual_workout_sets set body=jsonb_set(body,'{date}',to_jsonb(${day}::text),true)
       where canonical_user_id=${A} and record_id=${updated.record.recordId}`;
     const canonicalDateRead=await invoke(a,'getWorkoutRecords',{date:shift(-1)});
     assert.equal(canonicalDateRead.records.find(item=>item.recordId===updated.record.recordId)?.date,shift(-1));assert.equal(canonicalDateRead.trainingDays,1);
     assert.equal((await invoke(a,'getWorkoutRecords',{date:day})).records.some(item=>item.recordId===updated.record.recordId),false);
-    const across=await invoke(a,'getWorkoutRecords',{startDate:shift(-1),endDate:day});assert.equal(across.sessionCount,1);assert.equal(across.durationMinutes,20);assert.equal(across.trainingDays,2);
+    const across=await invoke(a,'getWorkoutRecords',{startDate:shift(-1),endDate:day});assert.equal(across.sessionCount,1);assert.equal(across.durationMinutes,20);assert.equal(across.trainingDays,1);
     assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'delete',revision:(await catalog()).find(e=>e.exerciseId==='custom-A').revision,clientRequestId:randomUUID()})).error,'EXERCISE_REFERENCED');
     await manage('custom-A','restore');
     for(const name of ['', '   ', 'x'.repeat(81), 'unsafe\u202ename'])assert.equal((await http(a,'manageExercise',{exerciseId:'custom-A',operation:'rename',name,revision:(await catalog()).find(e=>e.exerciseId==='custom-A').revision,clientRequestId:randomUUID()})).error,'INVALID_EXERCISE_NAME');
@@ -184,10 +193,10 @@ export async function runExerciseReleaseGates(h){
     await until(()=>report.http.some(r=>r.action==='getTrainingWriteStatus'&&r.response.data?.exists),'training-receipt-recovery');assert.equal(lost,true);
     await item('custom-A').locator('[data-operation="archive"]').click();await item('custom-A').locator('[data-operation="restore"]').waitFor();
     await p.locator('#start-workout').click();assert.equal(await p.locator('#exercise-select option[value="custom-A"]').count(),0);await p.locator('#back-training').click();
-    const history=(await invoke(a,'getWorkoutRecords',{date:day})).records.find(r=>r.exerciseId==='custom-A');
-    await p.locator(`.workout-edit-button[data-record-id="${history.recordId}"]`).click();assert.equal(await p.locator('#edit-workout-exercise').inputValue(),'custom-A');
+    const history=(await invoke(a,'getWorkoutRecords',{date:shift(-1)})).records.find(r=>r.exerciseId==='custom-A');
+    const historyEdit=p.locator(`.workout-edit-button[data-record-id="${history.recordId}"]`);await historyEdit.evaluate(button=>{button.closest('details').open=true;});await historyEdit.click();assert.equal(await p.locator('#edit-workout-exercise').inputValue(),'custom-A');
     await p.locator('#edit-workout-weight').fill('0');await p.locator('#edit-workout-reps').fill('12');await p.locator('#edit-workout-save').click();await p.locator('#workout-edit-form').waitFor({state:'hidden'});
-    await until(async()=>{const r=(await invoke(a,'getWorkoutRecords',{date:day})).records.find(r=>r.recordId===history.recordId);return r.weight===0&&r.reps===12&&r.exerciseName===history.exerciseName&&r.exerciseId===history.exerciseId;},'archived-history-edit');
+    await until(async()=>{const r=(await invoke(a,'getWorkoutRecords',{date:history.date})).records.find(r=>r.recordId===history.recordId);return r?.weight===0&&r.reps===12&&r.exerciseName===history.exerciseName&&r.exerciseId===history.exerciseId;},'archived-history-edit');
     // Permanent deletion remains distinct and requires the exact native confirmation.
     const confirm=async(id,answer)=>{const received=new Promise(resolve=>p.once('dialog',resolve));const clicked=item(id).locator('[data-operation="delete"]').click();const dialog=await Promise.race([received,new Promise((_,reject)=>setTimeout(()=>reject(Error('EXPECTED_EXERCISE_CONFIRM_MISSING')),5000))]);assert.equal(dialog.message(),'永久刪除此自訂動作？只有沒有任何歷史引用的項目才能刪除；無法復原。');await dialog[answer]();await clicked;report.dialogs.push({kind:'exercise-permanent-delete',id,answer});};
     await confirm('custom-A','accept');await item('custom-A').locator('.exercise-manage-result').filter({hasText:'有歷史引用'}).waitFor();
@@ -214,7 +223,7 @@ export async function runExerciseReleaseGates(h){
     await p.locator('#finish-workout').click();await p.locator('#training-overview').waitFor({state:'visible'});assert.equal(submissions.length,2);assert.deepEqual(submissions[0],submissions[1]);await p.setViewportSize({width:1280,height:900});
     const saved=await until(async()=>{const result=await invoke(a,'getWorkoutRecords',{date});return result.records.length?result:false;},'browser-workout-created');assert.equal(saved.records.length,1);assert.equal(saved.totalVolume,0);assert.equal(lost,true);
     await p.locator('#training-volume').filter({hasText:'0 kg'}).waitFor();
-    const id=saved.records[0].recordId;await p.locator(`.workout-edit-button[data-record-id="${id}"]`).click();
+    const id=saved.records[0].recordId,edit=p.locator(`.workout-edit-button[data-record-id="${id}"]`);await edit.evaluate(button=>{button.closest('details').open=true;});await edit.click();
     const dialog=new Promise(resolve=>p.once('dialog',resolve)),click=p.locator('#edit-workout-delete').click();const native=await dialog;assert.equal(native.message(),'確定刪除這一組訓練紀錄？此動作無法復原。');await native.accept();await click;await p.locator('#workout-edit-form').waitFor({state:'hidden'});
     await until(async()=>(await invoke(a,'getWorkoutRecords',{date})).records.length===0,'workout-set-tombstone');
     const retained=(await pg.admin`select deleted,body from public.manual_workout_sets where canonical_user_id=${A} and record_id=${id}`)[0];assert.equal(retained.deleted,true);assert.equal(retained.body.exerciseId,'global:barbell-back-squat');

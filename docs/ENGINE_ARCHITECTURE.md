@@ -29,10 +29,12 @@ $env:LOCAL_ENGINE_PG_BIN='D:/Dev/Evidence/health-edge-pg17-20260913-2210/pg17-to
 $env:LOCAL_ENGINE_PG_MAJOR='17'
 $env:DENO_DIR='D:/DevCache/health-companion-canonical-20260913-020110/deno'
 # Set MANUAL_SQL_EVIDENCE_DIR and MANUAL_SQL_PRIVATE_TRACE_DIR to new dedicated D paths.
-node scripts/test-manual-sql-e2e.mjs --release-exercise --edge-container
+node scripts/test-manual-sql-e2e.mjs --implementation-ready --release-exercise --edge-container
 ```
 
-This mode is `DOCKER_DIRECT_OFFICIAL_EDGE_NOT_SUPABASE_CLI_STACK`: finalAB27 PASS,
+This mode is `DOCKER_DIRECT_OFFICIAL_EDGE_NOT_SUPABASE_CLI_STACK`: the current
+release-exercise source defines 31 gates (the retained historical AB27 evidence
+is not current-source acceptance),
 no source mutation during execution. CLI2.115.0 has not served this stack. Its
 platform requires an approved patched PostgreSQL image; existing17.6 and the current
 official17.6.1.171 build do not meet the project's17.11+ rule. A fresh registry17.11

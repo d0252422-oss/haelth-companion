@@ -34,7 +34,7 @@ const report = {
   identity: 'Verified ES256 synthetic issuer -> existing canonical mapping; NOT Google OAuth',
   steps: [], console: [], http: [], page_errors: [], blocked_external_requests: [], dialogs: [], source_hashes: {},
 };
-for (const filename of ['index.html', 'scripts/local-engine-web.js', 'scripts/local-engine-server.ts', 'supabase/functions/mobile-health-beta/local-engine-runtime.ts', 'supabase/functions/mobile-health-beta/engine-portable.ts']) {
+for (const filename of ['index.html', 'scripts/build-version.js', 'scripts/core-ux-contract.js', 'scripts/local-engine-web.js', 'scripts/local-engine-server.ts', 'supabase/functions/mobile-health-beta/local-engine-runtime.ts', 'supabase/functions/mobile-health-beta/engine-portable.ts']) {
   report.source_hashes[filename] = createHash('sha256').update(await readFile(filename)).digest('hex');
 }
 const redact = text => String(text).replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED_SYNTHETIC_SESSION_JWT]');
@@ -134,10 +134,15 @@ try {
   await page.locator('.side-btn[data-screen="nutrition-screen"]').click(); await ready();
   assert.equal((await persisted()).length, 0); record('A enters existing Web with real verified local identity');
   await page.locator('#add-meal').click();
+  assert.equal(await page.locator('#meal-label-mode').isEnabled(),true);
   await page.locator('#meal-label-mode').check(); await page.locator('#meal-weight-grams').fill('150');
   await page.locator('#meal-food').fill(food); await page.locator('#meal-time').fill('12:00');
   for (const [key, value] of Object.entries({ calories: 200, protein: 10, carbs: 20, fat: 5 })) await page.locator('#meal-' + key).fill(String(value));
   assert.equal(await page.locator('#chatgpt-meal-box').isVisible(), false);
+  const writesBeforeConfirmation=report.http.filter(r=>r.action==='upsertMealRecord').length;
+  await page.locator('#meal-save').click();await page.waitForTimeout(75);
+  assert.equal(await page.locator('#meal-form').isVisible(),true);assert.equal(report.http.filter(r=>r.action==='upsertMealRecord').length,writesBeforeConfirmation);assert.equal(await page.locator('#meal-review-confirmed').evaluate(node=>node.validity.valueMissing),true);
+  await page.locator('#meal-review-confirmed').check();
   const errorResponse = page.waitForResponse(res => res.url().endsWith('/v1/engine/web') && res.request().postDataJSON()?.action === 'upsertMealRecord');
   await page.locator('#meal-save').click();
   const errorBody = await (await errorResponse).json(); assert.equal(errorBody.ok, false);
@@ -154,7 +159,7 @@ try {
   await page.reload(); await page.locator('.side-btn[data-screen="nutrition-screen"]').click(); await ready();
   assert.equal(await page.locator('#nutrition-calories').innerText(), '300 kcal'); await nutritionScore('17.6'); record('Refresh retains meal and versioned output');
   await page.locator(`[data-meal-record-id="${mealId}"]`).click();
-  assert.equal(await page.locator('#meal-calories').inputValue(), '200'); assert.equal(await page.locator('#meal-weight-grams').inputValue(), '150');
+  assert.equal(await page.locator('#meal-calories').inputValue(), '200'); assert.equal(await page.locator('#meal-weight-grams').inputValue(), '150');assert.equal(await page.locator('#meal-label-mode').isDisabled(),true);
   await page.locator('#meal-weight-grams').fill('200'); await page.locator('#meal-save').click();
   await page.locator('#meal-form').waitFor({ state: 'hidden' });
   await page.waitForFunction(() => document.getElementById('nutrition-calories').textContent === '400 kcal'); await nutritionScore('23.5');

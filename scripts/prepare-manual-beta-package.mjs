@@ -4,16 +4,20 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import vm from 'node:vm';
 import path from 'node:path';
+import {manualReleaseIncludesMigration,RELEASE_A_OMITTED_MIGRATIONS} from './manual-release-migrations.mjs';
 const output=process.argv[2],release=process.argv.includes('--release=AB')?'AB':'A';
 if(!output||!path.isAbsolute(output))throw Error('EXPLICIT_NEW_ARTIFACT_DIRECTORY_REQUIRED');
 await mkdir(output,{recursive:false});
 const backend='supabase/functions/mobile-health-beta';
-const files=['index.html','scripts/local-engine-web.js','scripts/web-view-state.js','scripts/manual-observation-web.js','scripts/manual-sql-config.js',
+const files=['index.html','build.json','scripts/build-version.js','scripts/core-ux-contract.js','scripts/local-engine-web.js','scripts/web-view-state.js','scripts/manual-observation-web.js','scripts/manual-sql-config.js',
  'config/engine-local.deno.json','config/engine-local.deno.lock',backend+'/deno.json',
  'fixtures/algorithm-golden/apps-script-health-score-v1.0.snapshot.js'];
 for(const name of await readdir(backend))if(name.endsWith('.ts'))files.push(backend+'/'+name);
-for(const name of await readdir('supabase/migrations'))if(name.endsWith('.sql')&&(release==='AB'||!/manual_exercise_(catalog_sql|category_update)/.test(name)))files.push('supabase/migrations/'+name);
-const manifest={created_at:new Date().toISOString(),source_revision:execFileSync('git',['--no-optional-locks','rev-parse','HEAD'],{encoding:'utf8'}).trim(),
+for(const name of await readdir('supabase/migrations'))if(name.endsWith('.sql')&&manualReleaseIncludesMigration(name,release))files.push('supabase/migrations/'+name);
+const sourceRevision=execFileSync('git',['--no-optional-locks','rev-parse','HEAD'],{encoding:'utf8'}).trim();
+const sourceStatus=execFileSync('git',['--no-optional-locks','status','--porcelain=v1','--untracked-files=normal'],{encoding:'utf8'}).replaceAll('\r\n','\n');
+const manifest={created_at:new Date().toISOString(),source_revision:sourceRevision,source_base_revision:sourceRevision,
+ source_worktree_state:sourceStatus.trim()?'DIRTY':'CLEAN',source_status_sha256:createHash('sha256').update(sourceStatus).digest('hex'),source_status_entry_count:sourceStatus.trim()?sourceStatus.trimEnd().split('\n').length:0,
  status:'SOURCE_PACKAGE_HOSTED_PROVIDER_IMPLEMENTED_NOT_ENABLED',release,files:[],
  candidate_entry:'https://d0252422-oss.github.io/health-companion-beta/',
  entry_evidence:'Existing Beta entry recorded in repository release docs; current remote frontend revision/artifact and login return-path NOT_VERIFIED. No new preview site is proposed.',
@@ -23,6 +27,7 @@ const manifest={created_at:new Date().toISOString(),source_revision:execFileSync
  background:{roles:['health_native_ingest','health_recompute_worker'],switch_boundary:'SQL-first rejects native ingestion/drain unless separate background config is ready; never privileged fallback',device_acceptance:'DEFERRED_NOT_INFERRED_FROM_SOURCE'},
  source_boundary:'Source deploy tree with derived single-function CLI config and effective pinned Deno config; NOT a verified CLI Edge compiled bundle',
  migration_execution:'Historical source only. Never apply this whole directory; compare the exact current Beta migration inventory and execute only the reviewed non-destructive missing subset after all preconditions PASS.',
+ omitted_migrations:release==='A'?[...RELEASE_A_OMITTED_MIGRATIONS]:[],
  calculation_dependency:'Exact unchanged frozen health-score-v1.0 executable snapshot; no fixture outputs or synthetic issuer',
  exclusions:['.env','tokens','test issuer','synthetic identity fixtures','databases','source maps','Android','private evidence','untracked deno.lock'],
  required_settings:['HEALTH_MANUAL_SQL_HOSTED_ENABLED','HEALTH_MANUAL_RELEASE','HEALTH_MANUAL_ALLOWED_ORIGIN','HEALTH_MANUAL_EXPECTED_PROJECT_REF','HEALTH_MANUAL_EXPECTED_DB_HOST','HEALTH_MANUAL_DATABASE_URL','HEALTH_BACKGROUND_SQL_ENABLED','HEALTH_NATIVE_DATABASE_URL','HEALTH_RECOMPUTE_DATABASE_URL','HEALTH_RECOMPUTE_TRIGGER_SECRET','BETA_WEB_AUTH_VERIFY_URL','Supabase SDK project configuration'],
@@ -30,8 +35,19 @@ const manifest={created_at:new Date().toISOString(),source_revision:execFileSync
  remote_operations:0};
 for(const name of files){
  const original=await readFile(name);
- const bytes=name==='scripts/manual-sql-config.js'?Buffer.from(original.toString('utf8').replace("release:'A'",`release:'${release}'`)):original,source=bytes.toString('utf8');
- if(name==='scripts/manual-sql-config.js'&&(!source.includes(`release:'${release}'`)||!source.includes('enabled:false')))throw Error('UNSAFE_PUBLIC_PACKAGE_CONFIG');
+ let bytes=original;
+ if(name==='scripts/manual-sql-config.js'){
+  const sourceContext={};
+  vm.runInNewContext(original.toString('utf8'),sourceContext,{filename:name});
+  const sourceConfig=sourceContext.HEALTH_MANUAL_SQL_CONFIG;
+  if(!sourceConfig||typeof sourceConfig!=='object')throw Error('INVALID_MANUAL_SQL_CONFIG');
+  const safeConfig={...sourceConfig,enabled:false,release};
+  bytes=Buffer.from(`globalThis.HEALTH_MANUAL_SQL_CONFIG=Object.freeze(${JSON.stringify(safeConfig)});\n`);
+  const verifyContext={};
+  vm.runInNewContext(bytes.toString('utf8'),verifyContext,{filename:name});
+  if(verifyContext.HEALTH_MANUAL_SQL_CONFIG?.release!==release||verifyContext.HEALTH_MANUAL_SQL_CONFIG?.enabled!==false)throw Error('UNSAFE_PUBLIC_PACKAGE_CONFIG');
+ }
+ const source=bytes.toString('utf8');
  if(name.endsWith('.js')&&!name.includes('fixtures/'))new vm.Script(source,{filename:name});
  if(name==='index.html')for(const [,script]of source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(script,{filename:name});
  if(name.endsWith('.ts')&&/Deno\.Command|local-engine-auth|synthetic-issuer/.test(source))throw Error('FORBIDDEN_DEPLOY_DEPENDENCY:'+name);

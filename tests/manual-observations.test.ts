@@ -1,6 +1,6 @@
 // Pure contract tests only. SQL/RLS/HTTP/Browser acceptance is a separate real-PG suite.
-import {normalizeManualObservation} from '../supabase/functions/mobile-health-beta/manual-observations-local.ts';
-import {observationEngineProjection, observationReadState, observationPublishedAnalysis, projectManualObservationDay} from '../supabase/functions/mobile-health-beta/manual-observation-projection.ts';
+import {normalizeManualObservation, storedObservationLocalDate} from '../supabase/functions/mobile-health-beta/manual-observations-local.ts';
+import {observationAnalysisPlan, observationEngineProjection, observationReadState, observationPublishedAnalysis, projectManualObservationDay} from '../supabase/functions/mobile-health-beta/manual-observation-projection.ts';
 type Json = Record<string, any>;
 function equal(actual: unknown, expected: unknown) { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`); }
 function throws(fn: () => unknown, code: string) { try { fn(); } catch (e) { if (e instanceof Error && e.message === code) return; throw e; } throw Error('Expected ' + code); }
@@ -11,19 +11,42 @@ const row = (input: Json, id = '00000000-0000-4000-8000-000000000001'): Json => 
   body: {...norm(input), recordId: id, revision: 1, updatedAt: '2026-09-13T00:00:00Z'}});
 const auto = (domain: string) => ({domain, affected_local_dates: [day], operation: 'UPSERT', invalidated_at: null});
 
+Deno.test('write response separates durable invalidation from adapter-supported analysis',()=>{
+ equal(observationAnalysisPlan(norm(base('steps',8000))),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
+ equal(observationAnalysisPlan(norm({...base('steps',6000),coverage:'PARTIAL_DAY',cutoffTime:'12:00'})),{analysisStatus:'ANALYSIS_NOT_ENABLED',analysisReason:'PARTIAL_DAY_NOT_FULL_DAY_SCORE',analysisJobScheduled:false});
+ equal(observationAnalysisPlan(norm(base('total_energy',2200))),{analysisStatus:'ANALYSIS_NOT_ENABLED',analysisReason:'TOTAL_ENERGY_SCORE_NOT_DEFINED',analysisJobScheduled:false});
+ equal(observationAnalysisPlan(norm(base('sleep',420))),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
+ equal(observationAnalysisPlan(norm({...base('sleep',420),startedAt:'2026-09-11T23:00:00+08:00',endedAt:'2026-09-12T06:00:00+08:00'})),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
+ equal(observationAnalysisPlan(norm({...base('sleep',360),startedAt:'2026-09-11T23:00:00+08:00',endedAt:'2026-09-12T06:00:00+08:00'})),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
+});
+
 Deno.test('raw observation analysis requires an actual matching publication or queued work',()=>{
  const body=norm(base('steps',8000)),projection=projectManualObservationDay([row(base('steps',8000))],[],day);
  const queue={status:'COMPLETE',generation:'4',engine_published_generation:'4'},scores=[{score_type:'activity',score:'80',status:'PARTIAL_DATA',algorithm_version:'health-score-v1.0'}];
  equal(observationPublishedAnalysis(body,projection,undefined,scores).analysisStatus,'ANALYSIS_UNAVAILABLE');
+ equal(observationPublishedAnalysis(body,projection,undefined,scores).analysisJobScheduled,false);
  equal(observationPublishedAnalysis(body,projection,{...queue,status:'DIRTY'},scores).analysisJobScheduled,true);
+ equal(observationPublishedAnalysis(body,projection,{...queue,status:'FAILED'},scores).analysisStatus,'ERROR');
+ equal(observationPublishedAnalysis(body,projection,{...queue,status:'FAILED'},scores).analysisReason,'RECOMPUTE_FAILED');
+ equal(observationPublishedAnalysis(body,projection,{...queue,status:'FAILED'},scores).analysisJobScheduled,false);
  equal(observationPublishedAnalysis(body,projection,{...queue,engine_published_generation:'3'},scores).analysisStatus,'ANALYSIS_UNAVAILABLE');
+ equal(observationPublishedAnalysis(body,projection,{...queue,engine_published_generation:'3'},scores).analysisJobScheduled,false);
+ equal(observationPublishedAnalysis(body,projection,queue,[]).analysisJobScheduled,false);
  equal(observationPublishedAnalysis(body,projection,queue,scores).score,80);
+ equal(observationPublishedAnalysis(body,projection,queue,scores).analysisJobScheduled,false);
  equal(observationPublishedAnalysis(body,projection,queue,[{...scores[0],score:null}]).analysisStatus,'INSUFFICIENT_DATA');
  equal(observationPublishedAnalysis({...body,coverage:'PARTIAL_DAY'},projection,queue,scores).analysisStatus,'ANALYSIS_NOT_ENABLED');
  equal(observationPublishedAnalysis({...body,domain:'total_energy'},projection,queue,scores).analysisStatus,'ANALYSIS_NOT_ENABLED');
  const conflict=projectManualObservationDay([row(base('steps',8000))],[auto('steps')],day);
  equal(observationPublishedAnalysis(body,conflict,queue,scores).score,null);
  equal(observationPublishedAnalysis(body,conflict,queue,scores).analysisReason,'SOURCE_CONFLICT');
+});
+Deno.test('stored relational observation date outranks stale duplicated body date',()=>{
+ equal(storedObservationLocalDate('2026-09-19'),'2026-09-19');
+ equal(storedObservationLocalDate(new Date('2026-09-19T00:00:00Z')),'2026-09-19');
+ const source=Deno.readTextFileSync('supabase/functions/mobile-health-beta/manual-observations-local.ts');
+ if(!/previousDate=old\?storedObservationLocalDate\(old\.local_date\):null,previousBody=old\?\{\.\.\.old\.body,date:previousDate\}:undefined/u.test(source))throw Error('stored local_date is not canonicalized before update/delete');
+ if(!/invalidatedDates: string\[\] = \[\.\.\.new Set<string>\(\[previousDate, body\.date\]/u.test(source))throw Error('canonical previous date is missing from invalidation');
 });
 
 Deno.test('manual observation zero is valid; blank/null/NaN/Infinity are not zero', () => {
@@ -71,7 +94,7 @@ Deno.test('duration-only sleep preserves duration without fabricated timing or s
   const projected = projectManualObservationDay([row(base('sleep', 420))], [], day);
   equal(projected.sleep.value, 420); equal(projected.sleep.status, 'AVAILABLE');
   equal(observationEngineProjection([row(base('sleep', 420))], [], 'user-a', day).records, []);
-  equal(projected.analysisJobScheduled, false); equal(projected.analysisStatus, 'ANALYSIS_NOT_ENABLED');
+  equal('analysisJobScheduled' in projected, false); equal('analysisStatus' in projected, false);
 });
 Deno.test('timed sleep supports midnight and keeps the existing wake-date contract', () => {
   const input = {...base('sleep', 420), startedAt: '2026-09-11T23:00:00+08:00', endedAt: '2026-09-12T06:00:00+08:00'};

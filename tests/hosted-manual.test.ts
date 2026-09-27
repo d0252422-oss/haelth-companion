@@ -1,6 +1,6 @@
 // Configuration/route contracts only. No remote calls and no Edge claim.
 import assert from 'node:assert/strict';
-import {validateHostedManualConfig,hostedManualBootstrap,processHostedClaimedScoreJob} from '../supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts';
+import {hostedScoreIdentityContext,resolveHostedScoreIdentityContext,validateHostedManualConfig,hostedManualBootstrap,processHostedClaimedScoreJob} from '../supabase/functions/mobile-health-beta/hosted-manual-bootstrap.ts';
 import {readManualRequest} from '../supabase/functions/mobile-health-beta/manual-request-body.ts';
 const project='a'.repeat(20),host='aws-0-test.pooler.supabase.com';
 Deno.test('manual ingress enforces byte limit and releases stalled body reader',async()=>{
@@ -10,6 +10,32 @@ Deno.test('manual ingress enforces byte limit and releases stalled body reader',
  await assert.rejects(()=>readManualRequest(new Request('https://unit.invalid',{method:'POST',body:stream}),25),/REQUEST_BODY_TIMEOUT/);assert.equal(cancelled,true);
 });
 const env:Record<string,string>={HEALTH_MANUAL_SQL_HOSTED_ENABLED:'1',HEALTH_MANUAL_RELEASE:'A',HEALTH_MANUAL_EXPECTED_PROJECT_REF:project,HEALTH_MANUAL_EXPECTED_DB_HOST:host,HEALTH_MANUAL_ALLOWED_ORIGIN:'https://synthetic.invalid',SUPABASE_URL:`https://${project}.supabase.co`,BETA_WEB_AUTH_VERIFY_URL:'https://script.google.com/macros/s/synthetic_only/exec',HEALTH_MANUAL_DATABASE_URL:`postgresql://health_manual_api.${project}:synthetic-local-unit@${host}:6543/postgres`};
+Deno.test('hosted score identity requires two bounded server-derived hashes',()=>{
+ const valid={webSubjectHash:'a'.repeat(64),emailHash:'b'.repeat(64)};
+ assert.deepEqual(hostedScoreIdentityContext(valid),valid);
+ for(const value of [null,{}, {...valid,emailHash:'raw@example.invalid'},{...valid,webSubjectHash:'A'.repeat(64)}])assert.throws(()=>hostedScoreIdentityContext(value),/VERIFIED_IDENTITY_CONTEXT_REQUIRED/);
+});
+Deno.test('hosted score identity resolves the stored Web subject by verified email and canonical owner',async()=>{
+ const native={webSubjectHash:'a'.repeat(64),emailHash:'b'.repeat(64)},webSubject='c'.repeat(64);
+ let active:typeof native|null=null,transactions=0;
+ const sql={
+  withWeb(identity:typeof native,work:()=>Promise<unknown>){active=identity;return work();},
+  begin(_options:string,work:(tx:any)=>Promise<unknown>){transactions++;assert.deepEqual(active,native);return work(async()=>[{
+   web_subject_hash:webSubject,verified_email_hash:native.emailHash,canonical_user_id:'a1b2c3d4-e5f6-4789-8abc-def012345678',status:'ACTIVE',
+  }]);},
+ };
+ assert.deepEqual(await resolveHostedScoreIdentityContext(sql,'a1b2c3d4-e5f6-4789-8abc-def012345678',native),{webSubjectHash:webSubject,emailHash:native.emailHash});
+ assert.equal(transactions,1);
+});
+Deno.test('hosted score identity rejects ambiguous, inactive, or cross-owner aliases',async()=>{
+ const native={webSubjectHash:'a'.repeat(64),emailHash:'b'.repeat(64)},valid={
+  web_subject_hash:'c'.repeat(64),verified_email_hash:native.emailHash,canonical_user_id:'a1b2c3d4-e5f6-4789-8abc-def012345678',status:'ACTIVE',
+ };
+ for(const rows of [[],[valid,valid],[{...valid,status:'DISABLED'}],[{...valid,canonical_user_id:'b1b2c3d4-e5f6-4789-8abc-def012345678'}]]){
+  const sql={withWeb(_identity:typeof native,work:()=>Promise<unknown>){return work();},begin(_options:string,work:(tx:any)=>Promise<unknown>){return work(async()=>rows);}};
+  await assert.rejects(()=>resolveHostedScoreIdentityContext(sql,valid.canonical_user_id,native),/VERIFIED_IDENTITY_CONTEXT_MISMATCH/);
+ }
+});
 Deno.test('hosted configuration default OFF and explicit project/role/TLS-origin guards',()=>{
  assert.equal(validateHostedManualConfig(()=>undefined),null);assert.equal(validateHostedManualConfig(k=>env[k])?.release,'A');
  for(const key of Object.keys(env).filter(k=>k!=='HEALTH_MANUAL_SQL_HOSTED_ENABLED'))assert.throws(()=>validateHostedManualConfig(k=>k===key?undefined:env[k]));

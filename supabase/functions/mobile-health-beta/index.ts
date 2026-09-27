@@ -1,5 +1,6 @@
 import { withSupabase } from "@supabase/server";
 import { boundedSdkFetch } from "./bounded-auth-fetch.ts";
+import { shouldRouteBackgroundMutation } from "./background-routing.ts";
 import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 import { canonicalScoreDate, scoreRecomputeStatus } from "./score-read-contract.ts";
 import { sameCanonicalUserId } from "./canonical-user-id.ts";
@@ -45,8 +46,7 @@ export default {
   fetch: withSupabase({ auth: "none", cors: "disabled", supabaseOptions:{global:{fetch:boundedSdkFetch}} }, async (request, ctx) => {
     const origin = request.headers.get("origin") ?? "";
     const workerPath=relativePath(new URL(request.url).pathname);
-    if(['/v1/health/ingestion/batches','/v1/connectors/ios-shortcut/ingest','/v1/mobile/connectors/status','/internal/score-recompute/drain'].includes(workerPath)
-      &&request.method!=='GET'&&(Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1'||Deno.env.get('HEALTH_BACKGROUND_SQL_ENABLED')==='1')){
+    if (shouldRouteBackgroundMutation(workerPath, request.method, (key) => Deno.env.get(key))) {
       return await(await import('./background-bootstrap.ts')).backgroundBootstrap(request);
     }
     // Manual Web has an independent, default-OFF provider; never uses the mobile auth callback guard.
@@ -430,15 +430,28 @@ async function reportStatus(request: Request, admin: any, origin: string): Promi
     p_permission_state: body.permission_state_if_known || "UNKNOWN",
   });
   if (error) throw databaseFailure(error);
-  if (successfulSync) scheduleScoreRecompute(admin, String(session.canonical_user_id));
+  if (successfulSync) scheduleScoreRecompute(admin, String(session.canonical_user_id), scoreWorkerIdentityContext(session));
   return json(200, { status: "RECORDED", score_recompute: successfulSync ? "QUEUED" : "NOT_QUEUED" }, origin);
 }
 
-function scheduleScoreRecompute(admin: any, userId: string): void {
-  EdgeRuntime.waitUntil(processScoreQueue(admin, userId, 3).catch(() => {
+function scheduleScoreRecompute(admin: any, userId: string, identityContext: Json | null): void {
+  EdgeRuntime.waitUntil(processScoreQueuePages(admin, userId, identityContext).catch(() => {
     // Postgres keeps the item retryable; logs intentionally exclude identity and health data.
     console.error("SCORE_BACKGROUND_RECOMPUTE_FAILED");
   }));
+}
+
+// Two bounded pages cover the seven-day real-device acceptance window without
+// turning one connector status request into an unbounded queue drain.
+async function processScoreQueuePages(admin:any,userId:string,identityContext:Json|null):Promise<Json>{
+  const total={claimed:0,completed:0,failed:0};
+  for(let page=0;page<2;page++){
+    const result=await processScoreQueue(admin,userId,5,identityContext);
+    total.claimed+=Number(result.claimed||0);total.completed+=Number(result.completed||0);total.failed+=Number(result.failed||0);
+    if(result.deferred)return {...total,deferred:result.deferred};
+    if(Number(result.claimed||0)<5)break;
+  }
+  return total;
 }
 
 async function getStatus(request: Request, admin: any, origin: string): Promise<Response> {
@@ -480,10 +493,23 @@ async function drainScoreQueue(request: Request, admin: any, origin: string): Pr
   }
   const body = await readJson(request);
   const limit = Number.isSafeInteger(body.limit) ? Math.min(Math.max(Number(body.limit), 1), 5) : 3;
-  return json(200, await processScoreQueue(admin, null, limit), origin);
+  return json(200, await processScoreQueue(admin, null, limit, null), origin);
 }
 
-async function processScoreQueue(admin: any, userId: string | null, limit: number): Promise<Json> {
+export function scoreWorkerIdentityContext(session:Json):Json|null{
+  const webSubjectHash=session?.score_worker_web_subject_hash,emailHash=session?.score_worker_email_hash;
+  return [webSubjectHash,emailHash].every(value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value))
+    ?{webSubjectHash,emailHash}:null;
+}
+
+export async function processScoreQueue(admin: any, userId: string | null, limit: number, identityContext:Json|null=null): Promise<Json> {
+  const hosted=Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1';
+  // The manual SQL role is owner-scoped by two server-verified Google hashes.
+  // Never claim first and discover afterwards that the RLS context is absent.
+  if(hosted){
+    if(!userId||!identityContext)return {claimed:0,completed:0,failed:0,deferred:'VERIFIED_IDENTITY_CONTEXT_REQUIRED'};
+    await(await import('./hosted-manual-bootstrap.ts')).validateHostedManualScoreContext(userId,identityContext);
+  }
   const workerToken = crypto.randomUUID();
   const { data, error } = await admin.rpc("beta_claim_score_recompute", {
     p_worker_token: workerToken, p_canonical_user_id: userId, p_limit: limit,
@@ -494,8 +520,8 @@ async function processScoreQueue(admin: any, userId: string | null, limit: numbe
   let failed = 0;
   for (const row of claimed as Json[]) {
     try {
-      const result = Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1'
-        ? await(await import('./hosted-manual-bootstrap.ts')).processHostedClaimedScoreJob(row,workerToken)
+      const result = hosted
+        ? await(await import('./hosted-manual-bootstrap.ts')).processHostedClaimedScoreJob(row,workerToken,identityContext!)
         : await recomputeBetaScore(admin, String(row.canonical_user_id), String(row.score_date));
       if(['SUPERSEDED','NOT_DIRTY'].includes(String(result.status)))continue; // Not our completion credit.
       if(!['PERSISTED','REPLAYED'].includes(String(result.status)))throw Error('STALE_SCORE_INPUT');
@@ -517,16 +543,32 @@ async function processScoreQueue(admin: any, userId: string | null, limit: numbe
 async function recomputeDates(admin: any, userId: string, dates: Set<string>): Promise<void> {
   if (dates.size > 31) throw failure("SCORE_RECOMPUTE_BOUND_EXCEEDED", 400);
   if(Deno.env.get('HEALTH_MANUAL_SQL_HOSTED_ENABLED')==='1'){
-    if(dates.size)await processScoreQueue(admin,userId,Math.min(dates.size,5));
+    if(dates.size)await processScoreQueue(admin,userId,Math.min(dates.size,5),null);
     return; // Remaining durable work is owned by the existing scheduled drain.
   }
   for (const date of [...dates].sort()) await recomputeBetaScore(admin, userId, date);
 }
 
-function scoreErrorCode(error: unknown): string {
+export function scoreErrorCode(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
+  const sqlState = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
   return message.includes("SCORE_INPUT_BOUND_EXCEEDED") ? "SCORE_INPUT_BOUND_EXCEEDED" :
-    message.includes("STALE_SCORE_INPUT") ? "STALE_SCORE_INPUT" : "SCORE_RECOMPUTE_FAILED";
+    message.includes("STALE_SCORE_INPUT") ? "STALE_SCORE_INPUT" :
+    message.includes("SCORE_STAGE_ENGINE_COMPUTE") ? "SCORE_STAGE_ENGINE_COMPUTE" :
+    message.includes("SCORE_STAGE_ENGINE_PUBLICATION") ? "SCORE_STAGE_ENGINE_PUBLICATION" :
+    message.includes("SCORE_STAGE_FROZEN_SCORE") ? "SCORE_STAGE_FROZEN_SCORE" :
+    message.includes("ENGINE_PUBLICATION_REQUIRED") || sqlState === "55000" ? "SCORE_PUBLICATION_GUARD" :
+    /row-level security/i.test(message) ? "SCORE_SQL_RLS_REJECTED" :
+    /permission denied/i.test(message) || sqlState === "42501" ? "SCORE_SQL_PERMISSION_DENIED" :
+    /statement timeout|transaction timeout|canceling statement/i.test(message) || sqlState === "57014" ? "SCORE_SQL_TIMEOUT" :
+    /INVALID_SCORE_BUNDLE|INVALID_SCORE_RESULT/.test(message) ? "SCORE_RESULT_CONTRACT_REJECTED" :
+    ["22P02", "42804", "42883", "42P18"].includes(sqlState) ||
+      /malformed array|operator does not exist|could not determine data type/i.test(message)
+      ? "SCORE_SQL_QUERY_CONTRACT" :
+    ["23503", "23505", "23514"].includes(sqlState) ? "SCORE_SQL_CONSTRAINT_REJECTED" :
+    "SCORE_RECOMPUTE_FAILED";
 }
 
 export async function authorizeSession(request: Request, admin: any): Promise<Json> {
@@ -537,7 +579,12 @@ export async function authorizeSession(request: Request, admin: any): Promise<Js
     if (!identity) throw failure("NATIVE_IDENTITY_NOT_LINKED", 401);
     // Native Supabase/Google bearer auth is currently an Android-only client path.
     // Bind the platform at this trusted boundary; never infer it from the upload body.
-    return { ...identity, platform: "android" };
+    return {
+      ...identity,
+      platform: "android",
+      score_worker_web_subject_hash: await sha256(String(nativeUser.google_subject)),
+      score_worker_email_hash: await sha256(String(nativeUser.auth_email)),
+    };
   }
   if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw failure("INVALID_SESSION", 401);
   const { data, error } = await admin.rpc("beta_authorize_app_session", {

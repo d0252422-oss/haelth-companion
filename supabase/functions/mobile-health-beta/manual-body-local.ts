@@ -14,6 +14,10 @@ export function manualDate(value: unknown): string {
   if (!Number.isFinite(time) || new Date(time).toISOString().slice(0, 10) !== value) throw Error("INVALID_DATE");
   return value;
 }
+export function storedBodyLocalDate(value: unknown): string {
+  const date=value instanceof Date?value.toISOString().slice(0,10):String(value??'').slice(0,10);
+  return manualDate(date);
+}
 export function localReadRange(input: Json = {}) {
   const end = manualDate(input.endDate ?? input.date ?? localToday());
   const start = manualDate(input.startDate ?? input.date ?? new Date(Date.parse(end) - 27 * 86400000).toISOString().slice(0, 10));
@@ -51,10 +55,13 @@ export class ManualBodyLocalStore {
     return await manualPrivilegedRead(this.sql,identity,async (tx: any) => {
       const analysis=await this.analysisRows(tx,identity.canonical,start,end);
       await prepareManualRead(tx,identity);
-      const rows = await tx`select body,revision from public.engine_manual_body_records
+      const rows = await tx`select body,revision,local_date::text as local_record_date from public.engine_manual_body_records
         where canonical_user_id=${identity.canonical} and not deleted and local_date between ${start}::date and ${end}::date order by local_date,record_id limit 367`;
       if (rows.length > 366) throw Error("READ_BOUND_EXCEEDED");
-      return rows.map((r: Json) => ({ ...r.body, ...analysis(r.body.date), revision: Number(r.revision) }));
+      return rows.map((r: Json) => {
+        const date=manualDate(String(r.local_record_date));
+        return {...r.body,date,...analysis(date),revision:Number(r.revision)};
+      });
     },true);
   }
   async write(identity: Json, input: Json, remove = false) {
@@ -76,7 +83,7 @@ export class ManualBodyLocalStore {
       if (input.recordId && !old) throw Error("BODY_RECORD_NOT_FOUND");
       if (old && old.deleted) throw Error("BODY_RECORD_DELETED");
       if (old && (!Number.isSafeInteger(input.revision) || input.revision !== Number(old.revision))) throw Error("STALE_REVISION");
-      const date = remove ? old.body.date : manualDate(input.date);
+      const date = remove ? storedBodyLocalDate(old.local_date) : manualDate(input.date);
       if (date > localToday()) throw Error("FUTURE_BODY_UNSUPPORTED");
       let weight = old?.body.weight ?? null, bodyFat = old?.body.bodyFat ?? null;
       if (!remove) {
