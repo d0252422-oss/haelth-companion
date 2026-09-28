@@ -1,6 +1,6 @@
 // Pure contract tests only. SQL/RLS/HTTP/Browser acceptance is a separate real-PG suite.
 import {normalizeManualObservation, storedObservationLocalDate} from '../supabase/functions/mobile-health-beta/manual-observations-local.ts';
-import {observationAnalysisPlan, observationEngineProjection, observationReadState, observationPublishedAnalysis, projectManualObservationDay} from '../supabase/functions/mobile-health-beta/manual-observation-projection.ts';
+import {observationAnalysisPlan, observationEngineProjection, observationReadState, observationPublishedAnalysis, observationRecomputeRequired, projectManualObservationDay} from '../supabase/functions/mobile-health-beta/manual-observation-projection.ts';
 type Json = Record<string, any>;
 function equal(actual: unknown, expected: unknown) { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`); }
 function throws(fn: () => unknown, code: string) { try { fn(); } catch (e) { if (e instanceof Error && e.message === code) return; throw e; } throw Error('Expected ' + code); }
@@ -18,6 +18,14 @@ Deno.test('write response separates durable invalidation from adapter-supported 
  equal(observationAnalysisPlan(norm(base('sleep',420))),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
  equal(observationAnalysisPlan(norm({...base('sleep',420),startedAt:'2026-09-11T23:00:00+08:00',endedAt:'2026-09-12T06:00:00+08:00'})),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
  equal(observationAnalysisPlan(norm({...base('sleep',360),startedAt:'2026-09-11T23:00:00+08:00',endedAt:'2026-09-12T06:00:00+08:00'})),{analysisStatus:'ANALYSIS_PENDING',analysisReason:'DURABLE_QUEUE_PENDING',analysisJobScheduled:true});
+});
+
+Deno.test('display-only total energy does not request a health-score recompute',()=>{
+ equal(observationRecomputeRequired(norm(base('total_energy',1064))),false);
+ equal(observationRecomputeRequired(norm(base('steps',7180))),true);
+ equal(observationRecomputeRequired(norm(base('sleep',420))),true);
+ const runtime=Deno.readTextFileSync('supabase/functions/mobile-health-beta/local-engine-runtime.ts');
+ if(!runtime.includes('if(data.recomputeScheduled!==false)this.scheduleDrain(identity.canonical)'))throw Error('manual observation write still wakes the score drain unconditionally');
 });
 
 Deno.test('raw observation analysis requires an actual matching publication or queued work',()=>{

@@ -2,7 +2,7 @@
 // No native ingestion impersonation, score fabrication, alternate storage or dual write.
 import {localReadRange, localToday, manualDate, rejectClientIdentity} from './manual-body-local.ts';
 import {manualPrivilegedRead, prepareManualRead, prepareManualWrite} from './manual-web-identity.ts';
-import {observationAnalysisPlan, observationReadState, observationPublishedAnalysis, projectManualObservationDay, timedSleepOverlaps} from './manual-observation-projection.ts';
+import {observationAnalysisPlan, observationReadState, observationPublishedAnalysis, observationRecomputeRequired, projectManualObservationDay, timedSleepOverlaps} from './manual-observation-projection.ts';
 type Json = Record<string, any>;
 const domains = ['sleep', 'steps', 'total_energy'];
 const maximumValues: Record<string, number> = {sleep: 1440, steps: 200000, total_energy: 30000};
@@ -133,7 +133,7 @@ export class ManualObservationsLocalStore {
         }
         }
       }
-      const result = {record: body, recordId: id, deleted: remove, status: 'SAVED', recomputeScheduled: true,
+      const result = {record: body, recordId: id, deleted: remove, status: 'SAVED', recomputeScheduled: observationRecomputeRequired(body),
         invalidatedDates, ...observationAnalysisPlan(body)};
       await tx`insert into private.engine_observation_receipts(canonical_user_id,request_id,input_hash,response) values(${identity.canonical},${input.clientRequestId},${inputHash},${tx.json(result)})`;
       return result;

@@ -18,8 +18,8 @@ function hasAutomatic(rows: Json[], day: string, domain: ObservationDomain) {
     && (Array.isArray(row.affected_local_dates) ? row.affected_local_dates.map(dayString).includes(day) : dayString(row.local_date ?? row.date) === day));
 }
 
-// A durable queue invalidation exists for every observation mutation. The
-// existing frozen sleep score consumes the reported duration even when timing is
+// Score-affecting observations have durable queue invalidation. The existing
+// frozen sleep score consumes the reported duration even when timing is
 // absent or differs from time-in-bed; exact timing is only required by the
 // portable interval projection below. Keep write/read status aligned with the
 // analysis that is actually published instead of claiming every queue row is a
@@ -28,6 +28,13 @@ export function observationAnalysisPlan(body: Json) {
   if (body.domain === 'total_energy') return {analysisStatus: 'ANALYSIS_NOT_ENABLED', analysisReason: 'TOTAL_ENERGY_SCORE_NOT_DEFINED', analysisJobScheduled: false};
   if (body.coverage === 'PARTIAL_DAY') return {analysisStatus: 'ANALYSIS_NOT_ENABLED', analysisReason: 'PARTIAL_DAY_NOT_FULL_DAY_SCORE', analysisJobScheduled: false};
   return {analysisStatus: 'ANALYSIS_PENDING', analysisReason: 'DURABLE_QUEUE_PENDING', analysisJobScheduled: true};
+}
+
+// This gates health-score recompute, not whether a manual record is durable.
+// The frozen score inputs omit total energy; display-only writes must not stale
+// an unrelated published score or wake a worker just for that observation.
+export function observationRecomputeRequired(body: Json) {
+  return body.domain !== 'total_energy';
 }
 
 export function projectManualObservationDay(rows: Json[], automaticRows: Json[], day: string) {

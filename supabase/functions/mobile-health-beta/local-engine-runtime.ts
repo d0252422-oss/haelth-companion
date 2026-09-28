@@ -834,7 +834,7 @@ export class LocalEngineRuntime {
         data = await this.manualObservations.status(identity,payload);
       } else if (action === 'upsertManualObservation' || action === 'deleteManualObservation') {
         data = await this.manualObservations.write(identity,payload,action==='deleteManualObservation');
-        this.scheduleDrain(identity.canonical);
+        if(data.recomputeScheduled!==false)this.scheduleDrain(identity.canonical);
       } else if (["addBodyRecord", "upsertBodyRecord", "deleteBodyRecord"].includes(action)) {
         data = await this.manualBody.write(identity, payload, action === "deleteBodyRecord");
         this.scheduleDrain(identity.canonical);
