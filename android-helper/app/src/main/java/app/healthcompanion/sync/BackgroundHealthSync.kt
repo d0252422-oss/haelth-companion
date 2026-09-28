@@ -649,7 +649,9 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                         SyncWindowPolicy.incremental(end, state.lastSuccessfulSync(session.canonicalUserId))
                 }
                 reportProgress(state, session.canonicalUserId, "HEALTH_READ")
-                val read = withTimeout(HEALTH_READ_TIMEOUT_MS) { health.readBounded(window.start, window.end) }
+                val read = withTimeout(HEALTH_READ_TIMEOUT_MS) {
+                    health.readBounded(window.start, window.end, HealthReadDomainPolicy.forMode(mode))
+                }
                 state.recordReadSummary(session.canonicalUserId, read.records)
                 val client = IngestionClient(BuildConfig.API_BASE_URL, onHttpResult = { result ->
                     state.recordHttpResult(session.canonicalUserId, result)

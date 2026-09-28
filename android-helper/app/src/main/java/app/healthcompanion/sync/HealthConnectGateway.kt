@@ -82,6 +82,7 @@ class HealthConnectGateway(private val context: Context) {
     suspend fun readBounded(
         start: Instant,
         end: Instant,
+        includedDomains: Set<String>? = null,
         onDomain: (domain: String, completed: Int, total: Int) -> Unit = { _, _, _ -> },
     ): HealthReadResult = coroutineScope {
         val filter = TimeRangeFilter.between(start, end)
@@ -91,7 +92,9 @@ class HealthConnectGateway(private val context: Context) {
         val readers = mutableListOf<Pair<String, suspend () -> DomainReadResult>>()
 
         fun <T : Record> add(domain: String, permission: String, type: KClass<T>, mapper: (T) -> List<CanonicalHealthRecord>) {
-            if (permission in granted) readers += domain to { semaphore.withPermit { readDomain(domain, type, filter, mapper) } }
+            if (permission in granted && HealthReadDomainPolicy.includes(includedDomains, domain)) {
+                readers += domain to { semaphore.withPermit { readDomain(domain, type, filter, mapper) } }
+            }
         }
 
         add("steps", HealthPermission.getReadPermission(StepsRecord::class), StepsRecord::class) { record ->

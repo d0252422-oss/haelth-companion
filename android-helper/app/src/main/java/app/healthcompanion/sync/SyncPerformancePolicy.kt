@@ -62,6 +62,16 @@ object AppSyncSingleFlight {
 
 enum class BackgroundSyncMode { INCREMENTAL, BACKFILL, P0_RECOVERY }
 
+/** The one-time P0 replay is limited to the two missing data domains. */
+internal object HealthReadDomainPolicy {
+    private val p0RecoveryDomains = setOf("steps", "total_energy")
+
+    fun forMode(mode: BackgroundSyncMode): Set<String>? =
+        if (mode == BackgroundSyncMode.P0_RECOVERY) p0RecoveryDomains else null
+
+    fun includes(domains: Set<String>?, domain: String): Boolean = domains == null || domain in domains
+}
+
 /** A missing system job is distinct from a WorkManager row waiting for constraints. */
 internal object PeriodicSchedulerRecoveryPolicy {
     const val REPAIR_COOLDOWN_MS = 15 * 60_000L

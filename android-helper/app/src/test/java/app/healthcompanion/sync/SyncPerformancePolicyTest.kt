@@ -109,6 +109,18 @@ class SyncPerformancePolicyTest {
         )
     }
 
+    @Test fun p0ReplayReadsOnlyMissingDomainsWhileNormalSyncStillReadsAll() {
+        val recovery = HealthReadDomainPolicy.forMode(BackgroundSyncMode.P0_RECOVERY)
+        assertEquals(setOf("steps", "total_energy"), recovery)
+        assertTrue(HealthReadDomainPolicy.includes(recovery, "steps"))
+        assertTrue(HealthReadDomainPolicy.includes(recovery, "total_energy"))
+        assertFalse(HealthReadDomainPolicy.includes(recovery, "heart_rate"))
+        assertFalse(HealthReadDomainPolicy.includes(recovery, "active_calories"))
+        assertEquals(null, HealthReadDomainPolicy.forMode(BackgroundSyncMode.INCREMENTAL))
+        assertEquals(null, HealthReadDomainPolicy.forMode(BackgroundSyncMode.BACKFILL))
+        assertTrue(HealthReadDomainPolicy.includes(null, "heart_rate"))
+    }
+
     @Test fun backfillUsesBoundedThirtyDayWindow() {
         val now = Instant.parse("2026-09-03T00:00:00Z")
         assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.backfill(now).start)
