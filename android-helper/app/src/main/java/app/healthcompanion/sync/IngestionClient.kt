@@ -15,6 +15,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Closeable
 import java.io.IOException
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 
 data class UploadSummary(
@@ -214,7 +217,34 @@ internal class IngestionClient(
             val idempotency = CanonicalIdentity.idempotencyKey(user, record)
             canonical.put("idempotency_key", idempotency)
             val revision = java.time.Instant.parse(record.sourceUpdatedAt).toEpochMilli().coerceAtLeast(1)
-            return JSONObject().put("canonical_user_id", user).put("platform", "android").put("domain", record.domain).put("source_app", record.sourceApp).put("source_record_id", record.sourceRecordId).put("source_revision", revision).put("source_updated_at", record.sourceUpdatedAt).put("source_content_hash", CanonicalIdentity.sha256(canonical.toString())).put("operation", "UPSERT").put("affected_local_dates", JSONArray().put(record.localDate)).put("idempotency_key", idempotency).put("record", canonical)
+            return JSONObject().put("canonical_user_id", user).put("platform", "android").put("domain", record.domain).put("source_app", record.sourceApp).put("source_record_id", record.sourceRecordId).put("source_revision", revision).put("source_updated_at", record.sourceUpdatedAt).put("source_content_hash", CanonicalIdentity.sha256(canonical.toString())).put("operation", "UPSERT").put("affected_local_dates", affectedLocalDates(record)).put("idempotency_key", idempotency).put("record", canonical)
+        }
+
+        private fun affectedLocalDates(record: CanonicalHealthRecord): JSONArray {
+            if (record.domain != "total_energy") return JSONArray().put(record.localDate)
+            val start = Instant.parse(requireNotNull(record.startedAt))
+            val end = Instant.parse(requireNotNull(record.endedAt))
+            require(end.isAfter(start)) { "INVALID_TOTAL_ENERGY_INTERVAL" }
+            val zone = ZoneId.of(record.timezone)
+            var date = start.atZone(zone).toLocalDate()
+            val lastCoveredDate = end.minusNanos(1).atZone(zone).toLocalDate()
+            val dates = linkedSetOf<String>()
+            // Dates are invalidation markers, not per-day kcal. A later source
+            // reconciliation gate must decide how overlapping origins are used.
+            val coveredDays = ChronoUnit.DAYS.between(date, lastCoveredDate) + 1
+            val endOwnerIsExtra = record.localDate != lastCoveredDate.toString()
+            if (coveredDays + (if (endOwnerIsExtra) 1 else 0) > 32) {
+                // The Edge accepts at most 32 markers. Preserve the entire raw interval
+                // and its boundary markers; do not fail a mixed-domain sync or imply that
+                // the omitted intermediate dates have calculated daily kcal values.
+                return JSONArray(linkedSetOf(date.toString(), lastCoveredDate.toString(), record.localDate).sorted())
+            }
+            while (!date.isAfter(lastCoveredDate)) {
+                dates += date.toString()
+                date = date.plusDays(1)
+            }
+            dates += record.localDate // Existing interval ownership uses the end date.
+            return JSONArray(dates.sorted())
         }
     }
 }

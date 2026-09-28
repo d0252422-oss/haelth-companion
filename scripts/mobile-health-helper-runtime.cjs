@@ -64,7 +64,7 @@ function isOlderSourceTimestamp(incoming, current) {
 function validateMutation(mutation, canonicalUserId) {
   if (!mutation || mutation.canonical_user_id !== canonicalUserId) throw codeError('CROSS_USER_UPLOAD', 403);
   if (!['ios', 'android'].includes(mutation.platform)) throw codeError('PLATFORM_MISMATCH', 400);
-  if (!['steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage', 'weight', 'workout', 'hrv', 'spo2'].includes(mutation.domain)) throw codeError('UNSUPPORTED_DOMAIN', 400);
+  if (!['steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage', 'weight', 'workout', 'hrv', 'spo2', 'total_energy'].includes(mutation.domain)) throw codeError('UNSUPPORTED_DOMAIN', 400);
   if (!['UPSERT', 'DELETE'].includes(mutation.operation)) throw codeError('INVALID_OPERATION', 400);
   if (!Number.isSafeInteger(mutation.source_revision) || mutation.source_revision < 1) throw codeError('INVALID_SOURCE_REVISION', 400);
   if (!/^[0-9a-f]{64}$/u.test(mutation.source_content_hash || '')) throw codeError('INVALID_CONTENT_HASH', 400);

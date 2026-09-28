@@ -14,17 +14,18 @@ const encoder = new TextEncoder();
 const MAX_BODY_BYTES = 1024 * 1024;
 const DOMAINS = new Set([
   "steps", "heart_rate", "resting_heart_rate", "sleep", "sleep_stage",
-  "weight", "workout", "hrv", "spo2",
+  "weight", "workout", "hrv", "spo2", "total_energy",
 ]);
 const UNITS: Record<string, Set<string>> = {
   steps: new Set(["count"]), heart_rate: new Set(["bpm"]), resting_heart_rate: new Set(["bpm"]),
   sleep: new Set(["minute"]), sleep_stage: new Set(["minute"]), weight: new Set(["kg"]),
   workout: new Set(["minute"]), hrv: new Set(["ms"]), spo2: new Set(["percent"]),
+  total_energy: new Set(["kcal"]),
 };
 const MAX_VALUE_BY_DOMAIN: Record<string, number> = {
   steps: 10_000_000, heart_rate: 1_000, resting_heart_rate: 1_000,
   sleep: 10_080, sleep_stage: 10_080, weight: 2_000,
-  workout: 10_080, hrv: 100_000, spo2: 100,
+  workout: 10_080, hrv: 100_000, spo2: 100, total_energy: 1_000_000,
 };
 type Json = Record<string, unknown>;
 
@@ -735,6 +736,13 @@ function validateRecord(record: Json, userId: string): void {
   try { new Intl.DateTimeFormat("en-US", { timeZone: record.timezone }).format(0); } catch { throw failure("INVALID_TIMEZONE", 400); }
   if (typeof record.value !== "number" || !Number.isFinite(record.value) || record.value < 0
       || record.value > MAX_VALUE_BY_DOMAIN[domain]) throw failure("MALFORMED_VALUE", 400);
+  if (domain === "total_energy") {
+    const start = Date.parse(String(record.started_at));
+    const end = Date.parse(String(record.ended_at));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      throw failure("MALFORMED_INTERVAL", 400);
+    }
+  }
 }
 
 function validateAffectedDates(value: unknown): string[] {

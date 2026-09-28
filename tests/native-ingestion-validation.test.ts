@@ -40,6 +40,32 @@ Deno.test("native mutation accepts the canonical aligned record", () => {
   assert.deepEqual(validateMutation(mutation(), user, "android").affected_local_dates, ["2026-09-20"]);
 });
 
+Deno.test("source total energy requires kcal and a real interval, without active/basal substitution", () => {
+  const total = mutation({
+    domain: "total_energy",
+    affected_local_dates: ["2026-09-19", "2026-09-20"],
+    record: {
+      domain: "total_energy",
+      unit: "kcal",
+      value: 90.5,
+      started_at: "2026-09-19T15:30:00Z",
+      ended_at: "2026-09-19T16:30:00Z",
+      recorded_at: "2026-09-19T16:30:00Z",
+      local_date: "2026-09-20",
+    },
+  });
+  assert.equal(validateMutation(total, user, "android").domain, "total_energy");
+  assert.doesNotThrow(() => validateMutation(mutation({ ...total, record: { ...total.record, timezone: "+08:00" } }), user, "android"));
+  assert.doesNotThrow(() => validateMutation(mutation({ ...total, record: { ...total.record, timezone: "+00:00", local_date: "2026-09-19" }, affected_local_dates: ["2026-09-19"] }), user, "android"));
+  assert.throws(() => validateMutation(mutation({ ...total, record: { ...total.record, unit: "cal" } }), user, "android"), /INVALID_UNIT/);
+  assert.throws(() => validateMutation(mutation({ ...total, record: { ...total.record, value: 1_000_001 } }), user, "android"), /MALFORMED_VALUE/);
+  assert.throws(() => validateMutation(mutation({ ...total, record: { ...total.record, ended_at: "2026-09-19T15:30:00Z" } }), user, "android"), /MALFORMED_INTERVAL/);
+  for (const domain of ["active_energy", "basal_energy"]) {
+    assert.throws(() => validateMutation(mutation({ ...total, domain, record: { ...total.record, domain } }), user, "android"), /UNSUPPORTED_DOMAIN/);
+  }
+  assert.throws(() => validateMutation({ ...total, canonical_user_id: "b1b2c3d4-e5f6-4789-8abc-def012345678" }, user, "android"), /CROSS_USER_UPLOAD/);
+});
+
 Deno.test("canonical identity comparison accepts Swift UUID casing only", () => {
   const swiftEncodedUser = user.toUpperCase();
   const uppercasePayload = mutation({

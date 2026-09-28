@@ -600,6 +600,20 @@ Deno.test("manual energy does not mask a generation-mismatched activity head", (
   );
 });
 
+Deno.test("unreconciled Fitbit and Google Fit total-energy intervals remain a null daily gap", () => {
+  const rows = projectPublishedDaily(snapshot({
+    automatic: [
+      { domain: "total_energy", source_app: "com.fitbit.FitbitMobile", daily_value: 90.5, affected_local_dates: ["2026-09-19"] },
+      { domain: "total_energy", source_app: "com.google.android.apps.fitness", daily_value: 92.0, affected_local_dates: ["2026-09-19"] },
+    ],
+  }), "activity");
+  equal(rows.length, 1);
+  equal(rows[0].date, "2026-09-19");
+  equal(rows[0].totalCalories, null);
+  equal(rows[0].activeCalories, null);
+  equal(rows[0].dataStatus, "STALE");
+});
+
 Deno.test("verified cardio publication coexists with a manual daily steps override", () => {
   const manual = [{
     local_date: "2026-09-19",

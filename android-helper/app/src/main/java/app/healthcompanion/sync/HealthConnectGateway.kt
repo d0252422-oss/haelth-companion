@@ -12,6 +12,7 @@ import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -55,6 +56,7 @@ class HealthConnectGateway(private val context: Context) {
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
     )
 
     fun supportsBackgroundRead(): Boolean = client.features.getFeatureStatus(
@@ -94,6 +96,9 @@ class HealthConnectGateway(private val context: Context) {
 
         add("steps", HealthPermission.getReadPermission(StepsRecord::class), StepsRecord::class) { record ->
             listOf(record.toCanonical("steps", record.count.toDouble(), "count", record.startTime, record.endTime, zone))
+        }
+        add("total_energy", HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class), TotalCaloriesBurnedRecord::class) { record ->
+            listOf(TotalEnergyRecordMapper.fromHealthConnect(record, zone))
         }
         add("heart_rate", HealthPermission.getReadPermission(HeartRateRecord::class), HeartRateRecord::class) { record ->
             record.samples.map { sample -> record.toCanonical("heart_rate", sample.beatsPerMinute.toDouble(), "bpm", sample.time, sample.time, zone, identitySuffix = sample.time.toString()) }

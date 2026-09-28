@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 
 const CLAIM_TTL_SECONDS = 300;
 const PLATFORMS = new Set(['ios', 'android']);
-const DOMAINS = new Set(['steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage', 'weight', 'workout', 'hrv', 'spo2']);
+const DOMAINS = new Set(['steps', 'heart_rate', 'resting_heart_rate', 'sleep', 'sleep_stage', 'weight', 'workout', 'hrv', 'spo2', 'total_energy']);
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
