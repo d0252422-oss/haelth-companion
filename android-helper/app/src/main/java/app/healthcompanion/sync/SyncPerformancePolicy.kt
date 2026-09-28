@@ -24,6 +24,7 @@ data class SyncWindow(val start: Instant, val end: Instant)
 
 object SyncWindowPolicy {
     const val HISTORY_LOOKBACK_DAYS = 30L
+    const val P0_RECOVERY_LOOKBACK_HOURS = 72L
     const val STARTUP_FALLBACK_HOURS = 6L
     const val INCREMENTAL_OVERLAP_HOURS = 1L
 
@@ -34,6 +35,9 @@ object SyncWindowPolicy {
     )
 
     fun backfill(now: Instant): SyncWindow = SyncWindow(now.minus(HISTORY_LOOKBACK_DAYS, ChronoUnit.DAYS), now)
+
+    fun p0Recovery(frozenEnd: Instant): SyncWindow =
+        SyncWindow(frozenEnd.minus(P0_RECOVERY_LOOKBACK_HOURS, ChronoUnit.HOURS), frozenEnd)
 
     // A retried window may finish hours after its frozen end. Only the durable
     // window boundary is safe as the next incremental cursor.
@@ -56,7 +60,7 @@ object AppSyncSingleFlight {
     val gate = SyncSingleFlight()
 }
 
-enum class BackgroundSyncMode { INCREMENTAL, BACKFILL }
+enum class BackgroundSyncMode { INCREMENTAL, BACKFILL, P0_RECOVERY }
 
 /** A missing system job is distinct from a WorkManager row waiting for constraints. */
 internal object PeriodicSchedulerRecoveryPolicy {
@@ -89,7 +93,8 @@ object BackgroundContinuationPolicy {
         checkpointIndex: Int,
         reconciliationPass: Int = 0,
     ): Int = when {
-        mode != BackgroundSyncMode.BACKFILL -> DEFAULT_MAX_ATTEMPTS
+        mode == BackgroundSyncMode.INCREMENTAL -> DEFAULT_MAX_ATTEMPTS
+        mode == BackgroundSyncMode.P0_RECOVERY -> BACKFILL_RECONCILIATION_MAX_ATTEMPTS
         reconciliationPass > 0 -> BACKFILL_RECONCILIATION_MAX_ATTEMPTS
         uploadStarted || checkpointIndex > 0 -> BACKFILL_MAX_CONTINUATION_ATTEMPTS
         else -> DEFAULT_MAX_ATTEMPTS
@@ -177,5 +182,6 @@ object BackgroundWorkNames {
     fun userKey(userId: String): String = SyncStateNamespace.userKey(userId)
     fun immediate(userId: String): String = "health-sync-immediate-${userKey(userId)}"
     fun backfill(userId: String): String = "health-sync-backfill-${userKey(userId)}"
+    fun p0Recovery(userId: String): String = "health-sync-p0-recovery-v21-${userKey(userId)}"
     fun periodic(userId: String): String = "health-sync-periodic-${userKey(userId)}"
 }

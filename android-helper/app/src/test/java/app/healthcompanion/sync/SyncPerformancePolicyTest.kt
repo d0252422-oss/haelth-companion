@@ -82,6 +82,33 @@ class SyncPerformancePolicyTest {
         assertEquals(finishedAt, SyncWindowPolicy.incremental(finishedAt, completed).end)
     }
 
+    @Test fun p0RecoveryCoversBothMissingTaipeiDatesWithFrozenEnd() {
+        val frozenEnd = Instant.parse("2026-09-28T15:45:00Z")
+        val window = SyncWindowPolicy.p0Recovery(frozenEnd)
+        assertEquals(Instant.parse("2026-09-25T15:45:00Z"), window.start)
+        assertEquals(frozenEnd, window.end)
+        assertTrue(window.start.isBefore(Instant.parse("2026-09-26T16:00:00Z")))
+        assertTrue(window.end.isAfter(Instant.parse("2026-09-28T00:00:00Z")))
+    }
+
+    @Test fun p0RecoveryHasItsOwnUserScopedWorkAndCheckpoint() {
+        val user = "p0-recovery-user"
+        val names = setOf(
+            BackgroundWorkNames.immediate(user), BackgroundWorkNames.backfill(user),
+            BackgroundWorkNames.periodic(user), BackgroundWorkNames.p0Recovery(user),
+        )
+        assertEquals(4, names.size)
+        assertFalse(BackgroundWorkNames.p0Recovery(user).contains(user))
+        assertFalse(
+            SyncStateNamespace.modeKey(user, BackgroundSyncMode.P0_RECOVERY, "next_record_index") ==
+                SyncStateNamespace.modeKey(user, BackgroundSyncMode.INCREMENTAL, "next_record_index"),
+        )
+        assertEquals(
+            BackgroundContinuationPolicy.BACKFILL_RECONCILIATION_MAX_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(BackgroundSyncMode.P0_RECOVERY, true, 1),
+        )
+    }
+
     @Test fun backfillUsesBoundedThirtyDayWindow() {
         val now = Instant.parse("2026-09-03T00:00:00Z")
         assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.backfill(now).start)

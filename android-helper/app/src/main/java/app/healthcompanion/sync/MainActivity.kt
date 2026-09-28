@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
         val state = SyncRuntimeStateStore(this)
         if (state.lastSuccessfulSync(session.canonicalUserId) == null) state.markHistoryPending(session.canonicalUserId)
         val runtime = BackgroundSyncScheduler.reconcileAndEnqueue(this, session.canonicalUserId)
+        BackgroundSyncScheduler.enqueueP0Recovery(this, session.canonicalUserId)
         renderBackground(runtime)
         backgroundObserver?.cancel()
         backgroundObserver = scope.launch {

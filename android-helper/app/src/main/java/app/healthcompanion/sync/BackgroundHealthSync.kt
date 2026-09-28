@@ -390,6 +390,23 @@ object BackgroundSyncScheduler {
         manager.enqueueUniqueWork(BackgroundWorkNames.backfill(userId), ExistingWorkPolicy.KEEP, request)
     }
 
+    /** One bounded, idempotent Beta recovery for the cursor gap found on beta.20. */
+    suspend fun enqueueP0Recovery(context: Context, userId: String) {
+        val manager = WorkManager.getInstance(context)
+        val name = BackgroundWorkNames.p0Recovery(userId)
+        if (queryWork(manager, name).isNotEmpty()) return
+        val request = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInputData(workDataOf(
+                WORK_MODE to BackgroundSyncMode.P0_RECOVERY.name,
+                WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
+                WORK_FROZEN_END to Instant.now().toString(),
+            ))
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        manager.enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, request)
+    }
+
     suspend fun reconcileAndEnqueue(context: Context, userId: String): BackgroundRuntimeStatus {
         val manager = WorkManager.getInstance(context)
         val store = SyncRuntimeStateStore(context)
@@ -427,12 +444,14 @@ object BackgroundSyncScheduler {
             manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.immediate(userId)),
             manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.backfill(userId)),
             manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.periodic(userId)),
-        ) { immediate, backfill, periodic ->
+            manager.getWorkInfosForUniqueWorkFlow(BackgroundWorkNames.p0Recovery(userId)),
+        ) { immediate, backfill, periodic, recovery ->
             ObserverWorkSet(
                 active = immediate.filter { it.state in ACTIVE_STATES } +
                     backfill.filter { it.state in ACTIVE_STATES } +
-                    periodic.filter { it.state == WorkInfo.State.RUNNING },
-                all = immediate + backfill + periodic,
+                    periodic.filter { it.state == WorkInfo.State.RUNNING } +
+                    recovery.filter { it.state in ACTIVE_STATES },
+                all = immediate + backfill + periodic + recovery,
             )
         }
             .map { workSet ->
@@ -462,7 +481,8 @@ object BackgroundSyncScheduler {
     private suspend fun queryForegroundWork(manager: WorkManager, userId: String): List<WorkInfo> =
         queryWork(manager, BackgroundWorkNames.immediate(userId)).filter { it.state in ACTIVE_STATES } +
             queryWork(manager, BackgroundWorkNames.backfill(userId)).filter { it.state in ACTIVE_STATES } +
-            queryWork(manager, BackgroundWorkNames.periodic(userId)).filter { it.state == WorkInfo.State.RUNNING }
+            queryWork(manager, BackgroundWorkNames.periodic(userId)).filter { it.state == WorkInfo.State.RUNNING } +
+            queryWork(manager, BackgroundWorkNames.p0Recovery(userId)).filter { it.state in ACTIVE_STATES }
 
     private suspend fun queryWork(manager: WorkManager, name: String): List<WorkInfo> = runCatching {
         withTimeout(WORK_QUERY_TIMEOUT_MS) { manager.getWorkInfosForUniqueWorkFlow(name).first() }
@@ -531,6 +551,7 @@ object BackgroundSyncScheduler {
             manager.cancelUniqueWork(BackgroundWorkNames.immediate(it))
             manager.cancelUniqueWork(BackgroundWorkNames.backfill(it))
             manager.cancelUniqueWork(BackgroundWorkNames.periodic(it))
+            manager.cancelUniqueWork(BackgroundWorkNames.p0Recovery(it))
         }
         manager.cancelUniqueWork(LEGACY_BACKFILL)
         manager.cancelUniqueWork(LEGACY_PERIODIC)
@@ -538,6 +559,7 @@ object BackgroundSyncScheduler {
 
     const val WORK_MODE = "sync_mode"
     const val WORK_USER_KEY = "canonical_user_key"
+    const val WORK_FROZEN_END = "recovery_frozen_end"
     const val PROGRESS_STAGE = "sync_stage"
     const val PROGRESS_AT_EPOCH_MS = "sync_progress_at"
     const val PROGRESS_REQUEST_COUNT = "sync_request_count"
@@ -572,7 +594,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         } catch (_: TimeoutCancellationException) {
             val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
                 mode,
-                uploadStarted = mode == BackgroundSyncMode.BACKFILL,
+                uploadStarted = mode != BackgroundSyncMode.INCREMENTAL,
                 checkpointIndex = 0,
             )
             return retryOrFailWithoutSession(maxAttempts)
@@ -615,11 +637,16 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 return Result.failure()
             }
             withTimeout(BACKGROUND_DEADLINE_MS) {
-                val end = state.activeWindowEnd(session.canonicalUserId, mode, Instant.now())
-                val window = if (mode == BackgroundSyncMode.BACKFILL) {
-                    SyncWindowPolicy.backfill(end)
-                } else {
-                    SyncWindowPolicy.incremental(end, state.lastSuccessfulSync(session.canonicalUserId))
+                val proposedEnd = if (mode == BackgroundSyncMode.P0_RECOVERY) {
+                    inputData.getString(BackgroundSyncScheduler.WORK_FROZEN_END)
+                        ?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.now()
+                } else Instant.now()
+                val end = state.activeWindowEnd(session.canonicalUserId, mode, proposedEnd)
+                val window = when (mode) {
+                    BackgroundSyncMode.BACKFILL -> SyncWindowPolicy.backfill(end)
+                    BackgroundSyncMode.P0_RECOVERY -> SyncWindowPolicy.p0Recovery(end)
+                    BackgroundSyncMode.INCREMENTAL ->
+                        SyncWindowPolicy.incremental(end, state.lastSuccessfulSync(session.canonicalUserId))
                 }
                 reportProgress(state, session.canonicalUserId, "HEALTH_READ")
                 val read = withTimeout(HEALTH_READ_TIMEOUT_MS) { health.readBounded(window.start, window.end) }
@@ -661,7 +688,9 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 }
                 if (mode == BackgroundSyncMode.BACKFILL) state.markHistoryComplete(session.canonicalUserId)
                 state.recordTerminal(session.canonicalUserId, "SUCCESS")
-                state.saveLastSuccessfulSync(session.canonicalUserId, SyncWindowPolicy.completedCursor(window))
+                if (mode != BackgroundSyncMode.P0_RECOVERY) {
+                    state.saveLastSuccessfulSync(session.canonicalUserId, SyncWindowPolicy.completedCursor(window))
+                }
                 checkpoints.clear()
                 state.clearActiveWindow(session.canonicalUserId, mode)
                 if (mode == BackgroundSyncMode.INCREMENTAL && state.isHistoryPending(session.canonicalUserId)) {

@@ -29,6 +29,7 @@ class SyncRecoveryReceiver : BroadcastReceiver() {
                         health.backgroundReadState() == BackgroundHealthReadState.GRANTED
                     ) {
                         BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId)
+                        BackgroundSyncScheduler.enqueueP0Recovery(app, session.canonicalUserId)
                     }
                 }
             } catch (_: Exception) {
