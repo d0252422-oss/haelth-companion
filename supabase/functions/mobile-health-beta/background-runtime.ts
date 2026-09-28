@@ -1,5 +1,5 @@
 // Existing connector payloads and device grants. No Web context or privileged fallback.
-import { shortcutRecordToMutation, validateMutation } from "./index.ts";
+import { authenticateNativeUser, shortcutRecordToMutation, validateMutation } from "./index.ts";
 import { sameCanonicalUserId } from "./canonical-user-id.ts";
 import { readManualRequest } from "./manual-request-body.ts";
 import { scopedWorkerSql } from "./worker-sql-context.ts";
@@ -16,7 +16,7 @@ export function createDelegatedIngestion(raw: any) {
   const sql = scopedWorkerSql(raw, "health_native_ingest");
   return {
     sql,
-    async handle(request: Request) {
+    async handle(request: Request, admin?: any) {
       try {
         if (request.method !== "POST") {
           return result(405, {
@@ -36,15 +36,43 @@ export function createDelegatedIngestion(raw: any) {
           );
         }
         const body = await readManualRequest(request);
+        const native = !shortcut && !session;
+        let nativeOwner: string | null = null;
+        let nativeDigest: string | null = null;
+        if (native) {
+          if (!admin) throw Error("NATIVE_AUTH_PROVIDER_UNAVAILABLE");
+          const verified = await authenticateNativeUser(request, admin);
+          // A random, request-local capability is never sent to Android. The
+          // issuing RPC resolves the linked ACTIVE owner from the verified Auth ID.
+          nativeDigest = await sha(Array.from(crypto.getRandomValues(new Uint8Array(32)))
+            .map((x) => x.toString(16).padStart(2, "0")).join(""));
+          const { data, error } = await admin.rpc("beta_issue_native_ingest_scope", {
+            p_auth_user_id: verified.auth_user_id,
+            p_capability_digest: nativeDigest,
+          });
+          if (error) {
+            if (String(error.message || "").includes("NATIVE_IDENTITY_NOT_LINKED")) {
+              throw Error("NATIVE_IDENTITY_NOT_LINKED");
+            }
+            throw Error("NATIVE_SCOPE_UNAVAILABLE");
+          }
+          if (!/^[0-9a-f-]{36}$/i.test(String(data))) {
+            throw Error("NATIVE_SCOPE_UNAVAILABLE");
+          }
+          nativeOwner = String(data);
+        }
         return await sql.withSession({
-          kind: shortcut ? "shortcut" : "app",
+          kind: shortcut ? "shortcut" : native ? "native" : "app",
           session,
-          digest: await sha(auth.slice(7)),
+          digest: nativeDigest ?? await sha(auth.slice(7)),
         }, () =>
           sql.begin(async (tx: any) => {
             const [identity] =
               await tx`select private.delegated_worker_user() as id,private.delegated_worker_platform() as platform`;
             if (!identity?.id) throw Error("INVALID_WORKER_SESSION");
+            if (native && !sameCanonicalUserId(identity.id, nativeOwner)) {
+              throw Error("NATIVE_IDENTITY_CONFLICT");
+            }
             const statusRequest = path.endsWith("/v1/mobile/connectors/status");
             if (
               body.environment !== "beta" &&
@@ -75,6 +103,10 @@ export function createDelegatedIngestion(raw: any) {
                   ? body.available_domains
                   : []
               },${body.permission_state_if_known || "UNKNOWN"})`;
+              if (native) {
+                const [consumed] = await tx`select private.consume_native_ingest_scope() as ok`;
+                if (!consumed?.ok) throw Error("INVALID_NATIVE_SCOPE");
+              }
               return result(200, {
                 status: "RECORDED",
                 score_recompute: successful ? "QUEUED" : "NOT_QUEUED",
@@ -142,6 +174,10 @@ export function createDelegatedIngestion(raw: any) {
                 receipts[k].push(...row.receipt[k]);
               }
             }
+            if (native) {
+              const [consumed] = await tx`select private.consume_native_ingest_scope() as ok`;
+              if (!consumed?.ok) throw Error("INVALID_NATIVE_SCOPE");
+            }
             return result(receipts.rejected.length ? 207 : 200, receipts);
           }));
       } catch (e) {
@@ -152,7 +188,13 @@ export function createDelegatedIngestion(raw: any) {
         return result(
           retryable
             ? 503
+            : Number.isInteger((e as any)?.status)
+            ? (e as any).status
+            : /_UNAVAILABLE$/.test(message)
+            ? 503
             : /SESSION|AUTH/.test(message)
+            ? 401
+            : /INVALID_NATIVE_SCOPE|NATIVE_IDENTITY_NOT_LINKED/.test(message)
             ? 401
             : /CROSS_USER|PLATFORM/.test(message)
             ? 403
@@ -160,6 +202,8 @@ export function createDelegatedIngestion(raw: any) {
           {
             error: retryable
               ? "DB_TIMEOUT_RETRYABLE"
+              : Number.isInteger((e as any)?.status) && /^[A-Z_]+$/.test(String((e as any)?.code))
+              ? (e as any).code
               : /^[A-Z_]+$/.test(message)
               ? message
               : "INGESTION_FAILED",

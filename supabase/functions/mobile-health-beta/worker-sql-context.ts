@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-type Session = { kind: "app" | "shortcut"; session: string; digest: string };
+type Session = { kind: "app" | "shortcut" | "native"; session: string; digest: string };
 type Job = {
   canonical_user_id: string;
   score_date: string;
@@ -72,8 +72,9 @@ export function scopedWorkerSql(
   sql.withSession = (c: Session, work: () => Promise<any>) => {
     if (
       role !== "health_native_ingest" ||
-      !["app", "shortcut"].includes(c.kind) ||
-      !/^[0-9a-f-]{36}$/.test(c.session) || !/^[0-9a-f]{64}$/.test(c.digest)
+      !["app", "shortcut", "native"].includes(c.kind) ||
+      (c.kind === "native" ? c.session !== "" : !/^[0-9a-f-]{36}$/.test(c.session)) ||
+      !/^[0-9a-f]{64}$/.test(c.digest)
     ) throw Error("INVALID_WORKER_SESSION");
     return contexts.run(Object.freeze({ ...c }), work);
   };

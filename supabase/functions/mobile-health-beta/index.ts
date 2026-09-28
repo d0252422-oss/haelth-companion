@@ -47,7 +47,7 @@ export default {
     const origin = request.headers.get("origin") ?? "";
     const workerPath=relativePath(new URL(request.url).pathname);
     if (shouldRouteBackgroundMutation(workerPath, request.method, (key) => Deno.env.get(key))) {
-      return await(await import('./background-bootstrap.ts')).backgroundBootstrap(request);
+      return await(await import('./background-bootstrap.ts')).backgroundBootstrap(request, ctx.supabaseAdmin);
     }
     // Manual Web has an independent, default-OFF provider; never uses the mobile auth callback guard.
     if(relativePath(new URL(request.url).pathname)==='/v1/engine/web'&&Deno.env.get('HEALTH_ENGINE_LOCAL_ONLY')!=='1'){

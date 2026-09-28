@@ -57,7 +57,7 @@ export function backgroundConfig(env: Env, system: boolean) {
   };
 }
 const runtimes = new Map<string, Promise<any>>();
-export async function backgroundBootstrap(request: Request) {
+export async function backgroundBootstrap(request: Request, admin?: any) {
   const system = new URL(request.url).pathname.endsWith(
     "/internal/score-recompute/drain",
   );
@@ -142,7 +142,7 @@ export async function backgroundBootstrap(request: Request) {
       const body = await readManualRequest(request);
       return Response.json(await engine.drain(body.limit ?? 3), { headers });
     }
-    const response = await engine.handle(request);
+    const response = await engine.handle(request, admin);
     return new Response(response.body, {
       status: response.status,
       headers: { ...Object.fromEntries(response.headers), ...headers },
