@@ -1,5 +1,5 @@
 // Existing connector payloads and device grants. No Web context or privileged fallback.
-import { authenticateNativeUser, shortcutRecordToMutation, validateMutation } from "./index.ts";
+import { authenticateNativeUser, scoreErrorCode, shortcutRecordToMutation, validateMutation } from "./index.ts";
 import { sameCanonicalUserId } from "./canonical-user-id.ts";
 import { readManualRequest } from "./manual-request-body.ts";
 import { scopedWorkerSql } from "./worker-sql-context.ts";
@@ -214,6 +214,13 @@ export function createDelegatedIngestion(raw: any) {
     },
   };
 }
+export function scoreWorkerFailureCode(error: unknown): string {
+  const classified = scoreErrorCode(error);
+  return classified === "SCORE_RECOMPUTE_FAILED"
+    ? "WORKER_RECOMPUTE_FAILED"
+    : classified;
+}
+
 export async function createRecomputeWorker(raw: any) {
   const sql = scopedWorkerSql(raw, "health_recompute_worker");
   const runtime = new LocalEngineRuntime({}, async () => {
@@ -247,12 +254,11 @@ export async function createRecomputeWorker(raw: any) {
           completed++;
         } catch (e) {
           failed++;
-          failureCodes.push(
-            /^[0-9A-Z_]+$/.test(String((e as any).code || (e as Error).message))
-              ? String((e as any).code || (e as Error).message)
-              : "WORKER_RECOMPUTE_FAILED",
-          );
-          await sql`select public.beta_fail_score_recompute(${job.canonical_user_id},${day}::date,${job.generation},${token},'WORKER_RECOMPUTE_FAILED',true)`;
+          // Persist only the existing allowlisted classifier, never the raw
+          // exception message (which may contain SQL or health-data details).
+          const failureCode = scoreWorkerFailureCode(e);
+          failureCodes.push(failureCode);
+          await sql`select public.beta_fail_score_recompute(${job.canonical_user_id},${day}::date,${job.generation},${token},${failureCode},true)`;
         }
       }
       return { claimed: jobs.length, completed, failed, failureCodes };
