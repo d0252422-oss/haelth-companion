@@ -171,6 +171,9 @@
   function metricReadState(metric, rows, fallbackState = "ready") {
     const candidates = Array.isArray(rows) ? rows : [];
     const hasValue = candidates.some((row) => finiteNumber(row?.[metric]) !== null);
+    // A failed read is not evidence that a metric has no data. Keep cached
+    // values visible, but let the caller label them as stale/error.
+    if (fallbackState === "error") return "error";
     if (!candidates.length) return ["loading", "updating", "error"].includes(fallbackState) ? fallbackState : "empty";
     const domain = ["sleepHours", "sleepScore"].includes(metric) ? "sleep"
       : ["steps", "activeMinutes", "activeCalories", "caloriesBurned", "heartRate", "hrv", "spo2"].includes(metric) ? "activity"

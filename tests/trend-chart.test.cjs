@@ -166,7 +166,7 @@ assert.strictEqual(timeline[0].caloriesIntake, null);
 assert.strictEqual(timeline[0].fatigueScore, 17);
 assert.strictEqual(timeline[1].fatigueScore, 19);
 context.__timeline = timeline;
-evaluate('appState.healthTimeline=__timeline;selectedHealthDate="2026-08-15";sharedTrendMetrics=["weight","sleepHours","trainingSets","caloriesIntake"];renderSharedHealthTrends(true)');
+evaluate('globalDateRange={preset:"custom",startDate:"2026-08-14",endDate:"2026-08-15"};appState.healthTimeline=__timeline;selectedHealthDate="2026-08-15";sharedTrendMetrics=["weight","sleepHours","trainingSets","caloriesIntake"];renderSharedHealthTrends(true)');
 assert.match(document.getElementById('shared-health-trends').innerHTML, /data-metric="weight"/);
 assert.match(document.getElementById('shared-health-trends').innerHTML, /data-metric="sleepHours"/);
 assert.match(document.getElementById('shared-health-trends').innerHTML, /shared-cursor/);
@@ -246,5 +246,51 @@ evaluate(`exerciseDatabase=[{exerciseId:"global:barbell-back-squat",exerciseName
 evaluate('renderMuscleGroupOptions()');
 assert.match(groupSelect.innerHTML, /value="system:legs">腿部</);
 assert.match(exerciseSelect.innerHTML, /槓鈴深蹲/);
+
+// A historical manual total is not a current-day wearable observation.
+evaluate('getLocalDateString=()=>"2026-09-28";globalDateRange={preset:"custom",startDate:"2026-09-22",endDate:"2026-09-28"};appState.healthTimeline=normalizeHealthTimeline({timeline:[{date:"2026-09-20",caloriesBurned:1064,caloriesBurnedSource:"MANUAL_WEB"}]});selectedHealthDate=null;sharedTrendMetrics=["caloriesBurned"];renderSharedHealthTrends(true)');
+assert.strictEqual(evaluate('sharedTrendRows().some(row=>row.date==="2026-09-20")'), false);
+assert.strictEqual(evaluate('selectedHealthDate'), '2026-09-28');
+assert.match(document.getElementById('daily-detail-date').textContent, /9 月 28 日 · 所選日期（今天）/);
+assert.doesNotMatch(document.getElementById('daily-detail-grid').innerHTML, /NaN|1,064/);
+evaluate('renderMetricDetail("caloriesBurned")');
+assert.strictEqual(document.getElementById('metric-detail-current').textContent, '—');
+assert.match(document.getElementById('metric-detail-latest').textContent, /所選期間尚無資料/);
+evaluate('globalDateRange={preset:"custom",startDate:"2026-08-30",endDate:"2026-09-28"};renderSharedHealthTrends(true)');
+assert.strictEqual(evaluate('sharedTrendRows().find(row=>row.date==="2026-09-20").caloriesBurned'), 1064);
+assert.strictEqual(evaluate('selectedHealthDate'), '2026-09-28');
+evaluate('renderMetricDetail("caloriesBurned")');
+assert.match(document.getElementById('metric-detail-current').textContent, /1,064/);
+assert.match(document.getElementById('metric-detail-latest').textContent, /9\/20/);
+assert.strictEqual(context.HealthCoreUX.metricReadState('healthScore', [{date:'2026-09-28',healthStatus:'NO_DATA'}], 'error'), 'error');
+
+// Same-day content changes must invalidate the shared chart even if date keys do not change.
+evaluate('globalDateRange={preset:"custom",startDate:"2026-09-22",endDate:"2026-09-28"};appState.healthTimeline=[{date:"2026-09-28",weight:80}];sharedTrendMetrics=["weight"];selectedHealthDate="2026-09-28";renderSharedHealthTrends(true)');
+assert.match(document.getElementById('shared-health-trends').innerHTML, /80\.0 kg/);
+evaluate('appState.healthTimeline[0].weight=81;renderSharedHealthTrends()');
+assert.match(document.getElementById('shared-health-trends').innerHTML, /81\.0 kg/);
+
+// Vertical page scrolling starts on the plot but must not change the selected day.
+const plot = {getBoundingClientRect:()=>({left:0,width:600})};
+const originalQuerySelectorAll = document.querySelectorAll;
+document.querySelectorAll = selector => selector === '.shared-trend-plot' ? [plot] : [];
+evaluate('bindSharedTrendInteraction()');
+plot.onpointerdown({pointerId:1,clientX:100,clientY:100,pointerType:'touch'});
+plot.onpointerup({pointerId:1,clientX:100,clientY:145,pointerType:'touch'});
+assert.strictEqual(evaluate('selectedHealthDate'), '2026-09-28');
+plot.onpointerdown({pointerId:2,clientX:100,clientY:100,pointerType:'touch'});
+plot.onpointerup({pointerId:2,clientX:100,clientY:100,pointerType:'touch'});
+assert.notStrictEqual(evaluate('selectedHealthDate'), '2026-09-28');
+document.querySelectorAll = originalQuerySelectorAll;
+evaluate('selectedHealthDate=getLocalDateString();renderSharedHealthTrends(true)');
+assert.strictEqual(evaluate('selectedHealthDate'), '2026-09-28');
+
+// A cached score remains visible after a failed read, but is labelled as old data.
+evaluate('appState.healthTimeline=[{date:"2026-09-28",healthScore:74,healthStatus:"READY"}];appState.dashboard={today:{date:"2026-09-28",healthScore:74,healthStatus:"READY"}};timelineReadError=true;renderMetricDetail("healthScore")');
+assert.match(document.getElementById('metric-detail-latest').textContent, /舊資料 · 更新失敗/);
+evaluate('renderDashboard()');
+assert.match(document.getElementById('score-status').textContent, /舊資料 · 更新失敗/);
+evaluate('timelineReadError=false;renderMetricDetail("healthScore")');
+assert.doesNotMatch(document.getElementById('metric-detail-latest').textContent, /舊資料 · 更新失敗/);
 
 console.log('Trend chart unit tests: PASS');

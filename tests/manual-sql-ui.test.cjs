@@ -314,7 +314,7 @@ test('Quick Add V3 presents six compact merged items in canonical mobile order',
  assert.match(html,/if\(backdrop\.classList\.contains\("show"\)\)\{closeSheet\(\{fromHistory:true\}\);return;\}/);
 });
 test('Quick Add capability matrix keeps six actions but disables unsupported provider writes',()=>{
- const viewState=fs.readFileSync('scripts/web-view-state.js','utf8'),source=viewState.match(/function quickAddCapabilities\([^\n]+\n(?:.*\n)*?\}/u)?.[0];
+ const viewState=fs.readFileSync('scripts/web-view-state.js','utf8').replace(/\r\n/g,'\n'),source=viewState.match(/function quickAddCapabilities\([^\n]+\n(?:.*\n)*?\}/u)?.[0];
  assert.ok(source);const context=vm.createContext({Object});vm.runInContext(source,context);
  assert.deepEqual(plain(context.quickAddCapabilities({sql:false,training:true})),{weight:true,workout:true,meal:true,sleep:false,activitypair:false,checkin:true});
  assert.deepEqual(plain(context.quickAddCapabilities({sql:true,training:false})),{weight:true,workout:false,meal:true,sleep:true,activitypair:true,checkin:false});
