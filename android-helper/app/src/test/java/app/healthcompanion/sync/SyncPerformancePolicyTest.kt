@@ -98,6 +98,7 @@ class SyncPerformancePolicyTest {
             BackgroundWorkNames.periodic(user), BackgroundWorkNames.p0Recovery(user),
         )
         assertEquals(4, names.size)
+        assertTrue(BackgroundWorkNames.p0Recovery(user).startsWith("health-sync-p0-recovery-v23-"))
         assertFalse(BackgroundWorkNames.p0Recovery(user).contains(user))
         assertFalse(
             SyncStateNamespace.modeKey(user, BackgroundSyncMode.P0_RECOVERY, "next_record_index") ==

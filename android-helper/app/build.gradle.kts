@@ -37,8 +37,8 @@ android {
         applicationId = "app.healthcompanion.sync.beta"
         minSdk = 28
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.1.0-beta.22"
+        versionCode = 23
+        versionName = "0.1.0-beta.23"
         buildConfigField("String", "API_BASE_URL", "\"${betaApiBaseUrl.get()}\"")
         buildConfigField("String", "AUTH_SETUP_URL", "\"${betaAuthSetupUrl.get()}\"")
         buildConfigField("String", "APP_LINK_HOST", "\"${betaAppLinkHost.get()}\"")

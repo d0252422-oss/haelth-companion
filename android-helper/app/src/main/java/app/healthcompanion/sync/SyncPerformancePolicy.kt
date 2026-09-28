@@ -192,6 +192,8 @@ object BackgroundWorkNames {
     fun userKey(userId: String): String = SyncStateNamespace.userKey(userId)
     fun immediate(userId: String): String = "health-sync-immediate-${userKey(userId)}"
     fun backfill(userId: String): String = "health-sync-backfill-${userKey(userId)}"
-    fun p0Recovery(userId: String): String = "health-sync-p0-recovery-v21-${userKey(userId)}"
+    // v21's one-time replay completed before Total Energy permission was granted.
+    // A new unique request replays the same bounded window without altering SQL rows.
+    fun p0Recovery(userId: String): String = "health-sync-p0-recovery-v23-${userKey(userId)}"
     fun periodic(userId: String): String = "health-sync-periodic-${userKey(userId)}"
 }
