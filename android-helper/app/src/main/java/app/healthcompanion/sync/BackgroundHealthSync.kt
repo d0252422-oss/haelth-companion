@@ -661,7 +661,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 }
                 if (mode == BackgroundSyncMode.BACKFILL) state.markHistoryComplete(session.canonicalUserId)
                 state.recordTerminal(session.canonicalUserId, "SUCCESS")
-                state.saveLastSuccessfulSync(session.canonicalUserId)
+                state.saveLastSuccessfulSync(session.canonicalUserId, SyncWindowPolicy.completedCursor(window))
                 checkpoints.clear()
                 state.clearActiveWindow(session.canonicalUserId, mode)
                 if (mode == BackgroundSyncMode.INCREMENTAL && state.isHistoryPending(session.canonicalUserId)) {

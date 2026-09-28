@@ -72,6 +72,16 @@ class SyncPerformancePolicyTest {
         assertEquals(Instant.parse("2026-09-02T19:00:00Z"), SyncWindowPolicy.incremental(now, last).start)
     }
 
+    @Test fun delayedRetryAdvancesOnlyThroughFrozenWindowEnd() {
+        val start = Instant.parse("2026-09-26T11:10:00Z")
+        val frozenEnd = Instant.parse("2026-09-27T17:53:08Z")
+        val finishedAt = Instant.parse("2026-09-28T15:35:00Z")
+        val completed = SyncWindowPolicy.completedCursor(SyncWindow(start, frozenEnd))
+        assertEquals(frozenEnd, completed)
+        assertEquals(frozenEnd.minusSeconds(3600), SyncWindowPolicy.incremental(finishedAt, completed).start)
+        assertEquals(finishedAt, SyncWindowPolicy.incremental(finishedAt, completed).end)
+    }
+
     @Test fun backfillUsesBoundedThirtyDayWindow() {
         val now = Instant.parse("2026-09-03T00:00:00Z")
         assertEquals(Instant.parse("2026-08-04T00:00:00Z"), SyncWindowPolicy.backfill(now).start)

@@ -34,6 +34,10 @@ object SyncWindowPolicy {
     )
 
     fun backfill(now: Instant): SyncWindow = SyncWindow(now.minus(HISTORY_LOOKBACK_DAYS, ChronoUnit.DAYS), now)
+
+    // A retried window may finish hours after its frozen end. Only the durable
+    // window boundary is safe as the next incremental cursor.
+    fun completedCursor(window: SyncWindow): Instant = window.end
 }
 
 class SyncSingleFlight {
