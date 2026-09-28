@@ -8,6 +8,24 @@ import java.io.IOException
 import java.time.Instant
 
 class SyncPerformancePolicyTest {
+    @Test fun missingSystemJobRepairsOnlyItsUniquePeriodicWork() {
+        val now = 1_000_000L
+        assertTrue(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, false, 0, now))
+        assertFalse(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, true, 0, now))
+        assertFalse(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, null, 0, now))
+        assertFalse(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.RUNNING, false, 0, now))
+        assertFalse(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, false, now - 60_000, now))
+        assertTrue(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, false, now - 900_001, now))
+    }
+
+    @Test fun failedImmediateDoesNotBlockPeriodicRepair() {
+        // The unique immediate and periodic names are independent, and the
+        // periodic decision consumes only its own state and OS-job evidence.
+        val user = "periodic-recovery-user"
+        assertFalse(BackgroundWorkNames.immediate(user) == BackgroundWorkNames.periodic(user))
+        assertTrue(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.CANCELLED, null, 0, 1_000_000))
+        assertTrue(PeriodicSchedulerRecoveryPolicy.shouldReplace(null, null, 0, 1_000_000))
+    }
     @Test fun paginationTerminatesOnRepeatedToken() {
         val seen = mutableSetOf<String>()
         assertFalse(PaginationGuard.isRepeated("page-2", seen))

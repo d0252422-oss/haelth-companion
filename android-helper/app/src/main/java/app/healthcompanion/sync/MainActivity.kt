@@ -148,7 +148,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun renderBackground(runtime: BackgroundRuntimeStatus) {
-        workerDiagnostic.text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: ${runtime.name}"
+        val scheduler = currentSession?.canonicalUserId?.let {
+            SyncRuntimeStateStore(this).periodicSchedulerHealth(it)
+        } ?: "UNKNOWN"
+        workerDiagnostic.text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: ${runtime.name}\nPeriodic: $scheduler"
         when (runtime) {
             BackgroundRuntimeStatus.RUNNING ->
                 render(ConnectorUiState.BACKGROUND_SYNCING, "健康資料已連接\n背景同步中，你可以繼續使用 App。")

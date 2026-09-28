@@ -1,6 +1,8 @@
 package app.healthcompanion.sync
 
 import android.content.Context
+import android.app.job.JobScheduler
+import android.os.Build
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.time.Instant
@@ -32,6 +35,13 @@ class SyncRuntimeStateStore(context: Context) {
     private val preferences = context.getSharedPreferences("sync_runtime_state", Context.MODE_PRIVATE)
 
     fun markHistoryPending(userId: String) = preferences.edit().putBoolean(key(userId, HISTORY_PENDING), true).apply()
+    fun periodicSchedulerHealth(userId: String): String? = preferences.getString(key(userId, PERIODIC_SCHEDULER_HEALTH), null)
+    fun lastPeriodicRepairAt(userId: String): Long = preferences.getLong(key(userId, PERIODIC_REPAIR_AT), 0L)
+    fun recordPeriodicSchedulerHealth(userId: String, health: String, repairAtMs: Long? = null) {
+        val editor = preferences.edit().putString(key(userId, PERIODIC_SCHEDULER_HEALTH), health)
+        repairAtMs?.let { editor.putLong(key(userId, PERIODIC_REPAIR_AT), it) }
+        editor.apply()
+    }
     fun markHistoryComplete(userId: String) = preferences.edit().putBoolean(key(userId, HISTORY_PENDING), false).apply()
     fun isHistoryPending(userId: String): Boolean = preferences.getBoolean(key(userId, HISTORY_PENDING), false)
     fun saveBackgroundResult(userId: String, result: String) = preferences.edit()
@@ -165,6 +175,8 @@ class SyncRuntimeStateStore(context: Context) {
             .remove(key(userId, BACKGROUND_READ_SOURCE_APPS))
             .remove(key(userId, BACKGROUND_HTTP_STATUS))
             .remove(key(userId, BACKGROUND_HTTP_ERROR_CODE))
+            .remove(key(userId, PERIODIC_SCHEDULER_HEALTH))
+            .remove(key(userId, PERIODIC_REPAIR_AT))
         BackgroundSyncMode.entries.forEach { mode ->
             editor.remove(modeKey(userId, mode, ACTIVE_WINDOW_END))
         }
@@ -250,6 +262,8 @@ class SyncRuntimeStateStore(context: Context) {
         const val BACKGROUND_READ_SOURCE_APPS = "background_read_source_apps"
         const val BACKGROUND_HTTP_STATUS = "background_http_status"
         const val BACKGROUND_HTTP_ERROR_CODE = "background_http_error_code"
+        const val PERIODIC_SCHEDULER_HEALTH = "periodic_scheduler_health"
+        const val PERIODIC_REPAIR_AT = "periodic_repair_at"
     }
 }
 
@@ -280,7 +294,7 @@ object BackgroundSyncScheduler {
             if (current != null && current.state in ACTIVE_STATES) {
                 val status = statusOf(current)
                 recordObserved(context, userId, current, status)
-                ensurePeriodic(manager, userId, constraints, replacePeriodic)
+                reconcilePeriodic(context, manager, userId, constraints, replacePeriodic)
                 return status
             }
         }
@@ -294,7 +308,7 @@ object BackgroundSyncScheduler {
         val immediatePolicy = if (replaceImmediate) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
         manager.beginUniqueWork(BackgroundWorkNames.immediate(userId), immediatePolicy, immediate).enqueue()
         SyncRuntimeStateStore(context).recordEnqueued(userId, immediate.id.toString())
-        ensurePeriodic(manager, userId, constraints, replacePeriodic)
+        reconcilePeriodic(context, manager, userId, constraints, replacePeriodic)
         return BackgroundRuntimeStatus.ENQUEUED
     }
 
@@ -312,6 +326,56 @@ object BackgroundSyncScheduler {
             .build()
         val policy = if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP
         manager.enqueueUniquePeriodicWork(BackgroundWorkNames.periodic(userId), policy, periodic)
+    }
+
+    /** Keep WorkManager's unique name authoritative while repairing an orphaned OS job. */
+    private suspend fun reconcilePeriodic(
+        context: Context,
+        manager: WorkManager,
+        userId: String,
+        constraints: Constraints,
+        replace: Boolean = false,
+    ) {
+        val store = SyncRuntimeStateStore(context)
+        val existing = queryWork(manager, BackgroundWorkNames.periodic(userId))
+        val work = existing.firstOrNull { it.state == WorkInfo.State.RUNNING }
+            ?: existing.firstOrNull { it.state in ACTIVE_STATES }
+        val state = work?.let(::durableState)
+        val present = if (state == DurableWorkState.ENQUEUED && !replace) {
+            systemJobPresent(context, work.id.toString())
+        } else null
+        val secondCheck = if (present == false) {
+            delay(1_000)
+            systemJobPresent(context, work!!.id.toString())
+        } else present
+        val confirmedMissing = present == false && secondCheck == false
+        val now = System.currentTimeMillis()
+        if (confirmedMissing) store.recordPeriodicSchedulerHealth(userId, "SCHEDULER_DEGRADED")
+        val repair = replace || PeriodicSchedulerRecoveryPolicy.shouldReplace(
+            state, if (confirmedMissing) false else secondCheck, store.lastPeriodicRepairAt(userId), now,
+        )
+        if (repair) {
+            ensurePeriodic(manager, userId, constraints, replace = true)
+            store.recordPeriodicSchedulerHealth(userId, "RECONCILING", now)
+        } else if (state == null) {
+            ensurePeriodic(manager, userId, constraints)
+            store.recordPeriodicSchedulerHealth(userId, "ENQUEUED")
+        } else if (present == true) {
+            store.recordPeriodicSchedulerHealth(userId, "HEALTHY")
+        }
+    }
+
+    private fun systemJobPresent(context: Context, workId: String): Boolean? = runCatching {
+        val scheduler = context.getSystemService(JobScheduler::class.java) ?: return@runCatching null
+        val jobs = if (Build.VERSION.SDK_INT >= 34) {
+            scheduler.pendingJobsInAllNamespaces.values.flatten()
+        } else scheduler.allPendingJobs
+        jobs.any { it.extras.getString("EXTRA_WORK_SPEC_ID") == workId }
+    }.getOrNull()
+
+    suspend fun reconcilePeriodicAfterWorkerStart(context: Context, userId: String) {
+        reconcilePeriodic(context, WorkManager.getInstance(context), userId,
+            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
     }
 
     suspend fun enqueueBackfill(context: Context, userId: String) {
@@ -341,7 +405,7 @@ object BackgroundSyncScheduler {
         return when (decision.action) {
             WorkRecoveryAction.KEEP -> {
                 selected?.let { recordObserved(context, userId, it, decision.status) }
-                ensurePeriodic(manager, userId, Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                reconcilePeriodic(context, manager, userId, Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 decision.status
             }
             WorkRecoveryAction.ENQUEUE -> {
@@ -515,6 +579,11 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         } ?: return Result.failure()
         if (BackgroundWorkNames.userKey(session.canonicalUserId) != expectedUserKey) {
             return Result.failure()
+        }
+        // An immediate worker can revive an orphaned periodic schedule without
+        // coupling either request to the other's terminal state.
+        if (mode == BackgroundSyncMode.INCREMENTAL) {
+            BackgroundSyncScheduler.reconcilePeriodicAfterWorkerStart(applicationContext, session.canonicalUserId)
         }
         val checkpoints = SyncCheckpointStore(applicationContext, session.canonicalUserId, mode)
         if (!AppSyncSingleFlight.gate.tryStart()) {

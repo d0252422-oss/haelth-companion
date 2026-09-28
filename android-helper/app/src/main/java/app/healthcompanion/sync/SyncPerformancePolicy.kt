@@ -54,6 +54,26 @@ object AppSyncSingleFlight {
 
 enum class BackgroundSyncMode { INCREMENTAL, BACKFILL }
 
+/** A missing system job is distinct from a WorkManager row waiting for constraints. */
+internal object PeriodicSchedulerRecoveryPolicy {
+    const val REPAIR_COOLDOWN_MS = 15 * 60_000L
+
+    fun shouldReplace(
+        state: DurableWorkState?,
+        systemJobPresent: Boolean?,
+        lastRepairAtMs: Long,
+        nowMs: Long,
+    ): Boolean {
+        if (lastRepairAtMs > 0 && nowMs - lastRepairAtMs in 0 until REPAIR_COOLDOWN_MS) return false
+        return when (state) {
+            null, DurableWorkState.FAILED, DurableWorkState.CANCELLED,
+            DurableWorkState.SUCCEEDED, DurableWorkState.BLOCKED -> true
+            DurableWorkState.ENQUEUED -> systemJobPresent == false
+            DurableWorkState.RUNNING, DurableWorkState.UNKNOWN -> false
+        }
+    }
+}
+
 object BackgroundContinuationPolicy {
     const val DEFAULT_MAX_ATTEMPTS = 3
     const val BACKFILL_MAX_CONTINUATION_ATTEMPTS = 12

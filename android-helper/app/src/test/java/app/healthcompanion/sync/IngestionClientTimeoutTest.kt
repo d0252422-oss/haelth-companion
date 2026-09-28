@@ -18,6 +18,43 @@ import kotlin.time.TimeSource
 class IngestionClientTimeoutTest {
     private val session = NativeAuthSession("11111111-1111-4111-8111-111111111111", "test-token")
 
+    @Test fun failedBatchKeepsCheckpointAndRetriesIdenticalPayloadAfterRecovery() = runTest {
+        for (failure in listOf(401, 429, 500, 503)) {
+            val checkpoints = MemoryCheckpoints()
+            val bodies = mutableListOf<String>()
+            var unavailable = true
+            val client = IngestionClient("https://beta.example", IngestionTransport { _, _, body ->
+                bodies += body
+                IngestionHttpResult(if (unavailable) failure else 200)
+            }, backoff = {})
+            val input = records(1)
+            val rejected = runCatching { client.upload(session, input, checkpoints) }.exceptionOrNull()
+            assertTrue("status=$failure", rejected is AuthenticationRequired || rejected is BatchUploadFailed)
+            assertNull("status=$failure", checkpoints.value)
+            unavailable = false
+            client.upload(session, input, checkpoints)
+            assertEquals("status=$failure", bodies.first(), bodies.last())
+            assertEquals("status=$failure", 1, checkpoints.value?.nextRecordIndex)
+        }
+    }
+
+    @Test fun networkFailureKeepsCheckpointUntilRetrySucceeds() = runTest {
+        val checkpoints = MemoryCheckpoints()
+        val bodies = mutableListOf<String>()
+        var unavailable = true
+        val client = IngestionClient("https://beta.example", IngestionTransport { _, _, body ->
+            bodies += body
+            if (unavailable) throw IOException("network unavailable")
+            IngestionHttpResult(200)
+        }, backoff = {})
+        assertTrue(runCatching { client.upload(session, records(1), checkpoints) }.exceptionOrNull() is IOException)
+        assertNull(checkpoints.value)
+        unavailable = false
+        client.upload(session, records(1), checkpoints)
+        assertEquals(bodies.first(), bodies.last())
+        assertEquals(1, checkpoints.value?.nextRecordIndex)
+    }
+
     @Test fun timeoutRetriesAndPreservesLastCompletedBatchCheckpoint() = runTest {
         val checkpoints = MemoryCheckpoints()
         var calls = 0
