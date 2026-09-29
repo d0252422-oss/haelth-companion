@@ -98,6 +98,7 @@ internal class IngestionClient(
         session: BackendSession,
         records: List<CanonicalHealthRecord>,
         checkpoints: CheckpointRepository,
+        diagnostic: SyncTriggerDiagnostic? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): UploadSummary {
         requireConfigured()
@@ -107,7 +108,7 @@ internal class IngestionClient(
         while (nextRecordIndex < plan.orderedRecords.size) {
             val batch = BatchPlanner.nextStreamingBatch(session.canonicalUserId, plan.orderedRecords, nextRecordIndex)
                 ?: break
-            postBatch(session, batch.body)
+            postBatch(session, batch.body, diagnostic)
             nextRecordIndex = batch.nextRecordIndex
             completedBatches += 1
             checkpoints.save(SyncCheckpoint(
@@ -151,11 +152,14 @@ internal class IngestionClient(
         )
     }
 
-    private suspend fun postBatch(session: BackendSession, body: String) {
+    private suspend fun postBatch(session: BackendSession, body: String, diagnostic: SyncTriggerDiagnostic?) {
         var attempt = 0
         while (true) {
             attempt += 1
-            val status = try { execute(session, body) } catch (error: IOException) {
+            val requestBody = diagnostic?.let {
+                JSONObject(body).put("sync_diagnostic", it.request(attempt)).toString()
+            } ?: body
+            val status = try { execute(session, requestBody) } catch (error: IOException) {
                 if (!RetryPolicy.isRetryable(error) || attempt >= MAX_ATTEMPTS) throw error
                 sleepBackoff(attempt)
                 continue
@@ -176,7 +180,7 @@ internal class IngestionClient(
         return result.statusCode
     }
 
-    suspend fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String) {
+    suspend fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String, diagnostic: SyncTriggerDiagnostic? = null) {
         requireConfigured()
         val now = java.time.Instant.now().toString()
         val body = JSONObject()
@@ -189,6 +193,7 @@ internal class IngestionClient(
             .put("last_result", result)
             .put("available_domains", JSONArray(records.map { it.domain }.distinct()))
             .put("permission_state_if_known", permissionState)
+            .apply { diagnostic?.let { put("sync_diagnostic", it.request(1)) } }
             .toString()
         val httpResult = transport.post("/v1/mobile/connectors/status", session, body)
         onHttpResult(httpResult)

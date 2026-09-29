@@ -284,6 +284,7 @@ object BackgroundSyncScheduler {
         userId: String,
         replaceImmediate: Boolean = false,
         replacePeriodic: Boolean = false,
+        trigger: SyncTriggerSource = SyncTriggerSource.APP_START,
     ): BackgroundRuntimeStatus {
         val manager = WorkManager.getInstance(context)
         manager.cancelUniqueWork(LEGACY_BACKFILL)
@@ -301,7 +302,7 @@ object BackgroundSyncScheduler {
         val userKey = BackgroundWorkNames.userKey(userId)
         val immediate = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>()
             .setConstraints(constraints)
-            .setInputData(workDataOf(WORK_MODE to BackgroundSyncMode.INCREMENTAL.name, WORK_USER_KEY to userKey))
+            .setInputData(triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, trigger))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
@@ -321,7 +322,7 @@ object BackgroundSyncScheduler {
         val userKey = BackgroundWorkNames.userKey(userId)
         val periodic = PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>(12, TimeUnit.HOURS)
             .setConstraints(constraints)
-            .setInputData(workDataOf(WORK_MODE to BackgroundSyncMode.INCREMENTAL.name, WORK_USER_KEY to userKey))
+            .setInputData(triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, SyncTriggerSource.PERIODIC_WORKER))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         val policy = if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP
@@ -378,13 +379,27 @@ object BackgroundSyncScheduler {
             Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
     }
 
+    /** Old beta.23 periodic WorkSpecs survive an in-place APK update under KEEP. */
+    suspend fun resolveTrigger(context: Context, userId: String, workId: String, configured: SyncTriggerSource): SyncTriggerSource {
+        if (configured != SyncTriggerSource.UNKNOWN) return configured
+        val manager = try { WorkManager.getInstance(context) } catch (_: Exception) { return SyncTriggerSource.UNKNOWN }
+        if (queryWork(manager, BackgroundWorkNames.periodic(userId)).any { it.id.toString() == workId }) {
+            return SyncTriggerSource.PERIODIC_WORKER
+        }
+        if (queryWork(manager, BackgroundWorkNames.backfill(userId)).any { it.id.toString() == workId } ||
+            queryWork(manager, BackgroundWorkNames.p0Recovery(userId)).any { it.id.toString() == workId }) {
+            return SyncTriggerSource.BACKFILL
+        }
+        return SyncTriggerSource.UNKNOWN
+    }
+
     suspend fun enqueueBackfill(context: Context, userId: String) {
         val manager = WorkManager.getInstance(context)
         val existing = queryWork(manager, BackgroundWorkNames.backfill(userId))
         if (existing.any { it.state in ACTIVE_STATES }) return
         val request = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInputData(workDataOf(WORK_MODE to BackgroundSyncMode.BACKFILL.name, WORK_USER_KEY to BackgroundWorkNames.userKey(userId)))
+            .setInputData(triggerInput(BackgroundSyncMode.BACKFILL, BackgroundWorkNames.userKey(userId), SyncTriggerSource.BACKFILL))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         manager.enqueueUniqueWork(BackgroundWorkNames.backfill(userId), ExistingWorkPolicy.KEEP, request)
@@ -401,13 +416,14 @@ object BackgroundSyncScheduler {
                 WORK_MODE to BackgroundSyncMode.P0_RECOVERY.name,
                 WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
                 WORK_FROZEN_END to Instant.now().toString(),
+                WORK_TRIGGER_SOURCE to SyncTriggerSource.BACKFILL.name,
             ))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         manager.enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, request)
     }
 
-    suspend fun reconcileAndEnqueue(context: Context, userId: String): BackgroundRuntimeStatus {
+    suspend fun reconcileAndEnqueue(context: Context, userId: String, trigger: SyncTriggerSource = SyncTriggerSource.APP_START): BackgroundRuntimeStatus {
         val manager = WorkManager.getInstance(context)
         val store = SyncRuntimeStateStore(context)
         val metadata = store.workMetadata(userId)
@@ -427,12 +443,12 @@ object BackgroundSyncScheduler {
             }
             WorkRecoveryAction.ENQUEUE -> {
                 if (decision.status == BackgroundRuntimeStatus.UP_TO_DATE) store.recordTerminal(userId, "UP_TO_DATE")
-                enqueue(context, userId)
+                enqueue(context, userId, trigger = trigger)
             }
             WorkRecoveryAction.REPLACE_STALE -> {
                 store.recordTerminal(userId, "STALE_RECOVERED")
                 manager.cancelUniqueWork(BackgroundWorkNames.backfill(userId))
-                enqueue(context, userId, replaceImmediate = true, replacePeriodic = true)
+                enqueue(context, userId, replaceImmediate = true, replacePeriodic = true, trigger = trigger)
             }
         }
     }
@@ -560,6 +576,9 @@ object BackgroundSyncScheduler {
     const val WORK_MODE = "sync_mode"
     const val WORK_USER_KEY = "canonical_user_key"
     const val WORK_FROZEN_END = "recovery_frozen_end"
+    const val WORK_TRIGGER_SOURCE = "sync_trigger_source"
+    internal fun triggerInput(mode: BackgroundSyncMode, userKey: String, trigger: SyncTriggerSource) =
+        workDataOf(WORK_MODE to mode.name, WORK_USER_KEY to userKey, WORK_TRIGGER_SOURCE to trigger.name)
     const val PROGRESS_STAGE = "sync_stage"
     const val PROGRESS_AT_EPOCH_MS = "sync_progress_at"
     const val PROGRESS_REQUEST_COUNT = "sync_request_count"
@@ -569,6 +588,7 @@ object BackgroundSyncScheduler {
 
 class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
+        val workerStartedAt = Instant.now().toString()
         val state = SyncRuntimeStateStore(applicationContext)
         val health = HealthConnectGateway(applicationContext)
         val mode = runCatching {
@@ -602,6 +622,10 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         if (BackgroundWorkNames.userKey(session.canonicalUserId) != expectedUserKey) {
             return Result.failure()
         }
+        val origin = BackgroundSyncScheduler.resolveTrigger(applicationContext, session.canonicalUserId,
+            id.toString(), SyncTriggerSource.fromWorkInput(inputData.getString(BackgroundSyncScheduler.WORK_TRIGGER_SOURCE)))
+        val diagnostic = SyncTriggerDiagnostic(origin, workerId = id.toString(),
+            startedAt = workerStartedAt, workerAttempt = runAttemptCount)
         // An immediate worker can revive an orphaned periodic schedule without
         // coupling either request to the other's terminal state.
         if (mode == BackgroundSyncMode.INCREMENTAL) {
@@ -661,7 +685,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 val uploadSummary = try {
                     withTimeout(UPLOAD_TIMEOUT_MS) {
                         withContext(Dispatchers.IO) {
-                            client.upload(session, read.records, checkpoints) { done, _ ->
+                            client.upload(session, read.records, checkpoints, diagnostic) { done, _ ->
                                 state.recordProgress(session.canonicalUserId, "UPLOAD", done)
                             }
                         }
@@ -670,7 +694,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     reportProgress(state, session.canonicalUserId, "SESSION_REFRESH")
                     session = withTimeout(SESSION_TIMEOUT_MS) { auth.refresh() }
                     withTimeout(UPLOAD_TIMEOUT_MS) {
-                        withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints) }
+                        withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints, diagnostic) }
                     }
                 }
                 reportProgress(state, session.canonicalUserId, "CHECKPOINT")
@@ -681,7 +705,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 val needsFollowUp = !durablyComplete
                 val result = if (needsFollowUp) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED"
                 withContext(Dispatchers.IO) {
-                    client.reportStatus(session, read.records, result, if (health.hasAllPermissions()) "GRANTED" else "PARTIAL")
+                    client.reportStatus(session, read.records, result, if (health.hasAllPermissions()) "GRANTED" else "PARTIAL", diagnostic)
                 }
                 if (needsFollowUp) {
                     state.markHistoryPending(session.canonicalUserId)

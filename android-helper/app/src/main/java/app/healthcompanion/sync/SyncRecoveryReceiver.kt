@@ -28,7 +28,7 @@ class SyncRecoveryReceiver : BroadcastReceiver() {
                         health.hasAnyPermission() &&
                         health.backgroundReadState() == BackgroundHealthReadState.GRANTED
                     ) {
-                        BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId)
+                        BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId, SyncTriggerSource.BOOT_RECOVERY)
                         BackgroundSyncScheduler.enqueueP0Recovery(app, session.canonicalUserId)
                     }
                 }

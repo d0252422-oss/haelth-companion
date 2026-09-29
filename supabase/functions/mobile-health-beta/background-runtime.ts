@@ -4,6 +4,7 @@ import { sameCanonicalUserId } from "./canonical-user-id.ts";
 import { readManualRequest } from "./manual-request-body.ts";
 import { scopedWorkerSql } from "./worker-sql-context.ts";
 import { LocalEngineRuntime } from "./local-engine-runtime.ts";
+import { logPersistedSyncReceipt } from "./sync-trigger-diagnostic.ts";
 const sha = async (value: string) =>
   Array.from(
     new Uint8Array(
@@ -25,6 +26,7 @@ export function createDelegatedIngestion(raw: any) {
         }
         const path = new URL(request.url).pathname,
           shortcut = path.endsWith("/v1/connectors/ios-shortcut/ingest");
+        const statusRequest = path.endsWith("/v1/mobile/connectors/status");
         const session = request.headers.get(
             shortcut ? "x-shortcut-session-id" : "x-app-session-id",
           ) || "",
@@ -61,7 +63,7 @@ export function createDelegatedIngestion(raw: any) {
           }
           nativeOwner = String(data);
         }
-        return await sql.withSession({
+        const response = await sql.withSession({
           kind: shortcut ? "shortcut" : native ? "native" : "app",
           session,
           digest: nativeDigest ?? await sha(auth.slice(7)),
@@ -73,7 +75,6 @@ export function createDelegatedIngestion(raw: any) {
             if (native && !sameCanonicalUserId(identity.id, nativeOwner)) {
               throw Error("NATIVE_IDENTITY_CONFLICT");
             }
-            const statusRequest = path.endsWith("/v1/mobile/connectors/status");
             if (
               body.environment !== "beta" &&
               !(statusRequest && body.environment === undefined)
@@ -180,6 +181,15 @@ export function createDelegatedIngestion(raw: any) {
             }
             return result(receipts.rejected.length ? 207 : 200, receipts);
           }));
+        if (body.sync_diagnostic && (response.status === 200 || response.status === 207)) {
+          const receipt = await response.clone().json().catch(() => ({}));
+          logPersistedSyncReceipt(statusRequest ? "connector_status" : "ingestion",
+            body.sync_diagnostic, response.status,
+            statusRequest ? { last_result: body.last_result } : receipt,
+            { platform: native ? "android" : shortcut ? "ios" : null,
+              auth_kind: native ? "native_bearer" : shortcut ? "shortcut_credential" : "app_session" });
+        }
+        return response;
       } catch (e) {
         const code = String((e as any)?.code || ""),
           message = (e as Error).message,

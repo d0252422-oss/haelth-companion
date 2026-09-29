@@ -4,6 +4,7 @@ import { shouldRouteBackgroundMutation } from "./background-routing.ts";
 import { readBetaScores, recomputeBetaScore } from "./score-bridge.ts";
 import { canonicalScoreDate, scoreRecomputeStatus } from "./score-read-contract.ts";
 import { sameCanonicalUserId } from "./canonical-user-id.ts";
+import { logPersistedSyncReceipt } from "./sync-trigger-diagnostic.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -408,7 +409,11 @@ async function ingest(request: Request, admin: any, origin: string): Promise<Res
   });
   if (error) throw databaseFailure(error);
   if (!receipt || !Array.isArray(receipt.rejected)) throw failure("INVALID_INGESTION_RECEIPT", 500);
-  return json((receipt.rejected as unknown[]).length ? 207 : 200, receipt, origin);
+  const status = (receipt.rejected as unknown[]).length ? 207 : 200;
+  logPersistedSyncReceipt("ingestion", body.sync_diagnostic, status, receipt,
+    { platform: session.platform === "android" ? "android" : session.platform === "ios" ? "ios" : null,
+      auth_kind: request.headers.get("x-app-session-id") ? "app_session" : "native_bearer" });
+  return json(status, receipt, origin);
 }
 
 async function reportStatus(request: Request, admin: any, origin: string): Promise<Response> {
@@ -431,6 +436,9 @@ async function reportStatus(request: Request, admin: any, origin: string): Promi
     p_permission_state: body.permission_state_if_known || "UNKNOWN",
   });
   if (error) throw databaseFailure(error);
+  logPersistedSyncReceipt("connector_status", body.sync_diagnostic, 200, { last_result: lastResult },
+    { platform: session.platform === "android" ? "android" : session.platform === "ios" ? "ios" : null,
+      auth_kind: request.headers.get("x-app-session-id") ? "app_session" : "native_bearer" });
   if (successfulSync) scheduleScoreRecompute(admin, String(session.canonical_user_id), scoreWorkerIdentityContext(session));
   return json(200, { status: "RECORDED", score_recompute: successfulSync ? "QUEUED" : "NOT_QUEUED" }, origin);
 }

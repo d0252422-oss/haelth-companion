@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                 render(ConnectorUiState.HEALTH_PERMISSION_REQUIRED, "請允許背景健康資料同步")
             BackgroundHealthReadState.UNSUPPORTED -> {
                 render(ConnectorUiState.READY_TO_SYNC, "健康資料已連接；此裝置需在 App 開啟時更新")
-                firstSync()
+                firstSync(SyncTriggerSource.APP_START)
             }
         }
     }
@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
         else render(ConnectorUiState.HEALTH_CONNECT_UNAVAILABLE)
     }
 
-    private fun firstSync() {
+    private fun firstSync(trigger: SyncTriggerSource = SyncTriggerSource.MANUAL_SYNC) {
         if (!AppSyncSingleFlight.gate.tryStart()) {
             render(ConnectorUiState.BACKGROUND_SYNCING, "背景同步進行中，你可以稍後查看更新。")
             return
@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
                 val initialSession = currentSession
                 if (initialSession == null) { render(ConnectorUiState.SIGNED_OUT); return@launch }
                 var session: NativeAuthSession = initialSession
+                val diagnostic = SyncTriggerDiagnostic(trigger)
                 val checkpoints = SyncCheckpointStore(
                     this@MainActivity,
                     initialSession.canonicalUserId,
@@ -210,13 +211,13 @@ class MainActivity : ComponentActivity() {
                     IngestionClient(BuildConfig.API_BASE_URL).use { client ->
                         val uploadSummary = try {
                             withContext(Dispatchers.IO) {
-                                client.upload(session, read.records, checkpoints) { done, total ->
+                                client.upload(session, read.records, checkpoints, diagnostic) { done, total ->
                                     scope.launch { status.text = "正在上傳健康資料… $done/$total" }
                                 }
                             }
                         } catch (_: AuthenticationRequired) {
                             session = auth.refresh().also { currentSession = it }
-                            withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints) }
+                            withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints, diagnostic) }
                         }
                         status.text = "健康資料已同步，分數正在更新…"
                         val partial = !SyncTerminalPolicy.isDurablyComplete(
@@ -225,7 +226,7 @@ class MainActivity : ComponentActivity() {
                         )
                         val result = if (partial) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED_RECENT"
                         val permissionState = if (granted.containsAll(health.readPermissions)) "GRANTED" else "PARTIAL"
-                        withContext(Dispatchers.IO) { client.reportStatus(session, read.records, result, permissionState) }
+                        withContext(Dispatchers.IO) { client.reportStatus(session, read.records, result, permissionState, diagnostic) }
                         if (!partial) checkpoints.clear()
                         ForegroundSyncResult(read.records.isNotEmpty(), partial)
                     }
