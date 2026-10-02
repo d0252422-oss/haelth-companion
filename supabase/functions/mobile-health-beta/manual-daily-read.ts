@@ -3,7 +3,9 @@
 import { localReadRange, rejectClientIdentity } from './manual-body-local.ts';
 import { manualPrivilegedRead, prepareManualRead } from './manual-web-identity.ts';
 import {projectManualObservationDay} from './manual-observation-projection.ts';
+import {projectCompleteTotalEnergyDays} from './total-energy-daily.ts';
 type Json = Record<string, any>;
+const TOTAL_ENERGY_READ_LIMIT = 100_000;
 const pgDay = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
 // Only these native domains participate in manual-source conflict detection or
 // pending-day visibility. Published output payloads remain authoritative. For
@@ -87,6 +89,20 @@ export async function readPublishedDailySnapshot(tx:any,identity:Json,input:Json
           from unnest(interval_ranges) span) else daily_value end as daily_value
       from ranked where source_rank=1 order by domain,local_date
       limit ${PUBLISHED_DAILY_AUTOMATIC_DOMAINS.length*366+1}`;
+    // Keep interval values server-side and user-scoped. This bounded snapshot is
+    // reconciled separately from score publication; raw source totals are never
+    // summed across Fitbit/Google Fit or promoted from a partial day.
+    const energy=await tx`select r.platform,r.source_app,r.source_record_id,r.source_revision,
+        r.source_updated_at,r.updated_at,r.affected_local_dates,
+        r.canonical_record->>'started_at' as started_at,
+        r.canonical_record->>'ended_at' as ended_at,
+        r.canonical_record->>'value' as value,
+        r.canonical_record->>'unit' as unit
+      from public.beta_health_records r
+      where r.canonical_user_id=${identity.canonical} and r.domain='total_energy'
+        and r.operation='UPSERT' and r.invalidated_at is null
+        and r.affected_local_dates && array(select generate_series(${range.start}::date,${range.end}::date,'1 day')::date)
+      order by r.updated_at,r.id limit ${TOTAL_ENERGY_READ_LIMIT+1}`;
     await prepareManualRead(tx, identity);
     const manual=await tx`select * from public.engine_manual_observations where canonical_user_id=${identity.canonical} and not deleted
       and (local_date between ${range.start}::date and ${range.end}::date or (domain='sleep' and local_date between ${range.start}::date-1 and ${range.end}::date+1)) limit 5001`;
@@ -96,7 +112,8 @@ export async function readPublishedDailySnapshot(tx:any,identity:Json,input:Json
       where p.canonical_user_id=${identity.canonical} and p.calculation_date between ${range.start}::date and ${range.end}::date
       and p.output_kind in ('sleep','activity') and p.engine_version=p.output_kind||'-score-v1.0' order by p.calculation_date limit 733`;
     if (rows.length > 732) throw Error('READ_BOUND_EXCEEDED');
-    return {queue,automatic,manual,rows,range};
+    return {queue,automatic,energy:energy.length>TOTAL_ENERGY_READ_LIMIT?[]:energy,
+      energyReadTruncated:energy.length>TOTAL_ENERGY_READ_LIMIT,manual,rows,range};
 }
 
 // Pure presentation of the same captured generation/raw/head snapshot. Both
@@ -202,6 +219,24 @@ export function projectPublishedDaily(snapshot:Json,domain:'sleep'|'activity') {
       entry.dataStatus='CURRENT';
       entry.staleReason=null;
     }
+    if(domain==='activity'&&!snapshot.energyReadTruncated&&snapshot.range){
+      for(const [date,total] of projectCompleteTotalEnergyDays(snapshot.energy||[],snapshot.range,snapshot.asOfMs??Date.now())){
+        const entry=days.get(date)||{date,dataStatus:'STALE',staleReason:'PUBLICATION_NOT_AVAILABLE',
+          source:'SQL_CANONICAL_INPUT_PENDING_PUBLICATION',steps:null,totalCalories:null};
+        if(entry.totalCalories!==null&&entry.totalCalories!==undefined)continue;
+        entry.analysisDataStatus??=entry.dataStatus;
+        entry.analysisStaleReason??=entry.staleReason??null;
+        entry.totalCalories=total.value;
+        entry.totalEnergySource='WEARABLE_SYNC';
+        entry.totalEnergyAutomaticSourceApp=total.sourceApp;
+        entry.totalEnergyAllocation=total.allocation;
+        entry.coverage={...entry.coverage,totalEnergy:'FULL_DAY'};
+        entry.source='SQL_CANONICAL_AUTOMATIC_FALLBACK';
+        entry.dataStatus='CURRENT';
+        entry.staleReason=null;
+        days.set(date,entry);
+      }
+    }
     for(const date of [...new Set<string>(manual.map((r:Json)=>pgDay(r.local_date)))]){
       if(snapshot.range&&(date<snapshot.range.start||date>snapshot.range.end))continue;
       const projection=projectManualObservationDay(manual,automatic,date);
@@ -232,7 +267,7 @@ export function projectPublishedDaily(snapshot:Json,domain:'sleep'|'activity') {
       // flags continue to disclose that derived analysis excluded the conflict.
       if(domain==='sleep'){entry.totalSleepMinutes=displayProjection.sleep.value;entry.sleepSource='SELF_REPORTED_UNKNOWN_QUALITY';}
       else {if(displayProjection.steps.recordIds.length){entry.steps=displayProjection.steps.value;entry.stepsSource='SELF_REPORTED_UNKNOWN_QUALITY';}if(displayProjection.totalEnergy.recordIds.length){entry.totalCalories=displayProjection.totalEnergy.value;entry.totalEnergySource='SELF_REPORTED_UNKNOWN_QUALITY';}}
-      entry.analysisDataStatus??=entry.dataStatus;entry.analysisStaleReason??=entry.staleReason??null;entry.dataStatus='CURRENT';entry.staleReason=null;entry.coverage={sleep:displayProjection.sleep.coverage,steps:displayProjection.steps.coverage,totalEnergy:displayProjection.totalEnergy.coverage};
+      entry.analysisDataStatus??=entry.dataStatus;entry.analysisStaleReason??=entry.staleReason??null;entry.dataStatus='CURRENT';entry.staleReason=null;entry.coverage={sleep:displayProjection.sleep.coverage,steps:displayProjection.steps.coverage,totalEnergy:displayProjection.totalEnergy.recordIds.length?displayProjection.totalEnergy.coverage:entry.coverage?.totalEnergy??displayProjection.totalEnergy.coverage};
       days.set(date,entry);
     }
     return [...days.values()].sort((a,b)=>a.date.localeCompare(b.date));

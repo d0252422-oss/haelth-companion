@@ -746,6 +746,16 @@ Deno.test("raw automatic read collapses high-frequency records to bounded domain
       throw Error(`AUTOMATIC_DOMAIN_DATE_COLLAPSE_MISSING:${contract}`);
     }
   }
+  const energyRead = source.split("const energy=await tx`")[1]?.split("`;")[0] ?? "";
+  for (const contract of [
+    /r\.canonical_user_id=\$\{identity\.canonical\}/u,
+    /r\.domain='total_energy'/u,
+    /r\.operation='UPSERT' and r\.invalidated_at is null/u,
+    /r\.affected_local_dates && array\(select generate_series/u,
+    /limit \$\{TOTAL_ENERGY_READ_LIMIT\+1\}/u,
+  ]) {
+    if (!contract.test(energyRead)) throw Error(`TOTAL_ENERGY_SCOPED_READ_MISSING:${contract}`);
+  }
 });
 
 Deno.test("pending native total energy keeps its local day as a null gap", () => {
