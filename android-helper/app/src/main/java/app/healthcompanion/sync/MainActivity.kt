@@ -41,6 +41,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Seed the independent scheduler repair before network/session restore.
+        // A transient restore failure must not make the one-time launch the
+        // user's only chance to revive automatic uploads.
+        PeriodicSyncWatchdog.schedule(this)
         health = HealthConnectGateway(this)
         auth = NativeGoogleAuth(
             this,
