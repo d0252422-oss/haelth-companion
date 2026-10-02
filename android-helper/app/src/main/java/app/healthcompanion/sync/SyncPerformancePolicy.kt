@@ -44,6 +44,15 @@ object SyncWindowPolicy {
     fun completedCursor(window: SyncWindow): Instant = window.end
 }
 
+/** A foreground gesture must not hold the user while durable background sync can continue. */
+internal object ForegroundSyncBudget {
+    const val BACKGROUND_CAPABLE_MS = 25_000L
+    const val FOREGROUND_ONLY_MS = 120_000L
+
+    fun deadlineMs(backgroundReadGranted: Boolean): Long =
+        if (backgroundReadGranted) BACKGROUND_CAPABLE_MS else FOREGROUND_ONLY_MS
+}
+
 class SyncSingleFlight {
     private var running = false
 

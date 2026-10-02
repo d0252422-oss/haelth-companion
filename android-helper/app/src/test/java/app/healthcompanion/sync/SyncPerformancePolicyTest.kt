@@ -8,6 +8,11 @@ import java.io.IOException
 import java.time.Instant
 
 class SyncPerformancePolicyTest {
+    @Test fun foregroundWaitIsBoundedOnlyWhenBackgroundCanFinishAllDomains() {
+        assertEquals(25_000L, ForegroundSyncBudget.deadlineMs(backgroundReadGranted = true))
+        assertEquals(120_000L, ForegroundSyncBudget.deadlineMs(backgroundReadGranted = false))
+    }
+
     @Test fun missingSystemJobRepairsOnlyItsUniquePeriodicWork() {
         val now = 1_000_000L
         assertTrue(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, false, 0, now))

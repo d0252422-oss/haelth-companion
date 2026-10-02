@@ -141,8 +141,12 @@ class MainActivity : ComponentActivity() {
     private suspend fun handoffToBackground(session: NativeAuthSession) {
         val state = SyncRuntimeStateStore(this)
         if (state.lastSuccessfulSync(session.canonicalUserId) == null) state.markHistoryPending(session.canonicalUserId)
+        // The existing last-sync state is usable before WorkManager finishes
+        // its schedule queries; the upload is never a startup prerequisite.
+        render(ConnectorUiState.AUTHENTICATED, "健康資料已連接\n背景同步正在啟動，不需等待")
         val runtime = BackgroundSyncScheduler.reconcileAndEnqueue(this, session.canonicalUserId)
         BackgroundSyncScheduler.enqueueP0Recovery(this, session.canonicalUserId)
+        if (currentSession?.canonicalUserId != session.canonicalUserId) return
         renderBackground(runtime)
         backgroundObserver?.cancel()
         backgroundObserver = scope.launch {
@@ -190,6 +194,7 @@ class MainActivity : ComponentActivity() {
             try {
                 val initialSession = currentSession
                 if (initialSession == null) { render(ConnectorUiState.SIGNED_OUT); return@launch }
+                val backgroundReadGranted = health.backgroundReadState() == BackgroundHealthReadState.GRANTED
                 var session: NativeAuthSession = initialSession
                 val diagnostic = SyncTriggerDiagnostic(trigger)
                 val checkpoints = SyncCheckpointStore(
@@ -199,7 +204,7 @@ class MainActivity : ComponentActivity() {
                 )
                 render(ConnectorUiState.SYNCING, "正在讀取最近健康資料…")
                 runCatching {
-                withTimeout(FOREGROUND_SYNC_DEADLINE_MS) {
+                withTimeout(ForegroundSyncBudget.deadlineMs(backgroundReadGranted)) {
                     val granted = health.grantedReadPermissions()
                     if (granted.isEmpty()) throw HealthPermissionMissing()
                     val end = Instant.now()
@@ -238,7 +243,7 @@ class MainActivity : ComponentActivity() {
                 }.onSuccess { result ->
                 if (!result.partial) saveLastSync(session.canonicalUserId)
                 SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session.canonicalUserId)
-                if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
+                if (backgroundReadGranted) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
                 render(SyncTerminalPolicy.state(result.hasData, result.partial, timedOut = false))
                 }.onFailure { error ->
                 when (error) {
@@ -249,7 +254,7 @@ class MainActivity : ComponentActivity() {
                     }
                     is TimeoutCancellationException -> {
                         SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session.canonicalUserId)
-                        if (health.backgroundReadState() == BackgroundHealthReadState.GRANTED) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
+                        if (backgroundReadGranted) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
                         render(ConnectorUiState.SYNC_TIMEOUT)
                     }
                     else -> render(ConnectorUiState.SYNC_ERROR)
@@ -346,5 +351,3 @@ class MainActivity : ComponentActivity() {
 
 class HealthPermissionMissing : Exception("HEALTH_PERMISSION_MISSING")
 data class ForegroundSyncResult(val hasData: Boolean, val partial: Boolean)
-
-private const val FOREGROUND_SYNC_DEADLINE_MS = 120_000L
