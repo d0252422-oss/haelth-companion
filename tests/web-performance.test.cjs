@@ -3,6 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const test=require('node:test');
+const vm=require('node:vm');
 
 const html=fs.readFileSync('index.html','utf8');
 const hosted=fs.readFileSync('scripts/local-engine-web.js','utf8');
@@ -39,6 +40,48 @@ test('exercise catalog is user/provider scoped, bounded and prefetched after das
 
 test('sleep and activity begin canonical and manual reads in parallel',()=>{
   for(const section of ['sleep','activity'])assert.match(html,new RegExp(`if\\(section==="${section}"\\)\\{const manual=refreshManualObservationList\\(section,start,end\\)\\.then`,'u'));
+});
+
+test('next-day dashboard paints only same-user overlapping cached dates while network refreshes',()=>{
+  const source=html.match(/    function readPriorDashboardCache\(start,end\)\{[\s\S]*?\n    \}/u)?.[0];
+  assert.ok(source,'prior-range cache reader must exist');
+  const prefix='healthCompanionDashboard:v4:provider:user-a:';
+  const storage={
+    [`${prefix}2026-09-25:2026-10-01`]:JSON.stringify({
+      userId:'user-a',cachedAt:Date.now()-1000,
+      data:{timelineResponse:{timeline:[
+        {date:'2026-09-25',steps:100},
+        {date:'2026-09-29',steps:3644,heartRate:68,sleepHours:7.5,caloriesBurned:null,healthScore:74},
+        {date:'2026-10-01',steps:2500},
+      ]}},
+    }),
+    [`${prefix}corrupt`]:'{',
+    'healthCompanionDashboard:v4:provider:user-b:2026-09-26:2026-10-02':JSON.stringify({
+      userId:'user-b',cachedAt:Date.now(),data:{timelineResponse:{timeline:[{date:'2026-10-02',steps:9999}]}} ,
+    }),
+    getItem(key){return this[key]??null;},
+  };
+  const sandbox={
+    localStorage:storage,currentUser:{userId:'user-a'},DASHBOARD_CACHE_SCHEMA:'v4',
+    DASHBOARD_CACHE_HARD_TTL:24*60*60*1000,CONFIG:{TIMEZONE:'Asia/Taipei'},
+    dashboardProviderNamespace:()=> 'provider',
+    dashboardFromTimeline:response=>({today:response.timeline.find(row=>row.date==='2026-10-02')||null}),
+    HealthCoreUX:{recordLocalDate:row=>row.date,isValidDateKey:date=>/^\d{4}-\d{2}-\d{2}$/u.test(date)},
+  };
+  const reader=vm.runInNewContext(`(${source})`,sandbox);
+  const cached=reader('2026-09-26','2026-10-02');
+  assert.equal(cached.priorRange,true);
+  assert.deepEqual(Array.from(cached.data.timelineResponse.timeline,row=>row.date),['2026-09-29','2026-10-01']);
+  assert.equal(cached.data.timelineResponse.timeline[0].heartRate,68);
+  assert.equal(cached.data.timelineResponse.timeline[0].sleepHours,7.5);
+  assert.equal(cached.data.timelineResponse.timeline[0].healthScore,74);
+  assert.equal(cached.data.timelineResponse.timeline[0].caloriesBurned,null);
+  assert.equal(cached.data.dashboard.today,null);
+  sandbox.currentUser={userId:'user-c'};
+  assert.equal(reader('2026-09-26','2026-10-02'),null);
+  assert.match(html,/cached=!force\?\(readDashboardCache\(start,end\)\|\|readPriorDashboardCache\(start,end\)\):null/u);
+  assert.match(html,/顯示上次可用資料；正在更新/u);
+  assert.match(html,/if\(cached\)\{fetchFresh\(\)\.then\([\s\S]*?return \[\];\}/u);
 });
 
 test('durable manual writes release the UI before bounded score recomputation',()=>{
