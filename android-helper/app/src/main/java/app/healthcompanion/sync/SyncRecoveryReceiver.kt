@@ -9,12 +9,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
-/** Reconciles unique periodic work after reboot or an in-place package update. */
+/** Reconciles unique periodic work after reboot, update, or an inexact watchdog wake. */
 class SyncRecoveryReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED)) return
+        if (intent.action !in setOf(
+                Intent.ACTION_BOOT_COMPLETED,
+                Intent.ACTION_MY_PACKAGE_REPLACED,
+                PeriodicSyncWatchdog.ACTION,
+            )) return
         val pending = goAsync()
         val app = context.applicationContext
+        // Re-arm before the asynchronous work so a transient auth/network error
+        // cannot permanently stop the only independent repair wakeup.
+        PeriodicSyncWatchdog.schedule(app)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 withTimeout(8_000L) {
@@ -28,8 +35,15 @@ class SyncRecoveryReceiver : BroadcastReceiver() {
                         health.hasAnyPermission() &&
                         health.backgroundReadState() == BackgroundHealthReadState.GRANTED
                     ) {
-                        BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId, SyncTriggerSource.BOOT_RECOVERY)
-                        BackgroundSyncScheduler.enqueueP0Recovery(app, session.canonicalUserId)
+                        if (intent.action == PeriodicSyncWatchdog.ACTION) {
+                            val repaired = BackgroundSyncScheduler.reconcilePeriodicFromWatchdog(app, session.canonicalUserId)
+                            if (repaired) {
+                                BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId, SyncTriggerSource.RETRY)
+                            }
+                        } else {
+                            BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId, SyncTriggerSource.BOOT_RECOVERY)
+                            BackgroundSyncScheduler.enqueueP0Recovery(app, session.canonicalUserId)
+                        }
                     }
                 }
             } catch (_: Exception) {

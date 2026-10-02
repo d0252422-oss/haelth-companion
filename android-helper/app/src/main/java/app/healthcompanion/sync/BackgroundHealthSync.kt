@@ -336,7 +336,11 @@ object BackgroundSyncScheduler {
         userId: String,
         constraints: Constraints,
         replace: Boolean = false,
-    ) {
+    ): Boolean {
+        // JobScheduler can lose a WorkManager job while its WorkSpec still says
+        // ENQUEUED. An independent, inexact alarm wakes this reconciliation even
+        // when the user never opens the app again.
+        PeriodicSyncWatchdog.schedule(context)
         val store = SyncRuntimeStateStore(context)
         val existing = queryWork(manager, BackgroundWorkNames.periodic(userId))
         val work = existing.firstOrNull { it.state == WorkInfo.State.RUNNING }
@@ -364,6 +368,7 @@ object BackgroundSyncScheduler {
         } else if (present == true) {
             store.recordPeriodicSchedulerHealth(userId, "HEALTHY")
         }
+        return repair || state == null
     }
 
     private fun systemJobPresent(context: Context, workId: String): Boolean? = runCatching {
@@ -378,6 +383,10 @@ object BackgroundSyncScheduler {
         reconcilePeriodic(context, WorkManager.getInstance(context), userId,
             Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
     }
+
+    suspend fun reconcilePeriodicFromWatchdog(context: Context, userId: String): Boolean =
+        reconcilePeriodic(context, WorkManager.getInstance(context), userId,
+            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
 
     /** Old beta.23 periodic WorkSpecs survive an in-place APK update under KEEP. */
     suspend fun resolveTrigger(context: Context, userId: String, workId: String, configured: SyncTriggerSource): SyncTriggerSource {

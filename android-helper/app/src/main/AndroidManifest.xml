@@ -20,6 +20,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="app.healthcompanion.sync.PERIODIC_WATCHDOG" />
             </intent-filter>
         </receiver>
         <activity android:name=".MainActivity" android:exported="true">
