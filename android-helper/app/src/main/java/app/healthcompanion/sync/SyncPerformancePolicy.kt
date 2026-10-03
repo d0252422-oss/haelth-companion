@@ -2,6 +2,7 @@ package app.healthcompanion.sync
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.TimeUnit
 
 object PaginationGuard {
     fun isRepeated(nextToken: String?, seenTokens: MutableSet<String>): Boolean =
@@ -79,6 +80,14 @@ internal object HealthReadDomainPolicy {
         if (mode == BackgroundSyncMode.P0_RECOVERY) p0RecoveryDomains else null
 
     fun includes(domains: Set<String>?, domain: String): Boolean = domains == null || domain in domains
+}
+
+/** Existing unique periodic work must adopt the shorter interval after an APK update. */
+internal object PeriodicSyncCadencePolicy {
+    const val INTERVAL_HOURS = 2L
+    val intervalMs: Long = TimeUnit.HOURS.toMillis(INTERVAL_HOURS)
+
+    fun needsUpdate(existingIntervalMs: Long?): Boolean = existingIntervalMs != intervalMs
 }
 
 /** A missing system job is distinct from a WorkManager row waiting for constraints. */

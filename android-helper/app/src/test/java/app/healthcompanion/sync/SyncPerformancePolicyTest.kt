@@ -23,6 +23,14 @@ class SyncPerformancePolicyTest {
         assertTrue(PeriodicSchedulerRecoveryPolicy.shouldReplace(DurableWorkState.ENQUEUED, false, now - 900_001, now))
     }
 
+    @Test fun twoHourCadenceUpdatesAnExistingTwelveHourPeriodicWorkOnlyOnce() {
+        assertEquals(2L, PeriodicSyncCadencePolicy.INTERVAL_HOURS)
+        assertEquals(7_200_000L, PeriodicSyncCadencePolicy.intervalMs)
+        assertTrue(PeriodicSyncCadencePolicy.needsUpdate(43_200_000L))
+        assertTrue(PeriodicSyncCadencePolicy.needsUpdate(null))
+        assertFalse(PeriodicSyncCadencePolicy.needsUpdate(7_200_000L))
+    }
+
     @Test fun failedImmediateDoesNotBlockPeriodicRepair() {
         // The unique immediate and periodic names are independent, and the
         // periodic decision consumes only its own state and OS-job evidence.

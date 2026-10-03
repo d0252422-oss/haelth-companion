@@ -317,15 +317,14 @@ object BackgroundSyncScheduler {
         manager: WorkManager,
         userId: String,
         constraints: Constraints,
-        replace: Boolean = false,
+        policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP,
     ) {
         val userKey = BackgroundWorkNames.userKey(userId)
-        val periodic = PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>(12, TimeUnit.HOURS)
+        val periodic = PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>(PeriodicSyncCadencePolicy.INTERVAL_HOURS, TimeUnit.HOURS)
             .setConstraints(constraints)
             .setInputData(triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, SyncTriggerSource.PERIODIC_WORKER))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        val policy = if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP
         manager.enqueueUniquePeriodicWork(BackgroundWorkNames.periodic(userId), policy, periodic)
     }
 
@@ -346,6 +345,8 @@ object BackgroundSyncScheduler {
         val work = existing.firstOrNull { it.state == WorkInfo.State.RUNNING }
             ?: existing.firstOrNull { it.state in ACTIVE_STATES }
         val state = work?.let(::durableState)
+        val cadenceOutdated = work != null &&
+            PeriodicSyncCadencePolicy.needsUpdate(work.periodicityInfo?.repeatIntervalMillis)
         val present = if (state == DurableWorkState.ENQUEUED && !replace) {
             systemJobPresent(context, work.id.toString())
         } else null
@@ -360,11 +361,16 @@ object BackgroundSyncScheduler {
             state, if (confirmedMissing) false else secondCheck, store.lastPeriodicRepairAt(userId), now,
         )
         if (repair) {
-            ensurePeriodic(manager, userId, constraints, replace = true)
+            ensurePeriodic(manager, userId, constraints, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE)
             store.recordPeriodicSchedulerHealth(userId, "RECONCILING", now)
         } else if (state == null) {
             ensurePeriodic(manager, userId, constraints)
             store.recordPeriodicSchedulerHealth(userId, "ENQUEUED")
+        } else if (cadenceOutdated && !confirmedMissing) {
+            // KEEP would retain the old 12-hour WorkSpec after an in-place APK update.
+            // UPDATE keeps the unique periodic job and does not interrupt a running sync.
+            ensurePeriodic(manager, userId, constraints, ExistingPeriodicWorkPolicy.UPDATE)
+            store.recordPeriodicSchedulerHealth(userId, "RECONCILING")
         } else if (present == true) {
             store.recordPeriodicSchedulerHealth(userId, "HEALTHY")
         }
