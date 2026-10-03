@@ -85,6 +85,37 @@ class SyncPerformancePolicyTest {
         assertEquals(Instant.parse("2026-09-02T19:00:00Z"), SyncWindowPolicy.incremental(now, last).start)
     }
 
+    @Test fun lateArrivingSleepAndOtherDomainsGetSevenDayReadWithoutRepeatingOldUploads() {
+        val end = Instant.parse("2026-10-03T00:00:00Z")
+        val last = Instant.parse("2026-10-02T22:00:00Z")
+        val window = SyncWindowPolicy.incremental(end, last)
+        for (domain in listOf("sleep", "steps", "total_energy", "spo2", "workout", "weight", "hrv")) {
+            assertEquals(Instant.parse("2026-09-26T00:00:00Z"), LateArrivalReplayPolicy.readStart(window, domain))
+        }
+        assertEquals(Instant.parse("2026-10-02T00:00:00Z"), LateArrivalReplayPolicy.readStart(window, "heart_rate"))
+
+        fun record(domain: String, endedAt: String, modifiedAt: String) = CanonicalHealthRecord(
+            domain = domain, sourceApp = "test.origin", sourceRecordId = "$domain-$endedAt",
+            sourceUpdatedAt = modifiedAt, recordedAt = endedAt,
+            startedAt = endedAt, endedAt = endedAt,
+            timezone = "Asia/Taipei", localDate = "2026-09-30", value = 1.0, unit = "count",
+        )
+        val oldEnd = "2026-09-30T00:00:00Z"
+        assertTrue(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "2026-10-02T23:00:00Z"), last, window))
+        assertTrue(LateArrivalReplayPolicy.shouldUpload(record("spo2", oldEnd, "2026-10-02T21:00:00Z"), last, window))
+        assertFalse(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "2026-10-01T00:00:00Z"), last, window))
+        assertTrue(LateArrivalReplayPolicy.shouldUpload(record("steps", "2026-10-02T22:30:00Z", "2026-10-01T00:00:00Z"), last, window))
+        assertTrue(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "invalid"), last, window))
+    }
+
+    @Test fun longOfflineGapIsNeverClippedByLateArrivalLookback() {
+        val window = SyncWindowPolicy.incremental(
+            Instant.parse("2026-10-03T00:00:00Z"), Instant.parse("2026-09-20T00:00:00Z"),
+        )
+        assertEquals(window.start, LateArrivalReplayPolicy.readStart(window, "sleep"))
+        assertEquals(window.start, LateArrivalReplayPolicy.readStart(window, "heart_rate"))
+    }
+
     @Test fun delayedRetryAdvancesOnlyThroughFrozenWindowEnd() {
         val start = Instant.parse("2026-09-26T11:10:00Z")
         val frozenEnd = Instant.parse("2026-09-27T17:53:08Z")

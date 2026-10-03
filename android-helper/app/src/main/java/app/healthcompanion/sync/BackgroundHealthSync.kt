@@ -681,17 +681,27 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                         ?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.now()
                 } else Instant.now()
                 val end = state.activeWindowEnd(session.canonicalUserId, mode, proposedEnd)
+                val lastSuccess = state.lastSuccessfulSync(session.canonicalUserId)
                 val window = when (mode) {
                     BackgroundSyncMode.BACKFILL -> SyncWindowPolicy.backfill(end)
                     BackgroundSyncMode.P0_RECOVERY -> SyncWindowPolicy.p0Recovery(end)
                     BackgroundSyncMode.INCREMENTAL ->
-                        SyncWindowPolicy.incremental(end, state.lastSuccessfulSync(session.canonicalUserId))
+                        SyncWindowPolicy.incremental(end, lastSuccess)
                 }
                 reportProgress(state, session.canonicalUserId, "HEALTH_READ")
                 val read = withTimeout(HEALTH_READ_TIMEOUT_MS) {
-                    health.readBounded(window.start, window.end, HealthReadDomainPolicy.forMode(mode))
+                    health.readBounded(
+                        window.start, window.end, HealthReadDomainPolicy.forMode(mode),
+                        startForDomain = { domain ->
+                            if (mode == BackgroundSyncMode.INCREMENTAL && lastSuccess != null) LateArrivalReplayPolicy.readStart(window, domain)
+                            else window.start
+                        },
+                    )
                 }
                 state.recordReadSummary(session.canonicalUserId, read.records)
+                val recordsToUpload = if (mode == BackgroundSyncMode.INCREMENTAL) {
+                    read.records.filter { LateArrivalReplayPolicy.shouldUpload(it, lastSuccess, window) }
+                } else read.records
                 val client = IngestionClient(BuildConfig.API_BASE_URL, onHttpResult = { result ->
                     state.recordHttpResult(session.canonicalUserId, result)
                 }).also { ingestionClient = it }
@@ -700,7 +710,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 val uploadSummary = try {
                     withTimeout(UPLOAD_TIMEOUT_MS) {
                         withContext(Dispatchers.IO) {
-                            client.upload(session, read.records, checkpoints, diagnostic) { done, _ ->
+                            client.upload(session, recordsToUpload, checkpoints, diagnostic) { done, _ ->
                                 state.recordProgress(session.canonicalUserId, "UPLOAD", done)
                             }
                         }
@@ -709,7 +719,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     reportProgress(state, session.canonicalUserId, "SESSION_REFRESH")
                     session = withTimeout(SESSION_TIMEOUT_MS) { auth.refresh() }
                     withTimeout(UPLOAD_TIMEOUT_MS) {
-                        withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints, diagnostic) }
+                        withContext(Dispatchers.IO) { client.upload(session, recordsToUpload, checkpoints, diagnostic) }
                     }
                 }
                 reportProgress(state, session.canonicalUserId, "CHECKPOINT")

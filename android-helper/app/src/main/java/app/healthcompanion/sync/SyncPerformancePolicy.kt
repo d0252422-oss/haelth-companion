@@ -45,6 +45,33 @@ object SyncWindowPolicy {
     fun completedCursor(window: SyncWindow): Instant = window.end
 }
 
+/** Re-read recent event time to catch Health Connect records imported after the event.
+ *  Only records modified since the last successful upload are sent again. */
+internal object LateArrivalReplayPolicy {
+    const val STANDARD_LOOKBACK_DAYS = 7L
+    const val HEART_RATE_LOOKBACK_HOURS = 24L
+
+    fun readStart(window: SyncWindow, domain: String): Instant {
+        val replayStart = if (domain == "heart_rate") {
+            window.end.minus(HEART_RATE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+        } else {
+            window.end.minus(STANDARD_LOOKBACK_DAYS, ChronoUnit.DAYS)
+        }
+        return minOf(window.start, replayStart)
+    }
+
+    fun shouldUpload(record: CanonicalHealthRecord, lastSuccess: Instant?, window: SyncWindow): Boolean {
+        if (lastSuccess == null) return true
+        val cutoff = lastSuccess.minus(SyncWindowPolicy.INCREMENTAL_OVERLAP_HOURS, ChronoUnit.HOURS)
+        // Keep the original incremental range even if source metadata is stale.
+        val eventEnd = runCatching { Instant.parse(record.endedAt) }.getOrNull()
+        if (eventEnd == null || !eventEnd.isBefore(window.start)) return true
+        val modifiedAt = runCatching { Instant.parse(record.sourceUpdatedAt) }.getOrNull()
+        // Invalid metadata must not silently discard a health record.
+        return modifiedAt == null || !modifiedAt.isBefore(cutoff)
+    }
+}
+
 /** A foreground gesture must not hold the user while durable background sync can continue. */
 internal object ForegroundSyncBudget {
     const val BACKGROUND_CAPABLE_MS = 25_000L

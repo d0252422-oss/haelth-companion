@@ -83,9 +83,9 @@ class HealthConnectGateway(private val context: Context) {
         start: Instant,
         end: Instant,
         includedDomains: Set<String>? = null,
+        startForDomain: (String) -> Instant = { start },
         onDomain: (domain: String, completed: Int, total: Int) -> Unit = { _, _, _ -> },
     ): HealthReadResult = coroutineScope {
-        val filter = TimeRangeFilter.between(start, end)
         val zone = ZoneId.systemDefault()
         val granted = client.permissionController.getGrantedPermissions()
         val semaphore = Semaphore(MAX_CONCURRENT_DOMAIN_READS)
@@ -93,7 +93,11 @@ class HealthConnectGateway(private val context: Context) {
 
         fun <T : Record> add(domain: String, permission: String, type: KClass<T>, mapper: (T) -> List<CanonicalHealthRecord>) {
             if (permission in granted && HealthReadDomainPolicy.includes(includedDomains, domain)) {
-                readers += domain to { semaphore.withPermit { readDomain(domain, type, filter, mapper) } }
+                readers += domain to {
+                    semaphore.withPermit {
+                        readDomain(domain, type, TimeRangeFilter.between(startForDomain(domain), end), mapper)
+                    }
+                }
             }
         }
 
