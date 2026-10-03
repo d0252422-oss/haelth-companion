@@ -148,7 +148,6 @@ object BackgroundContinuationPolicy {
         checkpointIndex: Int,
         reconciliationPass: Int = 0,
     ): Int = when {
-        mode == BackgroundSyncMode.INCREMENTAL -> DEFAULT_MAX_ATTEMPTS
         mode == BackgroundSyncMode.P0_RECOVERY -> BACKFILL_RECONCILIATION_MAX_ATTEMPTS
         reconciliationPass > 0 -> BACKFILL_RECONCILIATION_MAX_ATTEMPTS
         uploadStarted || checkpointIndex > 0 -> BACKFILL_MAX_CONTINUATION_ATTEMPTS

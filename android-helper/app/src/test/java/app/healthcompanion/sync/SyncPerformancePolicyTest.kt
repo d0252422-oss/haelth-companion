@@ -188,13 +188,30 @@ class SyncPerformancePolicyTest {
         )
     }
 
-    @Test fun incrementalAndUnstartedBackfillKeepDefaultRetryBound() {
+    @Test fun incrementalUploadContinuesFromItsCheckpointButUnstartedWorkKeepsDefaultBound() {
         assertEquals(
-            BackgroundContinuationPolicy.DEFAULT_MAX_ATTEMPTS,
+            BackgroundContinuationPolicy.BACKFILL_MAX_CONTINUATION_ATTEMPTS,
             BackgroundContinuationPolicy.maxAttempts(
                 BackgroundSyncMode.INCREMENTAL,
                 uploadStarted = true,
                 checkpointIndex = 130,
+            ),
+        )
+        assertEquals(
+            BackgroundContinuationPolicy.DEFAULT_MAX_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(
+                BackgroundSyncMode.INCREMENTAL,
+                uploadStarted = false,
+                checkpointIndex = 0,
+            ),
+        )
+        assertEquals(
+            BackgroundContinuationPolicy.BACKFILL_RECONCILIATION_MAX_ATTEMPTS,
+            BackgroundContinuationPolicy.maxAttempts(
+                BackgroundSyncMode.INCREMENTAL,
+                uploadStarted = true,
+                checkpointIndex = 0,
+                reconciliationPass = 1,
             ),
         )
         assertEquals(

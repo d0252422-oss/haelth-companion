@@ -73,6 +73,56 @@ class IngestionClientTimeoutTest {
         assertFalse(checkpoints.cleared)
     }
 
+    @Test fun interruptedMixedDomainUploadResumesWithSleepParentBeforeStages() = runTest {
+        val preceding = records(99).map { it.copy(recordedAt = "2026-10-03T00:00:00Z") }
+        val parent = preceding.first().copy(
+            domain = "sleep", sourceRecordId = "session-1", recordedAt = "2026-10-03T01:00:00Z",
+            startedAt = "2026-10-02T23:00:00Z", endedAt = "2026-10-03T01:00:00Z",
+            value = 120.0, unit = "minute",
+        )
+        val stage = parent.copy(
+            domain = "sleep_stage", sourceRecordId = "session-1:stage-1",
+            recordedAt = "2026-10-03T00:20:00Z", endedAt = "2026-10-03T00:20:00Z",
+            value = 80.0, stage = "4", uploadSortAt = parent.recordedAt,
+        )
+        val trailingDomains = listOf(
+            "steps", "total_energy", "spo2", "heart_rate",
+            "resting_heart_rate", "hrv", "weight", "workout",
+        )
+        val trailing = trailingDomains.mapIndexed { index, domain ->
+            parent.copy(domain = domain, sourceRecordId = "trailing-$domain",
+                recordedAt = "2026-10-03T02:00:0${index}Z", value = 1.0, unit = "count")
+        }
+        val input = preceding + stage + trailing + parent
+        val checkpoints = MemoryCheckpoints()
+        val acceptedIds = mutableListOf<String>()
+        var calls = 0
+        val transport = IngestionTransport { _, _, body ->
+            calls++
+            val result = if (calls == 1 || calls >= 5) 201 else 503
+            if (result == 201) {
+                val mutations = org.json.JSONObject(body).getJSONArray("mutations")
+                repeat(mutations.length()) { index ->
+                    acceptedIds += mutations.getJSONObject(index).getString("source_record_id")
+                }
+            }
+            IngestionHttpResult(result)
+        }
+        val client = IngestionClient("https://beta.example", transport, backoff = {})
+
+        val interrupted = runCatching { client.upload(session, input, checkpoints) }.exceptionOrNull()
+        assertTrue(interrupted is BatchUploadFailed)
+        assertEquals(100, checkpoints.value?.nextRecordIndex)
+        assertEquals("session-1", acceptedIds.last())
+
+        val completed = client.upload(session, input.reversed(), checkpoints)
+        assertEquals(input.size, completed.recordsUploaded)
+        assertEquals(input.size, acceptedIds.size)
+        assertEquals(input.size, acceptedIds.toSet().size)
+        assertTrue(acceptedIds.indexOf("session-1") < acceptedIds.indexOf("session-1:stage-1"))
+        assertTrue(trailingDomains.all { domain -> "trailing-$domain" in acceptedIds })
+    }
+
     @Test fun successfulUploadRetainsCompletedCheckpointUntilStatusIsDurable() = runTest {
         val checkpoints = MemoryCheckpoints()
         val seenBodies = mutableListOf<String>()

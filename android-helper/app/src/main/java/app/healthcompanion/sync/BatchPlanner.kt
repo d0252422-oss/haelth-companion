@@ -68,7 +68,10 @@ object BatchPlanner {
         val frontierResumeIndex = savedKey?.let { frontier ->
             ordered.indexOfFirst { recordSortKey(it) > frontier }.let { if (it < 0) ordered.size else it }
         }
-        val canResumeFromFrontier = saved != null && frontierResumeIndex != null && saved.nextBatchIndex >= 0
+        // Pre-v3 checkpoints used stage end-time ordering. Replaying their frontier
+        // against parent-first ordering could skip records, so replay from zero.
+        val canResumeFromFrontier = saved != null && saved.planFingerprint.startsWith(FINGERPRINT_PREFIX) &&
+            frontierResumeIndex != null && saved.nextBatchIndex >= 0
         val reconciliationSeed = saved != null && saved.nextBatchIndex == 0 &&
             saved.nextRecordIndex == 0 && saved.lastRecordKey == null && saved.reconciliationPass > 0
         val resumeIndex = when {
@@ -147,7 +150,7 @@ object BatchPlanner {
             updateInt(bytes.size)
             digest.update(bytes)
         }
-        updateString("health-sync-record-plan-v2")
+        updateString("health-sync-record-plan-v3")
         updateString(userId.lowercase())
         updateInt(ordered.size)
         ordered.forEach { record ->
@@ -163,8 +166,9 @@ object BatchPlanner {
             updateLong(java.lang.Double.doubleToLongBits(record.value))
             updateString(record.unit)
             updateString(record.stage)
+            updateString(record.uploadSortAt)
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return FINGERPRINT_PREFIX + digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun envelope(userId: String, mutations: List<JSONObject>) = JSONObject()
@@ -188,7 +192,7 @@ object BatchPlanner {
     }
 
     private fun recordSortKey(record: CanonicalHealthRecord) = RecordSortKey(
-        record.recordedAt,
+        record.uploadSortAt ?: record.recordedAt,
         record.domain,
         record.sourceApp,
         record.sourceRecordId,
@@ -201,9 +205,11 @@ object BatchPlanner {
     }.getOrNull()
 
     private val RECORD_COMPARATOR = compareBy<CanonicalHealthRecord>(
-        { it.recordedAt },
+        { it.uploadSortAt ?: it.recordedAt },
         { it.domain },
         { it.sourceApp },
         { it.sourceRecordId },
     )
+
+    private const val FINGERPRINT_PREFIX = "v3:"
 }

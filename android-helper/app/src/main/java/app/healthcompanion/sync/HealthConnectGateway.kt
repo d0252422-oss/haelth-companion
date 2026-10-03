@@ -115,7 +115,7 @@ class HealthConnectGateway(private val context: Context) {
         }
         add("sleep", HealthPermission.getReadPermission(SleepSessionRecord::class), SleepSessionRecord::class) { record ->
             listOf(record.toCanonical("sleep", (record.endTime.epochSecond - record.startTime.epochSecond) / 60.0, "minute", record.startTime, record.endTime, zone)) +
-                record.stages.map { stage -> record.toCanonical("sleep_stage", (stage.endTime.epochSecond - stage.startTime.epochSecond) / 60.0, "minute", stage.startTime, stage.endTime, zone, stage.stage.toString(), "${stage.startTime}:${stage.endTime}:${stage.stage}") }
+                record.stages.map { stage -> record.toCanonical("sleep_stage", (stage.endTime.epochSecond - stage.startTime.epochSecond) / 60.0, "minute", stage.startTime, stage.endTime, zone, stage.stage.toString(), "${stage.startTime}:${stage.endTime}:${stage.stage}", record.endTime.toString()) }
         }
         add("weight", HealthPermission.getReadPermission(WeightRecord::class), WeightRecord::class) { record ->
             listOf(record.toCanonical("weight", record.weight.inKilograms, "kg", record.time, record.time, zone))
@@ -164,10 +164,10 @@ class HealthConnectGateway(private val context: Context) {
         return DomainReadResult(domain, records, pages)
     }
 
-    private fun Record.toCanonical(domain: String, value: Double, unit: String, start: Instant, end: Instant, zone: ZoneId, stage: String? = null, identitySuffix: String? = null): CanonicalHealthRecord {
+    private fun Record.toCanonical(domain: String, value: Double, unit: String, start: Instant, end: Instant, zone: ZoneId, stage: String? = null, identitySuffix: String? = null, uploadSortAt: String? = null): CanonicalHealthRecord {
         val recorded = end.atZone(zone)
         val sourceId = if (identitySuffix == null) metadata.id else "${metadata.id}:$identitySuffix"
-        return CanonicalHealthRecord(domain, metadata.dataOrigin.packageName, sourceId, metadata.lastModifiedTime.toString(), end.toString(), start.toString(), end.toString(), zone.id, recorded.toLocalDate().toString(), value, unit, stage)
+        return CanonicalHealthRecord(domain, metadata.dataOrigin.packageName, sourceId, metadata.lastModifiedTime.toString(), end.toString(), start.toString(), end.toString(), zone.id, recorded.toLocalDate().toString(), value, unit, stage, uploadSortAt)
     }
 
     companion object {

@@ -99,6 +99,43 @@ class BatchPlannerTest {
         assertEquals(0, resumed.nextBatchIndex)
     }
 
+    @Test fun sleepSessionIsUploadedBeforeItsStagesAtABatchBoundary() {
+        val preceding = (1..99).map { record(it).copy(recordedAt = "2026-10-03T00:00:00Z") }
+        val parent = record(500, "sleep").copy(
+            sourceRecordId = "sleep-session", recordedAt = "2026-10-03T01:00:00Z",
+            startedAt = "2026-10-02T23:00:00Z", endedAt = "2026-10-03T01:00:00Z",
+            value = 120.0, unit = "minute",
+        )
+        val stage = parent.copy(
+            domain = "sleep_stage", sourceRecordId = "sleep-session:stage-1",
+            recordedAt = "2026-10-03T00:20:00Z", endedAt = "2026-10-03T00:20:00Z",
+            value = 80.0, stage = "4", uploadSortAt = parent.recordedAt,
+        )
+        val plan = BatchPlanner.streamingPlan(user, preceding + stage + parent, null)
+        val first = BatchPlanner.nextStreamingBatch(user, plan.orderedRecords, 0)!!
+        val second = BatchPlanner.nextStreamingBatch(user, plan.orderedRecords, first.nextRecordIndex)!!
+        val firstMutations = JSONObject(first.body).getJSONArray("mutations")
+        val secondMutations = JSONObject(second.body).getJSONArray("mutations")
+
+        assertEquals(100, first.recordCount)
+        assertEquals("sleep", firstMutations.getJSONObject(99).getString("domain"))
+        assertEquals("sleep_stage", secondMutations.getJSONObject(0).getString("domain"))
+        assertEquals("2026-10-03T00:20:00Z", secondMutations.getJSONObject(0).getJSONObject("record").getString("recorded_at"))
+    }
+
+    @Test fun preParentFirstCheckpointReplaysInsteadOfSkippingChangedSortOrder() {
+        val records = (1..150).map { record(it) }
+        val current = BatchPlanner.streamingPlan(user, records, null)
+        val oldCheckpoint = SyncCheckpoint(
+            planFingerprint = "legacy-v2-fingerprint", nextBatchIndex = 1, nextRecordIndex = 100,
+            lastRecordKey = BatchPlanner.encodedRecordKey(current.orderedRecords[99]),
+        )
+        val resumed = BatchPlanner.streamingPlan(user, records, oldCheckpoint)
+        assertEquals(0, resumed.nextRecordIndex)
+        assertEquals(0, resumed.nextBatchIndex)
+        assertFalse(resumed.datasetChanged)
+    }
+
     @Test fun changedDatasetWithStableFrontierContinuesCurrentPassAndMarksCatchUp() {
         val records = (1..250).map { record(it) }
         val initial = BatchPlanner.streamingPlan(user, records, null)

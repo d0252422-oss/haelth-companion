@@ -13,4 +13,6 @@ data class CanonicalHealthRecord(
     val value: Double,
     val unit: String,
     val stage: String? = null,
+    /** Upload ordering only; never serialized into the canonical health payload. */
+    val uploadSortAt: String? = null,
 )
