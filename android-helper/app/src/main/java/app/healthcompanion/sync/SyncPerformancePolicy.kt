@@ -25,11 +25,18 @@ internal object SleepDayOwnership {
  * revision, so v2 must sort after all revisions emitted by the old client.
  * Keep the v2 namespace for every stage, including same-day stages, so later
  * source updates remain monotonic if a stage crosses the midnight boundary.
+ * Microseconds preserve source edits inside one millisecond, while the doubled
+ * value is still a JavaScript safe integer for supported contemporary dates.
  */
 internal object SleepStageRevisionPolicy {
     fun revision(domain: String, sourceUpdatedAt: String): Long {
-        val millis = Instant.parse(sourceUpdatedAt).toEpochMilli().coerceAtLeast(1)
-        return if (domain == "sleep_stage") Math.addExact(Math.multiplyExact(millis, 2), 1) else millis
+        val instant = Instant.parse(sourceUpdatedAt)
+        val millis = instant.toEpochMilli().coerceAtLeast(1)
+        if (domain != "sleep_stage") return millis
+        val micros = Math.addExact(Math.multiplyExact(instant.epochSecond, 1_000_000L), instant.nano / 1_000L)
+        val revision = Math.addExact(Math.multiplyExact(micros.coerceAtLeast(1), 2), 1)
+        require(revision <= 9_007_199_254_740_991L) { "SLEEP_STAGE_REVISION_OUT_OF_RANGE" }
+        return revision
     }
 }
 

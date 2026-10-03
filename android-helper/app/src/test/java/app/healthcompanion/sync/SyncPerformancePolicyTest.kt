@@ -11,11 +11,13 @@ import java.time.ZoneId
 class SyncPerformancePolicyTest {
     @Test fun sleepStageOwnershipMigrationIsMonotonicAndReplaySafe() {
         val first = "2026-10-03T00:00:00Z"
+        val laterWithinSameMillisecond = "2026-10-03T00:00:00.000001Z"
         val later = "2026-10-03T01:00:00Z"
         val legacy = Instant.parse(first).toEpochMilli()
         val migrated = SleepStageRevisionPolicy.revision("sleep_stage", first)
         assertTrue(migrated > legacy)
         assertEquals(migrated, SleepStageRevisionPolicy.revision("sleep_stage", first))
+        assertTrue(SleepStageRevisionPolicy.revision("sleep_stage", laterWithinSameMillisecond) > migrated)
         assertTrue(SleepStageRevisionPolicy.revision("sleep_stage", later) > migrated)
         assertEquals(legacy, SleepStageRevisionPolicy.revision("sleep", first))
         assertEquals(legacy, SleepStageRevisionPolicy.revision("steps", first))
