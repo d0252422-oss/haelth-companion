@@ -1,12 +1,36 @@
 package app.healthcompanion.sync
 
 import java.time.Instant
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 
 object PaginationGuard {
+    // Some Health Connect implementations use an empty string for EOF rather
+    // than null. Passing it back would turn a complete read into a capped read.
+    fun nextPageToken(token: String?): String? = token?.takeUnless { it.isEmpty() }
+
     fun isRepeated(nextToken: String?, seenTokens: MutableSet<String>): Boolean =
         nextToken != null && !seenTokens.add(nextToken)
+}
+
+/** Match the existing sleep-session wake-date ownership for every child stage. */
+internal object SleepDayOwnership {
+    fun wakeDate(sessionEnd: Instant, zone: ZoneId): String = sessionEnd.atZone(zone).toLocalDate().toString()
+}
+
+/**
+ * Sleep-stage ownership changed from each stage's end date to its parent
+ * session's wake date. The server rejects a changed payload at the same
+ * revision, so v2 must sort after all revisions emitted by the old client.
+ * Keep the v2 namespace for every stage, including same-day stages, so later
+ * source updates remain monotonic if a stage crosses the midnight boundary.
+ */
+internal object SleepStageRevisionPolicy {
+    fun revision(domain: String, sourceUpdatedAt: String): Long {
+        val millis = Instant.parse(sourceUpdatedAt).toEpochMilli().coerceAtLeast(1)
+        return if (domain == "sleep_stage") Math.addExact(Math.multiplyExact(millis, 2), 1) else millis
+    }
 }
 
 object SyncTerminalPolicy {
@@ -66,6 +90,12 @@ internal object LateArrivalReplayPolicy {
         // Keep the original incremental range even if source metadata is stale.
         val eventEnd = runCatching { Instant.parse(record.endedAt) }.getOrNull()
         if (eventEnd == null || !eventEnd.isBefore(window.start)) return true
+        // A previous partial multi-batch run can have sent stages but not their
+        // session (or vice versa). A source modification timestamp cannot tell us
+        // which records reached the server. Reconcile the bounded recent sleep
+        // window by source identity; server upsert makes replay idempotent.
+        if (record.domain in setOf("sleep", "sleep_stage") &&
+            !eventEnd.isBefore(window.end.minus(STANDARD_LOOKBACK_DAYS, ChronoUnit.DAYS))) return true
         val modifiedAt = runCatching { Instant.parse(record.sourceUpdatedAt) }.getOrNull()
         // Invalid metadata must not silently discard a health record.
         return modifiedAt == null || !modifiedAt.isBefore(cutoff)

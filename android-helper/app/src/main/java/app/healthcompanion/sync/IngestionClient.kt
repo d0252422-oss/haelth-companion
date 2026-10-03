@@ -221,7 +221,7 @@ internal class IngestionClient(
             val canonical = JSONObject().put("schema_version", "hdl-v2.health-ingestion.v1").put("canonical_user_id", user).put("platform", "android").put("domain", record.domain).put("source_app", record.sourceApp).put("source_record_id", record.sourceRecordId).put("recorded_at", record.recordedAt).put("started_at", record.startedAt).put("ended_at", record.endedAt).put("timezone", record.timezone).put("local_date", record.localDate).put("value", record.value).put("unit", record.unit).put("stage", record.stage)
             val idempotency = CanonicalIdentity.idempotencyKey(user, record)
             canonical.put("idempotency_key", idempotency)
-            val revision = java.time.Instant.parse(record.sourceUpdatedAt).toEpochMilli().coerceAtLeast(1)
+            val revision = SleepStageRevisionPolicy.revision(record.domain, record.sourceUpdatedAt)
             return JSONObject().put("canonical_user_id", user).put("platform", "android").put("domain", record.domain).put("source_app", record.sourceApp).put("source_record_id", record.sourceRecordId).put("source_revision", revision).put("source_updated_at", record.sourceUpdatedAt).put("source_content_hash", CanonicalIdentity.sha256(canonical.toString())).put("operation", "UPSERT").put("affected_local_dates", affectedLocalDates(record)).put("idempotency_key", idempotency).put("record", canonical)
         }
 

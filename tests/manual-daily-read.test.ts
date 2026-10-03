@@ -170,6 +170,39 @@ Deno.test("committed automatic sleep uses interval-union minutes while analysis 
   equal(rows[0].analysisStaleReason, "RECOMPUTE_FAILED");
 });
 
+Deno.test("09/28, 09/30 and 10/03 sleep gaps stay blank until real sessions arrive", () => {
+  const range = { start: "2026-09-28", end: "2026-10-03" };
+  const queue = [
+    { score_date: "2026-09-28", status: "FAILED", generation: "4", engine_published_generation: "0" },
+    { score_date: "2026-09-30", status: "COMPLETE", generation: "4", engine_published_generation: "4" },
+    { score_date: "2026-10-03", status: "FAILED", generation: "4", engine_published_generation: "0" },
+  ];
+  const stagesOnly = [{ domain: "sleep_stage", affected_local_dates: ["2026-10-03"] }];
+  const missing = projectPublishedDaily(snapshot({ range, queue, automatic: stagesOnly }), "sleep");
+  deepStrictEqual(missing.map((row) => [row.date, row.totalSleepMinutes]), [
+    ["2026-09-28", null], ["2026-09-30", null], ["2026-10-03", null],
+  ]);
+
+  // These values represent SQL-validated session interval unions, not sums of
+  // stage fragments. Recompute failure must remain separate from metric readback.
+  const recovered = projectPublishedDaily(snapshot({
+    range, queue,
+    automatic: [
+      ...stagesOnly,
+      ...(["2026-09-28", "2026-09-30", "2026-10-03"] as const).map((date, index) => ({
+        domain: "sleep", local_date: date, affected_local_dates: [date],
+        source_app: "com.example.wearable", record_count: 1,
+        daily_value: [410, 385, 360][index],
+      })),
+    ],
+  }), "sleep");
+  deepStrictEqual(recovered.map((row) => [row.date, row.totalSleepMinutes]), [
+    ["2026-09-28", 410], ["2026-09-30", 385], ["2026-10-03", 360],
+  ]);
+  equal(recovered[0].analysisStaleReason, "RECOMPUTE_FAILED");
+  equal(recovered[2].analysisStaleReason, "RECOMPUTE_FAILED");
+});
+
 Deno.test("manual sleep remains authoritative over the raw interval fallback", () => {
   const rows = projectPublishedDaily(snapshot({
     automatic: [{

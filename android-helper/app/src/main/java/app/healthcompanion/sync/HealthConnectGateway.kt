@@ -115,7 +115,8 @@ class HealthConnectGateway(private val context: Context) {
         }
         add("sleep", HealthPermission.getReadPermission(SleepSessionRecord::class), SleepSessionRecord::class) { record ->
             listOf(record.toCanonical("sleep", (record.endTime.epochSecond - record.startTime.epochSecond) / 60.0, "minute", record.startTime, record.endTime, zone)) +
-                record.stages.map { stage -> record.toCanonical("sleep_stage", (stage.endTime.epochSecond - stage.startTime.epochSecond) / 60.0, "minute", stage.startTime, stage.endTime, zone, stage.stage.toString(), "${stage.startTime}:${stage.endTime}:${stage.stage}", record.endTime.toString()) }
+                record.stages.map { stage -> record.toCanonical("sleep_stage", (stage.endTime.epochSecond - stage.startTime.epochSecond) / 60.0, "minute", stage.startTime, stage.endTime, zone, stage.stage.toString(), "${stage.startTime}:${stage.endTime}:${stage.stage}", record.endTime.toString())
+                    .copy(localDate = SleepDayOwnership.wakeDate(record.endTime, zone)) }
         }
         add("weight", HealthPermission.getReadPermission(WeightRecord::class), WeightRecord::class) { record ->
             listOf(record.toCanonical("weight", record.weight.inKilograms, "kg", record.time, record.time, zone))
@@ -157,7 +158,7 @@ class HealthConnectGateway(private val context: Context) {
             val response = client.readRecords(ReadRecordsRequest(recordType = type, timeRangeFilter = filter, pageSize = PAGE_SIZE, pageToken = token))
             records += response.records.flatMap(mapper)
             pages += 1
-            val next = response.pageToken
+            val next = PaginationGuard.nextPageToken(response.pageToken)
             if (PaginationGuard.isRepeated(next, seenTokens)) return DomainReadResult(domain, records, pages, capped = true)
             token = next
         } while (token != null)

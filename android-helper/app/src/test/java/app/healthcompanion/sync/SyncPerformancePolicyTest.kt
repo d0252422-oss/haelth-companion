@@ -6,8 +6,59 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.time.Instant
+import java.time.ZoneId
 
 class SyncPerformancePolicyTest {
+    @Test fun sleepStageOwnershipMigrationIsMonotonicAndReplaySafe() {
+        val first = "2026-10-03T00:00:00Z"
+        val later = "2026-10-03T01:00:00Z"
+        val legacy = Instant.parse(first).toEpochMilli()
+        val migrated = SleepStageRevisionPolicy.revision("sleep_stage", first)
+        assertTrue(migrated > legacy)
+        assertEquals(migrated, SleepStageRevisionPolicy.revision("sleep_stage", first))
+        assertTrue(SleepStageRevisionPolicy.revision("sleep_stage", later) > migrated)
+        assertEquals(legacy, SleepStageRevisionPolicy.revision("sleep", first))
+        assertEquals(legacy, SleepStageRevisionPolicy.revision("steps", first))
+        assertTrue(migrated <= 9_007_199_254_740_991L) // Edge Number.isSafeInteger
+    }
+
+    @Test fun sleepStageMutationKeepsIdentityAndMovesExistingRecordToWakeDate() {
+        val user = "11111111-1111-4111-8111-111111111111"
+        val stage = CanonicalHealthRecord(
+            domain = "sleep_stage", sourceApp = "com.example.health", sourceRecordId = "session-1:stage-1",
+            sourceUpdatedAt = "2026-10-03T00:00:00Z", recordedAt = "2026-10-02T15:30:00Z",
+            startedAt = "2026-10-02T15:00:00Z", endedAt = "2026-10-02T15:30:00Z",
+            timezone = "Asia/Taipei", localDate = "2026-10-03", value = 30.0, unit = "minute", stage = "LIGHT",
+        )
+        val oldStage = stage.copy(localDate = "2026-10-02")
+        val mutation = IngestionClient.mutation(user, stage)
+        val oldMutation = IngestionClient.mutation(user, oldStage)
+        assertEquals(oldMutation.getString("idempotency_key"), mutation.getString("idempotency_key"))
+        assertFalse(oldMutation.getString("source_content_hash") == mutation.getString("source_content_hash"))
+        assertEquals("2026-10-03", mutation.getJSONObject("record").getString("local_date"))
+        assertEquals("2026-10-03", mutation.getJSONArray("affected_local_dates").getString(0))
+        assertEquals(SleepStageRevisionPolicy.revision("sleep_stage", stage.sourceUpdatedAt), mutation.getLong("source_revision"))
+        assertEquals(stage.startedAt, mutation.getJSONObject("record").getString("started_at"))
+        assertEquals(stage.endedAt, mutation.getJSONObject("record").getString("ended_at"))
+    }
+
+    @Test fun allStagesUseTheirSessionWakeDateAcrossTaipeiMidnight() {
+        val zone = ZoneId.of("Asia/Taipei")
+        val sessions = listOf(
+            Triple("2026-10-02T15:30:00Z", "2026-10-02T23:00:00Z", "2026-10-03"), // 23:30→07:00
+            Triple("2026-10-02T16:30:00Z", "2026-10-03T00:00:00Z", "2026-10-03"), // 00:30→08:00
+            Triple("2026-10-02T14:00:00Z", "2026-10-02T19:00:00Z", "2026-10-03"), // 22:00→03:00
+            Triple("2026-10-02T19:00:00Z", "2026-10-02T20:00:00Z", "2026-10-03"), // 03:00 nap
+        )
+        for ((start, end, owner) in sessions) {
+            assertTrue(Instant.parse(end).isAfter(Instant.parse(start)))
+            assertEquals(owner, SleepDayOwnership.wakeDate(Instant.parse(end), zone))
+        }
+        val stageEndBeforeMidnight = Instant.parse("2026-10-02T15:30:00Z")
+        assertEquals("2026-10-02", stageEndBeforeMidnight.atZone(zone).toLocalDate().toString())
+        assertEquals("2026-10-03", SleepDayOwnership.wakeDate(Instant.parse("2026-10-02T23:00:00Z"), zone))
+    }
+
     @Test fun foregroundWaitIsBoundedOnlyWhenBackgroundCanFinishAllDomains() {
         assertEquals(25_000L, ForegroundSyncBudget.deadlineMs(backgroundReadGranted = true))
         assertEquals(120_000L, ForegroundSyncBudget.deadlineMs(backgroundReadGranted = false))
@@ -41,6 +92,9 @@ class SyncPerformancePolicyTest {
     }
     @Test fun paginationTerminatesOnRepeatedToken() {
         val seen = mutableSetOf<String>()
+        assertEquals(null, PaginationGuard.nextPageToken(null))
+        assertEquals(null, PaginationGuard.nextPageToken(""))
+        assertEquals("page-2", PaginationGuard.nextPageToken("page-2"))
         assertFalse(PaginationGuard.isRepeated("page-2", seen))
         assertTrue(PaginationGuard.isRepeated("page-2", seen))
         assertFalse(PaginationGuard.isRepeated(null, seen))
@@ -85,7 +139,7 @@ class SyncPerformancePolicyTest {
         assertEquals(Instant.parse("2026-09-02T19:00:00Z"), SyncWindowPolicy.incremental(now, last).start)
     }
 
-    @Test fun lateArrivingSleepAndOtherDomainsGetSevenDayReadWithoutRepeatingOldUploads() {
+    @Test fun lateArrivingSleepReplaysRecentSessionsAndStagesWithoutRepeatingOtherOldUploads() {
         val end = Instant.parse("2026-10-03T00:00:00Z")
         val last = Instant.parse("2026-10-02T22:00:00Z")
         val window = SyncWindowPolicy.incremental(end, last)
@@ -103,9 +157,35 @@ class SyncPerformancePolicyTest {
         val oldEnd = "2026-09-30T00:00:00Z"
         assertTrue(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "2026-10-02T23:00:00Z"), last, window))
         assertTrue(LateArrivalReplayPolicy.shouldUpload(record("spo2", oldEnd, "2026-10-02T21:00:00Z"), last, window))
-        assertFalse(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "2026-10-01T00:00:00Z"), last, window))
+        assertTrue(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "2026-10-01T00:00:00Z"), last, window))
+        assertTrue(LateArrivalReplayPolicy.shouldUpload(record("sleep_stage", oldEnd, "2026-10-01T00:00:00Z"), last, window))
+        assertFalse(LateArrivalReplayPolicy.shouldUpload(record("steps", oldEnd, "2026-10-01T00:00:00Z"), last, window))
         assertTrue(LateArrivalReplayPolicy.shouldUpload(record("steps", "2026-10-02T22:30:00Z", "2026-10-01T00:00:00Z"), last, window))
         assertTrue(LateArrivalReplayPolicy.shouldUpload(record("sleep", oldEnd, "invalid"), last, window))
+        assertFalse(LateArrivalReplayPolicy.shouldUpload(record("sleep", "2026-09-25T00:00:00Z", "2026-09-25T00:00:00Z"), last, window))
+    }
+
+    @Test fun missingSleepDatesStayEligibleForBoundedReplayAcrossMidnight() {
+        val end = Instant.parse("2026-10-03T12:00:00Z")
+        val last = Instant.parse("2026-10-02T14:05:55Z")
+        val window = SyncWindowPolicy.incremental(end, last)
+        val targetEnds = listOf(
+            "2026-09-28T00:30:00Z", // 09/28 Asia/Taipei wake date
+            "2026-09-30T01:00:00Z", // 09/30 Asia/Taipei wake date
+            "2026-10-02T17:03:00Z", // 10/03 Asia/Taipei wake date
+        )
+        for (endedAt in targetEnds) {
+            val session = CanonicalHealthRecord(
+                domain = "sleep", sourceApp = "test.origin", sourceRecordId = "session-$endedAt",
+                sourceUpdatedAt = "2026-09-28T02:00:00Z", recordedAt = endedAt,
+                startedAt = Instant.parse(endedAt).minus(6, java.time.temporal.ChronoUnit.HOURS).toString(),
+                endedAt = endedAt, timezone = "Asia/Taipei",
+                localDate = Instant.parse(endedAt).atZone(java.time.ZoneId.of("Asia/Taipei")).toLocalDate().toString(),
+                value = 360.0, unit = "minute",
+            )
+            assertTrue("session $endedAt", LateArrivalReplayPolicy.shouldUpload(session, last, window))
+            assertTrue("stage $endedAt", LateArrivalReplayPolicy.shouldUpload(session.copy(domain = "sleep_stage", sourceRecordId = "${session.sourceRecordId}:stage"), last, window))
+        }
     }
 
     @Test fun longOfflineGapIsNeverClippedByLateArrivalLookback() {
