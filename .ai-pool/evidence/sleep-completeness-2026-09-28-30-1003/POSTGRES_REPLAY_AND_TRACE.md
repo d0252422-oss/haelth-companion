@@ -49,6 +49,13 @@ This static contract is **not** a live record-ID trace. Health Connect IDs and
 per-record Edge receipt identities are unavailable without a permitted device
 read or correlated safe diagnostics; do not infer them from matching counts.
 
+At 2026-10-03 15:03 UTC, a fresh **read-only** query confirmed the same three
+target-day raw counts (0/0, 0/0, 0/3). The installed beta.25 connector still
+reported `last_success_at=2026-10-02 14:05:55.735 UTC`, `last_result=SYNCED`,
+with no newly created Android raw rows after the 10/03 07:54:27 UTC receipt.
+This does not identify the WorkManager terminal reason or prove the source
+parent IDs absent; no ADB or app action was performed during the passive window.
+
 ## Safe Beta build path
 
 `android-helper/app/build.gradle.kts` fixes the Beta package
