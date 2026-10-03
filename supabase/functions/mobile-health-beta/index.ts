@@ -565,6 +565,7 @@ export function scoreErrorCode(error: unknown): string {
     : "";
   return message.includes("SCORE_INPUT_BOUND_EXCEEDED") ? "SCORE_INPUT_BOUND_EXCEEDED" :
     message.includes("STALE_SCORE_INPUT") ? "STALE_SCORE_INPUT" :
+    message.includes("SCORE_STAGE_INPUT_ASSEMBLER") ? "SCORE_STAGE_INPUT_ASSEMBLER" :
     message.includes("SCORE_STAGE_ENGINE_COMPUTE") ? "SCORE_STAGE_ENGINE_COMPUTE" :
     message.includes("SCORE_STAGE_ENGINE_PUBLICATION") ? "SCORE_STAGE_ENGINE_PUBLICATION" :
     message.includes("SCORE_STAGE_FROZEN_SCORE") ? "SCORE_STAGE_FROZEN_SCORE" :

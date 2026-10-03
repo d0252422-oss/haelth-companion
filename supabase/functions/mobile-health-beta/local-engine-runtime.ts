@@ -12,6 +12,7 @@ import {readPublishedDaily,readPublishedDailySnapshot,projectPublishedDaily} fro
 import {ManualObservationsLocalStore} from './manual-observations-local.ts';
 import {observationEngineProjection,projectManualObservationDay} from './manual-observation-projection.ts';
 import {readUserEntitlement} from './entitlement.ts';
+import { inScoreStage } from './score-stage-diagnostic.ts';
 
 type Json = Record<string, any>;
 // Keep the hosted engine aligned with score-bridge.ts. The previous 5k cap
@@ -513,7 +514,7 @@ export class LocalEngineRuntime {
       payload: {manual_reconciliation:{policy:'manual-source-exclusion-v1',excluded_local_dates:manualDays.filter(p=>r.affected_local_dates.map(pgDay).includes(p.date)&&p.blockedDomains.some(d=>d===r.domain||d==='sleep'&&r.domain==='sleep_stage')).map(p=>p.date).sort()}},
     }));
     assertScoreEngineInputBound(rows.length,health.length,bodyRecords.length,observationRecords.length);
-    const result = await this.worker.execute({
+    const result = await inScoreStage("ENGINE_COMPUTE", () => this.worker.execute({
       algorithm_id: "multi-domain-bundle",
       algorithm_version: "health-score-v1.0",
       domain: "multi_domain",
@@ -531,7 +532,7 @@ export class LocalEngineRuntime {
         ],
         calculated_at: new Date().toISOString(),
       },
-    });
+    }));
     this.timings.push({
       date: day,
       records: mealRecords.length + healthRecords.length + bodyRecords.length + observationRecords.length,
@@ -547,8 +548,8 @@ export class LocalEngineRuntime {
   async processClaimedJob(job: Json, token: string) {
           const user = String(job.canonical_user_id), day = pgDay(job.score_date);
           if (!/^[0-9a-f-]{36}$/i.test(user) || !/^[0-9a-f-]{36}$/i.test(token)) throw Error('INVALID_SCORE_SCOPE');
-          const {bundle,nativeRows} = await this.computeClaimedJob(user, day);
-          const admin = pgAdmin(this.sql, this.verify, async (tx, args) => {
+          const {bundle,nativeRows} = await inScoreStage("INPUT_ASSEMBLER", () => this.computeClaimedJob(user, day));
+          const admin = pgAdmin(this.sql, this.verify, async (tx, args) => inScoreStage("ENGINE_PUBLICATION", async () => {
             const valid =
               await tx`select generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date=${day} and generation=${job.generation} and lease_token=${token} and status='PROCESSING' and lease_expires_at>now() for update`;
             if (
@@ -567,15 +568,15 @@ export class LocalEngineRuntime {
               await tx`insert into public.engine_output_heads values(${user},${day},${kind},${output.engine_version},${output.input_fingerprint}) on conflict(canonical_user_id,calculation_date,output_kind,engine_version) do update set input_fingerprint=excluded.input_fingerprint`;
             }
             await tx`update private.beta_score_recompute_queue set engine_published_generation=${job.generation} where canonical_user_id=${user} and score_date=${day}`;
-          });
+          }));
           // Frozen original eight-score computation remains unchanged, including missing training/nutrition.
-          const result = await recomputeBetaScore(
+          const result = await inScoreStage("FROZEN_SCORE", () => recomputeBetaScore(
             admin,
             user,
             day,
             (rows,dates)=>this.frozenManualRows(rows,user,dates),
             {userId:user,startDate:new Date(Date.parse(day)-28*86400000).toISOString().slice(0,10),endDate:day,rows:nativeRows as NormalizedHealthRow[]},
-          );
+          ));
           if(result.status==='NOT_DIRTY'){
             const [current]=await this.sql`select generation,status,engine_published_generation from private.beta_score_recompute_queue where canonical_user_id=${user} and score_date=${day}`;
             if(current?.status==='COMPLETE'&&BigInt(current.generation)>=BigInt(job.generation)&&String(current.engine_published_generation)===String(current.generation))return {status:'SUPERSEDED',local_date:day};

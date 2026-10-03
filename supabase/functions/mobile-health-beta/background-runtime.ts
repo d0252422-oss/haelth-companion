@@ -4,6 +4,7 @@ import { sameCanonicalUserId } from "./canonical-user-id.ts";
 import { readManualRequest } from "./manual-request-body.ts";
 import { scopedWorkerSql } from "./worker-sql-context.ts";
 import { LocalEngineRuntime } from "./local-engine-runtime.ts";
+import { scoreFailureDiagnostic, scoreStageOf } from "./score-stage-diagnostic.ts";
 import { logPersistedSyncReceipt } from "./sync-trigger-diagnostic.ts";
 const sha = async (value: string) =>
   Array.from(
@@ -227,7 +228,7 @@ export function createDelegatedIngestion(raw: any) {
 export function scoreWorkerFailureCode(error: unknown): string {
   const classified = scoreErrorCode(error);
   return classified === "SCORE_RECOMPUTE_FAILED"
-    ? "WORKER_RECOMPUTE_FAILED"
+    ? (scoreStageOf(error) ? `SCORE_STAGE_${scoreStageOf(error)}` : "WORKER_RECOMPUTE_FAILED")
     : classified;
 }
 
@@ -267,6 +268,7 @@ export async function createRecomputeWorker(raw: any) {
           // Persist only the existing allowlisted classifier, never the raw
           // exception message (which may contain SQL or health-data details).
           const failureCode = scoreWorkerFailureCode(e);
+          console.error("SCORE_RECOMPUTE_DIAGNOSTIC", JSON.stringify(scoreFailureDiagnostic(e, day, scoreErrorCode)));
           failureCodes.push(failureCode);
           await sql`select public.beta_fail_score_recompute(${job.canonical_user_id},${day}::date,${job.generation},${token},${failureCode},true)`;
         }

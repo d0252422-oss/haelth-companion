@@ -14,6 +14,18 @@ Read-only Beta queue showed `FAILED / WORKER_RECOMPUTE_FAILED` for 09/27, 09/28,
 
 Next safe check: obtain scoped worker log/diagnostic or reproduce in an isolated supported PostgreSQL database with synthetic inputs, then add an allowlisted stage marker without raw exception, SQL text, credentials, or health payload. Do not label missing sleep as the cause of these generic errors; 09/30 lacked raw sleep but its queue completed.
 
+2026-10-03 offline follow-on: the current Android candidate branch now tags
+input assembly, portable engine computation, engine publication, and frozen
+score bridge failures without changing the original exception or score formula.
+The scheduled worker emits only `failure_stage`, an allowlisted `reason_code`,
+allowlisted `exception_class`, and `input_date`; it never prints the raw cause.
+The existing `STALE_SCORE_INPUT` lease behavior remains intact. Three targeted
+Deno tests passed, including secret-like error text absence from serialized
+diagnostics. This diagnostic code has **not** been deployed, and the four live
+date-specific root causes remain UNKNOWN. Full local PostgreSQL worker
+integration was not rerun because its dedicated 57484 test cluster is not
+available in this task; the sleep replay cluster on 57485 is a separate scope.
+
 ## 3. Authenticated Web acceptance preparation — READY, live step BLOCKED_HUMAN
 
 Checklist: `docs/BETA_SLEEP_WEB_ACCEPTANCE_20261003.md`. The local readback fixture verifies metric availability remains separate from score failure. No current authenticated login was performed and no live Beta Web acceptance was claimed.
