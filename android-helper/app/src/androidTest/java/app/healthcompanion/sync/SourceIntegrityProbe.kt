@@ -18,7 +18,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
-/** Read-only test APK. No auth storage, health values, upload, or scheduling calls. */
+/** Default is read-only source capture. Explicit runtime/backfill modes use the
+ * production pipeline and independently verified plans; never schedule workers. */
 class SourceIntegrityProbe : Instrumentation() {
     private lateinit var arguments: Bundle
     private val zone = ZoneId.of("Asia/Taipei")
@@ -26,15 +27,62 @@ class SourceIntegrityProbe : Instrumentation() {
     override fun onStart() {
         val result = Bundle()
         try {
-            val report = runBlocking { snapshot() }
-            File(targetContext.filesDir, "health-source-integrity.json").writeText(report.toString())
-            result.putString("stream", "SOURCE_SNAPSHOT_SAVED; HEALTH_VALUES_EXCLUDED")
+            val runtime = arguments.getString("mode") in setOf("runtime", "verified_backfill")
+            val extras = arguments.getString("mode") == "verify_sql_extras"
+            val report = runBlocking {
+                if (runtime) RuntimeIntegrityAcceptance.run(targetContext, arguments)
+                else if (extras) verifySqlExtras() else snapshot()
+            }
+            val filename = if (runtime) "health-runtime-integrity.json"
+                else if (extras) "health-extra-integrity.json" else "health-source-integrity.json"
+            File(targetContext.filesDir, filename).writeText(report.toString())
+            result.putString("stream", "INTEGRITY_REPORT_SAVED; HEALTH_VALUES_EXCLUDED")
             finish(0, result)
         } catch (e: Exception) {
             result.putString("stream", "SOURCE_SNAPSHOT_FAILED:" + e.javaClass.simpleName)
             finish(1, result)
         }
     }
+    /** By-ID source lookup distinguishes deleted/replaced IDs from range omissions. */
+    private suspend fun verifySqlExtras(): JSONObject {
+        val plan = JSONObject(File(targetContext.filesDir,"extra-source-read-plan.json").readText()).getJSONArray("records")
+        require(plan.length() in 1..300)
+        val client = HealthConnectClient.getOrCreate(targetContext)
+        val rows = JSONArray()
+        withTimeout(300_000L) {
+            for (i in 0 until plan.length()) {
+                val item=plan.getJSONObject(i)
+                val id=item.getString("source_record_id")
+                require(hash(id)==item.getString("id_hash"))
+                val domain=item.getString("domain")
+                val row=JSONObject().put("domain",domain).put("id_hash",hash(id))
+                try {
+                    val record: Record = withTimeout<Record>(15_000L) {
+                        when(domain) {
+                            "steps" -> readOne(client,StepsRecord::class,id)
+                            "total_energy" -> readOne(client,TotalCaloriesBurnedRecord::class,id)
+                            else -> error("UNSUPPORTED_EXTRA_DOMAIN")
+                        }
+                    }
+                    require(record.metadata.dataOrigin.packageName==item.getString("source_app"))
+                    val time=bounds(record)
+                    row.put("status","SOURCE_PRESENT").put("start",time.first.toString()).put("end",time.second.toString())
+                        .put("taipei_date",time.second.atZone(zone).toLocalDate().toString())
+                } catch (e: android.os.RemoteException) {
+                    // connect-client 1.1.0 emits exactly this only for an empty
+                    // platform ReadRecordsRequestUsingIds response.
+                    row.put("status",if(e.message=="No records") "SOURCE_RECORD_NOT_FOUND" else "UNKNOWN")
+                        .put("error_class",e.javaClass.simpleName)
+                } catch(e: Exception) {
+                    row.put("status","UNKNOWN").put("error_class",e.javaClass.simpleName)
+                }
+                rows.put(row)
+            }
+        }
+        return JSONObject().put("captured_at",Instant.now().toString()).put("rows",rows).put("health_values_included",false)
+    }
+    private suspend fun <T : Record> readOne(client: HealthConnectClient, type: KClass<T>, id: String): Record =
+        client.readRecord(type,id).record
     private suspend fun snapshot(): JSONObject {
         val start = LocalDate.parse(arguments.getString("start_date") ?: "2026-10-01")
         val end = LocalDate.parse(arguments.getString("end_date") ?: "2026-10-08")
