@@ -9,6 +9,7 @@ data class SyncCheckpoint(
     val lastRecordKey: String? = null,
     val reconciliationPass: Int = 0,
     val datasetChanged: Boolean = false,
+    val receiptContractVersion: Int = 0,
 )
 interface CheckpointRepository {
     fun load(): SyncCheckpoint?
@@ -36,6 +37,7 @@ class SyncCheckpointStore(
     private val lastRecordKey = SyncStateNamespace.modeKey(userId, mode, LAST_RECORD_KEY)
     private val reconciliationPassKey = SyncStateNamespace.modeKey(userId, mode, RECONCILIATION_PASS)
     private val datasetChangedKey = SyncStateNamespace.modeKey(userId, mode, DATASET_CHANGED)
+    private val receiptVersionKey = SyncStateNamespace.modeKey(userId, mode, RECEIPT_VERSION)
 
     init {
         // beta.16 stored one global cursor. It belongs to the outstanding history
@@ -52,6 +54,7 @@ class SyncCheckpointStore(
             preferences.getString(lastRecordKey, null),
             preferences.getInt(reconciliationPassKey, 0).coerceAtLeast(0),
             preferences.getBoolean(datasetChangedKey, false),
+            preferences.getInt(receiptVersionKey, 0),
         )
     }
 
@@ -61,6 +64,7 @@ class SyncCheckpointStore(
             .putInt(recordIndexKey, checkpoint.nextRecordIndex)
             .putInt(reconciliationPassKey, checkpoint.reconciliationPass)
             .putBoolean(datasetChangedKey, checkpoint.datasetChanged)
+            .putInt(receiptVersionKey, checkpoint.receiptContractVersion)
             .also { editor ->
                 checkpoint.lastRecordKey?.let { editor.putString(lastRecordKey, it) }
                     ?: editor.remove(lastRecordKey)
@@ -76,6 +80,7 @@ class SyncCheckpointStore(
             .remove(lastRecordKey)
             .remove(reconciliationPassKey)
             .remove(datasetChangedKey)
+            .remove(receiptVersionKey)
             .apply()
     }
 
@@ -99,6 +104,7 @@ class SyncCheckpointStore(
         private const val LAST_RECORD_KEY = "last_record_key"
         private const val RECONCILIATION_PASS = "reconciliation_pass"
         private const val DATASET_CHANGED = "dataset_changed"
+        private const val RECEIPT_VERSION = "receipt_contract_version"
 
         fun clearAll(context: Context, userId: String) {
             val preferences = context.getSharedPreferences("sync_checkpoint", Context.MODE_PRIVATE)
@@ -113,6 +119,7 @@ class SyncCheckpointStore(
                     .remove(SyncStateNamespace.modeKey(userId, mode, LAST_RECORD_KEY))
                     .remove(SyncStateNamespace.modeKey(userId, mode, RECONCILIATION_PASS))
                     .remove(SyncStateNamespace.modeKey(userId, mode, DATASET_CHANGED))
+                    .remove(SyncStateNamespace.modeKey(userId, mode, RECEIPT_VERSION))
             }
             editor.apply()
         }

@@ -25,13 +25,20 @@ data class UploadSummary(
     val batchesTotal: Int,
     val recordsUploaded: Int,
     val reconciliationPending: Boolean = false,
+    val persistedDomainCounts: Map<String, Int> = emptyMap(),
 )
 class AuthenticationRequired : IOException("AUTHENTICATION_REQUIRED")
 class OversizedBatchRejected : IOException("OVERSIZED_BATCH_REJECTED")
 class BatchUploadFailed(val statusCode: Int) : IOException("BATCH_UPLOAD_FAILED")
 class BackfillCatchUpRequired : IOException("BACKFILL_CATCH_UP_REQUIRED")
 
-internal data class IngestionHttpResult(val statusCode: Int, val errorCode: String? = null)
+internal data class IngestionHttpResult(
+    val statusCode: Int, val errorCode: String? = null, val receipt: IngestionReceipt? = null,
+    val acceptedCount: Int? = receipt?.accepted?.size,
+    val duplicateCount: Int? = receipt?.duplicate?.size,
+    val rejectedCount: Int? = receipt?.rejectedCount,
+    val rejectionReasons: Map<String, Int> = receipt?.rejectionReasons ?: emptyMap(),
+)
 
 internal fun interface IngestionTransport : Closeable {
     suspend fun post(path: String, session: BackendSession, body: String): IngestionHttpResult
@@ -76,6 +83,7 @@ internal class OkHttpIngestionTransport(
             response.status.value.takeIf { it >= 400 }?.let {
                 sanitizedServerError(responseBody.take(IngestionClient.MAX_ERROR_BODY_CHARS))
             },
+            if (path.endsWith("/ingestion/batches") && responseBody.length <= 64 * 1024) IngestionReceipt.parse(responseBody) else null,
         )
     }
 
@@ -94,6 +102,8 @@ internal class IngestionClient(
     private val backoff: suspend (Long) -> Unit = { delay(it) },
     private val onHttpResult: (IngestionHttpResult) -> Unit = {},
 ) : Closeable {
+    var confirmedDomainCounts: Map<String, Int> = emptyMap()
+        private set
     suspend fun upload(
         session: BackendSession,
         records: List<CanonicalHealthRecord>,
@@ -102,13 +112,24 @@ internal class IngestionClient(
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): UploadSummary {
         requireConfigured()
-        val plan = BatchPlanner.streamingPlan(session.canonicalUserId, records, checkpoints.load())
+        // Old HTTP-only cursors are not proof of SQL persistence. Replay safely by identity.
+        val verifiedCheckpoint = checkpoints.load()?.takeIf { it.receiptContractVersion == SyncCompletenessPolicy.CONTRACT_VERSION }
+        val plan = BatchPlanner.streamingPlan(session.canonicalUserId, records, verifiedCheckpoint)
         var nextRecordIndex = plan.nextRecordIndex
         var completedBatches = plan.nextBatchIndex
+        // A changed dataset can resume by ordering frontier, but that frontier is
+        // not evidence for newly inserted/edited records before it.
+        confirmedDomainCounts = if (plan.datasetChanged) emptyMap()
+            else plan.orderedRecords.take(nextRecordIndex).groupingBy { it.domain }.eachCount()
         while (nextRecordIndex < plan.orderedRecords.size) {
             val batch = BatchPlanner.nextStreamingBatch(session.canonicalUserId, plan.orderedRecords, nextRecordIndex)
                 ?: break
             postBatch(session, batch.body, diagnostic)
+            val newCounts = confirmedDomainCounts.toMutableMap()
+            plan.orderedRecords.subList(nextRecordIndex, batch.nextRecordIndex).forEach { record ->
+                newCounts[record.domain] = (newCounts[record.domain] ?: 0) + 1
+            }
+            confirmedDomainCounts = newCounts
             nextRecordIndex = batch.nextRecordIndex
             completedBatches += 1
             checkpoints.save(SyncCheckpoint(
@@ -118,6 +139,7 @@ internal class IngestionClient(
                 lastRecordKey = BatchPlanner.encodedRecordKey(plan.orderedRecords[nextRecordIndex - 1]),
                 reconciliationPass = plan.reconciliationPass,
                 datasetChanged = plan.datasetChanged,
+                receiptContractVersion = SyncCompletenessPolicy.CONTRACT_VERSION,
             ))
             onProgress(
                 completedBatches,
@@ -130,6 +152,7 @@ internal class IngestionClient(
                 nextBatchIndex = 0,
                 nextRecordIndex = 0,
                 reconciliationPass = plan.reconciliationPass + 1,
+                receiptContractVersion = SyncCompletenessPolicy.CONTRACT_VERSION,
             ))
             throw BackfillCatchUpRequired()
         }
@@ -142,6 +165,7 @@ internal class IngestionClient(
                 nextBatchIndex = 0,
                 nextRecordIndex = 0,
                 reconciliationPass = MAX_RECONCILIATION_PASSES,
+                receiptContractVersion = SyncCompletenessPolicy.CONTRACT_VERSION,
             ))
         }
         return UploadSummary(
@@ -149,35 +173,43 @@ internal class IngestionClient(
             completedBatches,
             nextRecordIndex,
             reconciliationPending = plan.datasetChanged,
+            persistedDomainCounts = confirmedDomainCounts,
         )
     }
 
     private suspend fun postBatch(session: BackendSession, body: String, diagnostic: SyncTriggerDiagnostic?) {
+        val mutations = JSONObject(body).getJSONArray("mutations")
+        val expected = List(mutations.length()) { mutations.getJSONObject(it).getString("idempotency_key") }
         var attempt = 0
         while (true) {
             attempt += 1
             val requestBody = diagnostic?.let {
                 JSONObject(body).put("sync_diagnostic", it.request(attempt)).toString()
             } ?: body
-            val status = try { execute(session, requestBody) } catch (error: IOException) {
+            val result = try { execute(session, requestBody) } catch (error: IOException) {
                 if (!RetryPolicy.isRetryable(error) || attempt >= MAX_ATTEMPTS) throw error
                 sleepBackoff(attempt)
                 continue
             }
-            when (RetryPolicy.action(status, attempt)) {
-                RetryAction.SUCCESS -> return
+            when (RetryPolicy.action(result.statusCode, attempt)) {
+                RetryAction.SUCCESS -> {
+                    if (result.receipt?.verifies(expected) == true) return
+                    onHttpResult(result.copy(errorCode = "DATA_INTEGRITY_WARNING", receipt = null))
+                    if (attempt >= MAX_ATTEMPTS) throw IncompleteIngestionReceipt()
+                    sleepBackoff(attempt)
+                }
                 RetryAction.AUTH_FAIL -> throw AuthenticationRequired()
                 RetryAction.OVERSIZE_FAIL -> throw OversizedBatchRejected()
                 RetryAction.RETRY -> sleepBackoff(attempt)
-                RetryAction.FAIL -> throw BatchUploadFailed(status)
+                RetryAction.FAIL -> throw BatchUploadFailed(result.statusCode)
             }
         }
     }
 
-    private suspend fun execute(session: BackendSession, body: String): Int {
+    private suspend fun execute(session: BackendSession, body: String): IngestionHttpResult {
         val result = transport.post("/v1/health/ingestion/batches", session, body)
-        onHttpResult(result)
-        return result.statusCode
+        onHttpResult(result.copy(receipt = null))
+        return result
     }
 
     suspend fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String, diagnostic: SyncTriggerDiagnostic? = null) {
@@ -273,7 +305,7 @@ object RetryPolicy {
     fun shouldRetryWorker(error: Throwable, runAttemptCount: Int, maxAttempts: Int): Boolean {
         if (runAttemptCount >= maxAttempts - 1) return false
         return when (error) {
-            is AuthenticationRequired, is OversizedBatchRejected -> false
+            is AuthenticationRequired, is OversizedBatchRejected, is IncompleteIngestionReceipt, is DomainCompletenessExhausted -> false
             is BatchUploadFailed -> error.statusCode == 429 || error.statusCode in 500..599
             is IOException -> true
             else -> false

@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 object PaginationGuard {
     // Some Health Connect implementations use an empty string for EOF rather
     // than null. Passing it back would turn a complete read into a capped read.
-    fun nextPageToken(token: String?): String? = token?.takeUnless { it.isEmpty() }
+    fun nextPageToken(token: String?): String? = token?.takeUnless { it.isBlank() }
 
     fun isRepeated(nextToken: String?, seenTokens: MutableSet<String>): Boolean =
         nextToken != null && !seenTokens.add(nextToken)

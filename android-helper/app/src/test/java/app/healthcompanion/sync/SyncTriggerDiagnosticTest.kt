@@ -44,7 +44,7 @@ class SyncTriggerDiagnosticTest {
         }
         val client = IngestionClient("https://beta.example", IngestionTransport { _, _, body ->
             bodies += JSONObject(body)
-            IngestionHttpResult(if (bodies.size == 1) 500 else 200)
+            successfulReceipt(body, if (bodies.size == 1) 500 else 200)
         }, backoff = {})
         val record = CanonicalHealthRecord(
             domain = "steps", sourceApp = "fixture", sourceRecordId = "record-1",

@@ -75,6 +75,10 @@ class SyncRuntimeStateStore(context: Context) {
         .remove(key(userId, BACKGROUND_READ_SOURCE_APPS))
         .remove(key(userId, BACKGROUND_HTTP_STATUS))
         .remove(key(userId, BACKGROUND_HTTP_ERROR_CODE))
+        .remove(key(userId, "background_http_accepted_count"))
+        .remove(key(userId, "background_http_duplicate_count"))
+        .remove(key(userId, "background_http_rejected_count"))
+        .remove(key(userId, "background_http_rejection_reasons"))
         .apply()
     fun recordProgress(userId: String, stage: String, requestCount: Int? = null) {
         val editor = preferences.edit()
@@ -96,6 +100,13 @@ class SyncRuntimeStateStore(context: Context) {
     }
     internal fun recordHttpResult(userId: String, result: IngestionHttpResult) {
         val editor = preferences.edit().putInt(key(userId, BACKGROUND_HTTP_STATUS), result.statusCode)
+        // Only counts and bounded reason codes survive; receipt identities are excluded.
+        mapOf("accepted" to result.acceptedCount, "duplicate" to result.duplicateCount, "rejected" to result.rejectedCount).forEach { (name, count) ->
+            if (count == null) editor.remove(key(userId, "background_http_${name}_count"))
+            else editor.putInt(key(userId, "background_http_${name}_count"), count)
+        }
+        editor.putString(key(userId, "background_http_rejection_reasons"),
+            result.rejectionReasons.toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" })
         result.errorCode?.takeIf { it.matches(Regex("[A-Z][A-Z0-9_]{0,63}")) }
             ?.let { editor.putString(key(userId, BACKGROUND_HTTP_ERROR_CODE), it) }
             ?: editor.remove(key(userId, BACKGROUND_HTTP_ERROR_CODE))
@@ -689,6 +700,8 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                         SyncWindowPolicy.incremental(end, lastSuccess)
                 }
                 reportProgress(state, session.canonicalUserId, "HEALTH_READ")
+                val completeness = SyncCompletenessStore(applicationContext, session.canonicalUserId)
+                completeness.begin(id.toString(), window, HealthReadDomainPolicy.forMode(mode) ?: SyncCompletenessPolicy.SUPPORTED_DOMAINS)
                 val read = withTimeout(HEALTH_READ_TIMEOUT_MS) {
                     health.readBounded(
                         window.start, window.end, HealthReadDomainPolicy.forMode(mode),
@@ -699,9 +712,10 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     )
                 }
                 state.recordReadSummary(session.canonicalUserId, read.records)
-                val recordsToUpload = if (mode == BackgroundSyncMode.INCREMENTAL) {
-                    read.records.filter { LateArrivalReplayPolicy.shouldUpload(it, lastSuccess, window) }
-                } else read.records
+                // Source lastModifiedTime is not evidence that SQL received a record.
+                // Replay this bounded read by stable identity and require commit receipts.
+                val recordsToUpload = read.records
+                completeness.save(id.toString(), window, read)
                 val client = IngestionClient(BuildConfig.API_BASE_URL, onHttpResult = { result ->
                     state.recordHttpResult(session.canonicalUserId, result)
                 }).also { ingestionClient = it }
@@ -712,6 +726,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                         withContext(Dispatchers.IO) {
                             client.upload(session, recordsToUpload, checkpoints, diagnostic) { done, _ ->
                                 state.recordProgress(session.canonicalUserId, "UPLOAD", done)
+                                completeness.save(id.toString(), window, read, client.confirmedDomainCounts)
                             }
                         }
                     }
@@ -723,8 +738,9 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     }
                 }
                 reportProgress(state, session.canonicalUserId, "CHECKPOINT")
+                completeness.save(id.toString(), window, read, uploadSummary.persistedDomainCounts)
                 val durablyComplete = SyncTerminalPolicy.isDurablyComplete(
-                    readPartial = read.isPartial,
+                    readPartial = read.isPartial || SyncCompletenessPolicy.incompleteDomains(read.domainTraces, uploadSummary.persistedDomainCounts).isNotEmpty(),
                     reconciliationPending = uploadSummary.reconciliationPending,
                 )
                 val needsFollowUp = !durablyComplete
@@ -735,7 +751,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 if (needsFollowUp) {
                     state.markHistoryPending(session.canonicalUserId)
                     if (uploadSummary.reconciliationPending) throw BackfillCatchUpRequired()
-                    throw PartialHealthRead()
+                    throw DomainCompletenessExhausted()
                 }
                 if (mode == BackgroundSyncMode.BACKFILL) state.markHistoryComplete(session.canonicalUserId)
                 state.recordTerminal(session.canonicalUserId, "SUCCESS")
@@ -792,6 +808,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
             state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "FAILED")
             retryOrFail(maxAttempts)
         } finally {
+            SyncCompletenessStore(applicationContext, session.canonicalUserId).finishPending(id.toString())
             ingestionClient?.close()
             AppSyncSingleFlight.gate.finish()
         }
@@ -820,5 +837,3 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
         const val PERMISSION_TIMEOUT_MS = 30_000L
     }
 }
-
-private class PartialHealthRead : IOException("PARTIAL_HEALTH_READ")

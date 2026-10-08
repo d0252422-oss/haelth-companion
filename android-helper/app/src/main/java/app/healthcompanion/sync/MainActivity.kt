@@ -212,15 +212,20 @@ class MainActivity : ComponentActivity() {
                         end,
                         SyncRuntimeStateStore(this@MainActivity).lastSuccessfulSync(session.canonicalUserId),
                     )
-                    val read = withContext(Dispatchers.IO) {
+                    val completeness = SyncCompletenessStore(this@MainActivity, session.canonicalUserId)
+                    val syncRunId = java.util.UUID.randomUUID().toString()
+                    completeness.begin(syncRunId, window)
+                    val read = try { withContext(Dispatchers.IO) {
                         health.readBounded(window.start, window.end) { domain, done, total ->
                             scope.launch { status.text = "正在讀取 $domain… $done/$total" }
                         }
-                    }
+                    } } catch (error: Exception) { completeness.finishPending(syncRunId); throw error }
                     IngestionClient(BuildConfig.API_BASE_URL).use { client ->
+                        completeness.save(syncRunId, window, read)
                         val uploadSummary = try {
                             withContext(Dispatchers.IO) {
                                 client.upload(session, read.records, checkpoints, diagnostic) { done, total ->
+                                    completeness.save(syncRunId, window, read, client.confirmedDomainCounts)
                                     scope.launch { status.text = "正在上傳健康資料… $done/$total" }
                                 }
                             }
@@ -228,12 +233,13 @@ class MainActivity : ComponentActivity() {
                             session = auth.refresh().also { currentSession = it }
                             withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints, diagnostic) }
                         }
-                        status.text = "健康資料已同步，分數正在更新…"
+                        completeness.save(syncRunId, window, read, uploadSummary.persistedDomainCounts)
                         val partial = !SyncTerminalPolicy.isDurablyComplete(
-                            readPartial = read.isPartial,
+                            readPartial = read.isPartial || SyncCompletenessPolicy.incompleteDomains(read.domainTraces, uploadSummary.persistedDomainCounts).isNotEmpty(),
                             reconciliationPending = uploadSummary.reconciliationPending,
                         )
                         val result = if (partial) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED_RECENT"
+                        status.text = if (partial) "部分資料尚未完成同步，將有限度重試" else "健康資料已同步，分數正在更新…"
                         val permissionState = if (granted.containsAll(health.readPermissions)) "GRANTED" else "PARTIAL"
                         withContext(Dispatchers.IO) { client.reportStatus(session, read.records, result, permissionState, diagnostic) }
                         if (!partial) checkpoints.clear()

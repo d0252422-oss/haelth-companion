@@ -25,7 +25,7 @@ class IngestionClientTimeoutTest {
             var unavailable = true
             val client = IngestionClient("https://beta.example", IngestionTransport { _, _, body ->
                 bodies += body
-                IngestionHttpResult(if (unavailable) failure else 200)
+                successfulReceipt(body, if (unavailable) failure else 200)
             }, backoff = {})
             val input = records(1)
             val rejected = runCatching { client.upload(session, input, checkpoints) }.exceptionOrNull()
@@ -45,7 +45,7 @@ class IngestionClientTimeoutTest {
         val client = IngestionClient("https://beta.example", IngestionTransport { _, _, body ->
             bodies += body
             if (unavailable) throw IOException("network unavailable")
-            IngestionHttpResult(200)
+            successfulReceipt(body, 200)
         }, backoff = {})
         assertTrue(runCatching { client.upload(session, records(1), checkpoints) }.exceptionOrNull() is IOException)
         assertNull(checkpoints.value)
@@ -58,9 +58,9 @@ class IngestionClientTimeoutTest {
     @Test fun timeoutRetriesAndPreservesLastCompletedBatchCheckpoint() = runTest {
         val checkpoints = MemoryCheckpoints()
         var calls = 0
-        val transport = IngestionTransport { _, _, _ ->
+        val transport = IngestionTransport { _, _, body ->
             calls += 1
-            if (calls == 1) IngestionHttpResult(201) else throw SocketTimeoutException("bounded timeout")
+            if (calls == 1) successfulReceipt(body, 201) else throw SocketTimeoutException("bounded timeout")
         }
         val client = IngestionClient("https://beta.example", transport) {}
 
@@ -106,7 +106,7 @@ class IngestionClientTimeoutTest {
                     acceptedIds += mutations.getJSONObject(index).getString("source_record_id")
                 }
             }
-            IngestionHttpResult(result)
+            successfulReceipt(body, result)
         }
         val client = IngestionClient("https://beta.example", transport, backoff = {})
 
@@ -126,7 +126,7 @@ class IngestionClientTimeoutTest {
     @Test fun successfulUploadRetainsCompletedCheckpointUntilStatusIsDurable() = runTest {
         val checkpoints = MemoryCheckpoints()
         val seenBodies = mutableListOf<String>()
-        val transport = IngestionTransport { _, _, body -> seenBodies += body; IngestionHttpResult(201) }
+        val transport = IngestionTransport { _, _, body -> seenBodies += body; successfulReceipt(body, 201) }
         val client = IngestionClient("https://beta.example", transport) {}
 
         val result = client.upload(session, records(101), checkpoints)
@@ -145,9 +145,9 @@ class IngestionClientTimeoutTest {
     @Test fun connectorStatusFailureRetainsCompletedCursorAndAvoidsBatchReplay() = runTest {
         val checkpoints = MemoryCheckpoints()
         var ingestionCalls = 0
-        val transport = IngestionTransport { path, _, _ ->
+        val transport = IngestionTransport { path, _, body ->
             if (path.endsWith("/connectors/status")) IngestionHttpResult(503)
-            else IngestionHttpResult(201).also { ingestionCalls += 1 }
+            else successfulReceipt(body, 201).also { ingestionCalls += 1 }
         }
         val client = IngestionClient("https://beta.example", transport) {}
         val input = records(101)
@@ -169,9 +169,9 @@ class IngestionClientTimeoutTest {
         var calls = 0
         val client = IngestionClient(
             "https://beta.example",
-            IngestionTransport { _, _, _ ->
+            IngestionTransport { _, _, body ->
                 calls += 1
-                if (calls == 1) IngestionHttpResult(201) else throw kotlinx.coroutines.CancellationException("cancelled")
+                if (calls == 1) successfulReceipt(body, 201) else throw kotlinx.coroutines.CancellationException("cancelled")
             },
             backoff = {},
         )
@@ -186,7 +186,7 @@ class IngestionClientTimeoutTest {
     @Test fun realBackfillScaleStreamingContinuationResumesExactlyOnce() = runTest {
         val input = records(42_235)
         val initial = BatchPlanner.streamingPlan(session.canonicalUserId, input, null)
-        val checkpoints = MemoryCheckpoints(SyncCheckpoint(initial.fingerprint, 171, 17_100))
+        val checkpoints = MemoryCheckpoints(SyncCheckpoint(initial.fingerprint, 171, 17_100, receiptContractVersion = 1))
         val expectedIds = initial.orderedRecords.drop(17_100).map { it.sourceRecordId }
         val uploadedIds = linkedSetOf<String>()
         var ingestionCalls = 0
@@ -198,7 +198,7 @@ class IngestionClientTimeoutTest {
                 repeat(mutations.length()) { index ->
                     assertTrue(uploadedIds.add(mutations.getJSONObject(index).getString("source_record_id")))
                 }
-                IngestionHttpResult(201)
+                successfulReceipt(body, 201)
             },
             backoff = {},
         )
@@ -217,6 +217,7 @@ class IngestionClientTimeoutTest {
         val original = records(250)
         val initial = BatchPlanner.streamingPlan(session.canonicalUserId, original, null)
         val checkpoints = MemoryCheckpoints(SyncCheckpoint(
+            receiptContractVersion = 1,
             planFingerprint = initial.fingerprint,
             nextBatchIndex = 1,
             nextRecordIndex = 100,
@@ -232,7 +233,7 @@ class IngestionClientTimeoutTest {
         var ingestionCalls = 0
         val client = IngestionClient(
             "https://beta.example",
-            IngestionTransport { _, _, _ -> IngestionHttpResult(201).also { ingestionCalls += 1 } },
+            IngestionTransport { _, _, body -> successfulReceipt(body, 201).also { ingestionCalls += 1 } },
             backoff = {},
         )
 
@@ -253,6 +254,7 @@ class IngestionClientTimeoutTest {
         val original = records(250)
         val initial = BatchPlanner.streamingPlan(session.canonicalUserId, original, null)
         val checkpoints = MemoryCheckpoints(SyncCheckpoint(
+            receiptContractVersion = 1,
             planFingerprint = initial.fingerprint,
             nextBatchIndex = 1,
             nextRecordIndex = 100,
@@ -268,13 +270,14 @@ class IngestionClientTimeoutTest {
         }
         val client = IngestionClient(
             "https://beta.example",
-            IngestionTransport { _, _, _ -> IngestionHttpResult(201) },
+            IngestionTransport { _, _, body -> successfulReceipt(body, 201) },
             backoff = {},
         )
 
         val dirtyResult = client.upload(session, firstChangedSnapshot, checkpoints)
 
         assertTrue(dirtyResult.reconciliationPending)
+        assertTrue(dirtyResult.persistedDomainCounts.values.sum() < firstChangedSnapshot.size)
         assertEquals(0, checkpoints.value?.nextBatchIndex)
         assertEquals(0, checkpoints.value?.nextRecordIndex)
         assertEquals(IngestionClient.MAX_RECONCILIATION_PASSES, checkpoints.value?.reconciliationPass)
@@ -287,6 +290,7 @@ class IngestionClientTimeoutTest {
 
         assertFalse(final.reconciliationPending)
         assertEquals(latestStableSnapshot.size, checkpoints.value?.nextRecordIndex)
+        assertEquals(latestStableSnapshot.size, final.persistedDomainCounts.values.sum())
         assertEquals(IngestionClient.MAX_RECONCILIATION_PASSES, checkpoints.value?.reconciliationPass)
     }
 
@@ -294,14 +298,14 @@ class IngestionClientTimeoutTest {
         val statuses = mutableListOf<IngestionHttpResult>()
         val client = IngestionClient(
             "https://beta.example",
-            IngestionTransport { _, _, _ -> IngestionHttpResult(202) },
+            IngestionTransport { _, _, body -> successfulReceipt(body, 202) },
             backoff = {},
             onHttpResult = statuses::add,
         )
 
         client.upload(session, records(1), MemoryCheckpoints())
 
-        assertEquals(listOf(IngestionHttpResult(202)), statuses)
+        assertEquals(listOf(IngestionHttpResult(202, acceptedCount = 1, duplicateCount = 0, rejectedCount = 0)), statuses)
     }
 
     @Test fun serverErrorCodeIsAllowlistedAndBounded() {
@@ -315,9 +319,9 @@ class IngestionClientTimeoutTest {
         var calls = 0
         val client = IngestionClient(
             "https://beta.example",
-            IngestionTransport { _, _, _ ->
+            IngestionTransport { _, _, body ->
                 calls += 1
-                IngestionHttpResult(if (calls == 1) 201 else 207)
+                successfulReceipt(body, if (calls == 1) 201 else 207)
             },
             backoff = {},
         )
@@ -334,7 +338,7 @@ class IngestionClientTimeoutTest {
     @Test fun connectorStatusFailureCannotBecomeFalseSyncSuccess() = runTest {
         val client = IngestionClient(
             "https://beta.example",
-            IngestionTransport { _, _, _ -> IngestionHttpResult(503) },
+            IngestionTransport { _, _, body -> IngestionHttpResult(503) },
             backoff = {},
         )
 

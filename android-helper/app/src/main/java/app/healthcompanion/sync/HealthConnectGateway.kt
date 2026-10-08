@@ -20,8 +20,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import java.time.Instant
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicInteger
@@ -32,6 +33,8 @@ data class HealthReadResult(
     val failedDomains: Set<String>,
     val cappedDomains: Set<String>,
     val pagesRead: Int,
+    val domainTraces: Map<String, DomainReadTrace> = emptyMap(),
+    val domainRangeStarts: Map<String, String> = emptyMap(),
 ) {
     val isPartial: Boolean get() = failedDomains.isNotEmpty() || cappedDomains.isNotEmpty()
 }
@@ -42,6 +45,7 @@ private data class DomainReadResult(
     val pages: Int,
     val capped: Boolean = false,
     val failed: Boolean = false,
+    val traces: Map<String, DomainReadTrace> = emptyMap(),
 )
 
 class HealthConnectGateway(private val context: Context) {
@@ -86,7 +90,7 @@ class HealthConnectGateway(private val context: Context) {
         startForDomain: (String) -> Instant = { start },
         onDomain: (domain: String, completed: Int, total: Int) -> Unit = { _, _, _ -> },
     ): HealthReadResult = coroutineScope {
-        val zone = ZoneId.systemDefault()
+        val zone = ZoneId.of("Asia/Taipei")
         val granted = client.permissionController.getGrantedPermissions()
         val semaphore = Semaphore(MAX_CONCURRENT_DOMAIN_READS)
         val readers = mutableListOf<Pair<String, suspend () -> DomainReadResult>>()
@@ -94,9 +98,7 @@ class HealthConnectGateway(private val context: Context) {
         fun <T : Record> add(domain: String, permission: String, type: KClass<T>, mapper: (T) -> List<CanonicalHealthRecord>) {
             if (permission in granted && HealthReadDomainPolicy.includes(includedDomains, domain)) {
                 readers += domain to {
-                    semaphore.withPermit {
-                        readDomain(domain, type, TimeRangeFilter.between(startForDomain(domain), end), mapper)
-                    }
+                    readDomain(domain, type, TimeRangeFilter.between(startForDomain(domain), end), mapper)
                 }
             }
         }
@@ -134,8 +136,21 @@ class HealthConnectGateway(private val context: Context) {
         val completed = AtomicInteger(0)
         val results = readers.map { (domain, reader) ->
             async {
-                val result = runCatching { withTimeout(PER_DOMAIN_TIMEOUT_MS) { reader() } }
-                    .getOrElse { DomainReadResult(domain, emptyList(), 0, failed = true) }
+                // The per-domain deadline starts after acquiring a slot. Waiting
+                // behind a slow domain must not consume another domain's read budget.
+                val result = run {
+                    var current: DomainReadResult? = null
+                    for (attempt in 0..SyncCompletenessPolicy.MAX_DOMAIN_RECOVERY_ATTEMPTS) {
+                        current = try { DomainReadBudget.read(semaphore, PER_DOMAIN_TIMEOUT_MS, reader) }
+                        catch (_: TimeoutCancellationException) { failedRead(domain, "READER_TIMEOUT") }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: SecurityException) { failedRead(domain, "PERMISSION") }
+                        catch (_: Exception) { failedRead(domain, "READER_ERROR") }
+                        current = current.copy(traces = current.traces.mapValues { (_, trace) -> trace.copy(recoveryAttempts = attempt) })
+                        if (!current.failed && !current.capped) break
+                    }
+                    requireNotNull(current)
+                }
                 onDomain(result.domain, completed.incrementAndGet(), readers.size)
                 result
             }
@@ -145,6 +160,8 @@ class HealthConnectGateway(private val context: Context) {
             failedDomains = results.filter { it.failed }.map { it.domain }.toSet(),
             cappedDomains = results.filter { it.capped }.map { it.domain }.toSet(),
             pagesRead = results.sumOf { it.pages },
+            domainTraces = results.flatMap { it.traces.entries }.associate { it.key to it.value },
+            domainRangeStarts = results.flatMap { result -> result.traces.keys.map { it to startForDomain(result.domain).toString() } }.toMap(),
         )
     }
 
@@ -153,16 +170,43 @@ class HealthConnectGateway(private val context: Context) {
         val seenTokens = mutableSetOf<String>()
         var token: String? = null
         var pages = 0
+        var sourceCount = 0
+        var stageCount = 0
+        val drops = mutableMapOf<String, Int>()
+        fun result(capped: Boolean = false): DomainReadResult {
+            val status = if (capped) "CAPPED" else if (drops.isNotEmpty()) "MAPPING_INCOMPLETE" else "COMPLETE"
+            val traces = mutableMapOf(domain to DomainReadTrace(sourceCount, records.count { it.domain == domain }, pages, status, drops.toMap()))
+            if (domain == "sleep") traces["sleep_stage"] = DomainReadTrace(stageCount, records.count { it.domain == "sleep_stage" }, pages, status, drops.toMap())
+            return DomainReadResult(domain, records, pages, capped, drops.isNotEmpty(), traces)
+        }
         do {
-            if (pages >= MAX_PAGES_PER_DOMAIN) return DomainReadResult(domain, records, pages, capped = true)
+            if (pages >= MAX_PAGES_PER_DOMAIN) return result(capped = true)
             val response = client.readRecords(ReadRecordsRequest(recordType = type, timeRangeFilter = filter, pageSize = PAGE_SIZE, pageToken = token))
-            records += response.records.flatMap(mapper)
+            sourceCount += response.records.size
+            response.records.forEach { source ->
+                if (source is SleepSessionRecord) stageCount += source.stages.size
+                try {
+                    val mapped = mapper(source)
+                    if (mapped.isEmpty()) drops.merge("EMPTY_MAPPING", 1, Int::plus)
+                    mapped.forEach { record ->
+                        if (!record.value.isFinite() || record.sourceRecordId.isBlank()) drops.merge("INVALID_RECORD", 1, Int::plus)
+                        else records += record
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { drops.merge("MAPPER_ERROR", 1, Int::plus) }
+            }
             pages += 1
             val next = PaginationGuard.nextPageToken(response.pageToken)
-            if (PaginationGuard.isRepeated(next, seenTokens)) return DomainReadResult(domain, records, pages, capped = true)
+            if (PaginationGuard.isRepeated(next, seenTokens)) return result(capped = true)
             token = next
         } while (token != null)
-        return DomainReadResult(domain, records, pages)
+        return result()
+    }
+
+    private fun failedRead(domain: String, reason: String): DomainReadResult {
+        val names = if (domain == "sleep") listOf("sleep", "sleep_stage") else listOf(domain)
+        return DomainReadResult(domain, emptyList(), 0, failed = true,
+            traces = names.associateWith { DomainReadTrace(null, 0, 0, reason) })
     }
 
     private fun Record.toCanonical(domain: String, value: Double, unit: String, start: Instant, end: Instant, zone: ZoneId, stage: String? = null, identitySuffix: String? = null, uploadSortAt: String? = null): CanonicalHealthRecord {
