@@ -71,11 +71,22 @@ export async function readPublishedDailySnapshot(tx:any,identity:Json,input:Json
               and (r.canonical_record->>'ended_at')::timestamptz<=(r.canonical_record->>'started_at')::timestamptz+interval '24 hours'
             then tstzrange((r.canonical_record->>'started_at')::timestamptz,(r.canonical_record->>'ended_at')::timestamptz,'[)') end)
             else null::tstzmultirange end as interval_ranges
-        from public.beta_health_records r cross join lateral unnest(r.affected_local_dates) as affected(local_date)
-        where r.canonical_user_id=${identity.canonical}
-        and r.domain in ('sleep','sleep_stage','steps','energy','total_energy','heart_rate','resting_heart_rate','hrv','weight','spo2')
-        and r.operation='UPSERT' and r.invalidated_at is null
-        and r.affected_local_dates && array(select generate_series(${range.start}::date,${range.end}::date,'1 day')::date)
+        from (
+          -- Health Connect can replace an interval with a new record identity.
+          -- Keep its newest same-source steps window once; retain every SQL row.
+          select r.*,row_number() over(partition by r.domain,r.platform,r.source_app,
+            case when r.domain='steps' and r.canonical_record->>'started_at' is not null
+              and r.canonical_record->>'ended_at' is not null then r.canonical_record->>'started_at' else r.source_record_id end,
+            case when r.domain='steps' and r.canonical_record->>'started_at' is not null
+              and r.canonical_record->>'ended_at' is not null then r.canonical_record->>'ended_at' else r.source_record_id end
+            order by coalesce(r.source_updated_at,r.updated_at) desc,r.source_revision desc,r.updated_at desc,r.source_record_id desc) as interval_rank
+          from public.beta_health_records r
+          where r.canonical_user_id=${identity.canonical}
+          and r.domain in ('sleep','sleep_stage','steps','energy','total_energy','heart_rate','resting_heart_rate','hrv','weight','spo2')
+          and r.operation='UPSERT' and r.invalidated_at is null
+          and r.affected_local_dates && array(select generate_series(${range.start}::date,${range.end}::date,'1 day')::date)
+        ) r cross join lateral unnest(r.affected_local_dates) as affected(local_date)
+        where (r.domain<>'steps' or r.interval_rank=1)
         and affected.local_date between ${range.start}::date and ${range.end}::date
         group by r.domain,affected.local_date,r.source_app
       ), ranked as (
