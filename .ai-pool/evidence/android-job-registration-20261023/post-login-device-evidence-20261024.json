@@ -1,0 +1,808 @@
+{
+  "captured_after_login": {
+    "captured_at": "2026-10-23T16:25:00.412576+00:00",
+    "files_stable": true,
+    "sqlite_integrity": "ok",
+    "app_wide_atomicity": "NOT_PROVEN",
+    "works": [
+      {
+        "id": "41ab61b0-dd86-497c-ad20-bc725dc9abfa",
+        "state": 1,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "parent_flow_id": "dc107ff9-9b7c-46a6-a046-cd598b286b50",
+          "sync_trigger_source": "APP_START",
+          "parent_worker_id": "5123a553-7149-4c15-811f-c484ca37190c",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772663233,
+        "last_enqueue_time": 1792772663209,
+        "system_id": 391,
+        "names": [
+          "health-sync-immediate-f06b9871e33e6fa0"
+        ]
+      },
+      {
+        "id": "2f5e0af8-ffb6-4f67-94f8-053d40b0e49c",
+        "state": 0,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "canonical_user_key": "f06b9871e33e6fa0",
+          "sync_trigger_source": "PERIODIC_WORKER"
+        },
+        "run_attempt_count": 0,
+        "generation": 1,
+        "period_count": 4,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772623010,
+        "last_enqueue_time": 1792769575832,
+        "system_id": 390,
+        "names": [
+          "health-sync-periodic-f06b9871e33e6fa0"
+        ]
+      }
+    ],
+    "runtime": {
+      "f06b9871e33e6fa0_background_result_at": "2026-10-23T16:24:55.238164Z",
+      "f06b9871e33e6fa0_background_last_progress_at": "2026-10-23T16:24:58.526644Z",
+      "f06b9871e33e6fa0_background_stage": "BATCH_POST",
+      "f06b9871e33e6fa0_periodic_repair_at": "1792772622986",
+      "f06b9871e33e6fa0_background_result": "SYNCING",
+      "f06b9871e33e6fa0_background_work_id": "41ab61b0-dd86-497c-ad20-bc725dc9abfa",
+      "f06b9871e33e6fa0_periodic_scheduler_health": "HEALTHY",
+      "f06b9871e33e6fa0_run_diagnostic": {
+        "trigger_source": "APP_START",
+        "origin_trigger_source": "APP_START",
+        "flow_id": "c6a9632b-6f0b-4895-81b9-0fb12e6ae656",
+        "worker_id": "41ab61b0-dd86-497c-ad20-bc725dc9abfa",
+        "attempt": 1,
+        "worker_attempt": 0,
+        "started_at": "2026-10-23T16:24:53.296647Z"
+      },
+      "f06b9871e33e6fa0_background_request_count": "1"
+    },
+    "checkpoints": {
+      "f06b9871e33e6fa0_backfill_receipt_contract_version": "1",
+      "f06b9871e33e6fa0_incremental_reconciliation_pass": "0",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_reconciliation_pass": "0",
+      "f06b9871e33e6fa0_backfill_next_record_index": "13600",
+      "f06b9871e33e6fa0_backfill_reconciliation_pass": "1",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_plan_fingerprint": "v3:27a3f4ed7e1fc6a35f0cfe83f78d4028d7d2905324e02741390ebb2e902a3dc3",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_next_record_index": "100",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_receipt_contract_version": "1",
+      "f06b9871e33e6fa0_incremental_plan_fingerprint": "v3:d5563757a7ef096a024ffc4297459e1322e0a4d744be97e87140f618cd663695",
+      "f06b9871e33e6fa0_incremental_next_record_index": "3363",
+      "f06b9871e33e6fa0_incremental_receipt_contract_version": "1",
+      "f06b9871e33e6fa0_backfill_plan_fingerprint": "v3:a554b96794b6c0be54069d84f535768a2828ca238387eebe67874199033717ab"
+    },
+    "last_success": {
+      "f06b9871e33e6fa0_last_success": "2026-10-23T06:18:33.499692Z"
+    },
+    "jobs": {
+      "391": "waiting\r\n",
+      "390": "waiting\r\n"
+    }
+  },
+  "captured_completed_incremental": {
+    "captured_at": "2026-10-23T16:35:51.618274+00:00",
+    "stable_fileset": true,
+    "stability_attempts": [
+      true
+    ],
+    "sqlite_integrity": "ok",
+    "app_wide_atomicity": "NOT_PROVEN",
+    "files_sha256": {
+      "no_backup/androidx.work.workdb": "a7723409583a1a20943b49be98782946f5383992dbd27123ae02fff954095cf7",
+      "no_backup/androidx.work.workdb-wal": "e52fbabcc515ae943a01ef68296225b93fba86a28cc79950f744c6f8c5f9f09e",
+      "no_backup/androidx.work.workdb-shm": "f36f4d2a344ff26ebecfde3b0907e70cfb019651275e7c5e266f04dcd2bf58ee",
+      "shared_prefs/sync_runtime_state.xml": "a84f3098e3228456e76b9ddb3051416b705f12848181b3ed9305acc51a92a4d6",
+      "shared_prefs/sync_checkpoint.xml": "4663e7a1a3e14180849756b7f9f6f219f32b1756a2047f3d325f0c57d857656e",
+      "shared_prefs/sync_completeness.xml": "53a171030df11881d882e746f8a9be6617269a8ee9f2a3d17758f6d73f9be66e",
+      "shared_prefs/sync_status.xml": "7a5ddd70ad1f6e706fd0f5f8f15e5441529bf0bf4129292b130178fc69588692"
+    },
+    "works": [
+      {
+        "id": "00b5cd1e-aa16-4998-94d1-181ba84f95a2",
+        "state": 2,
+        "input": {
+          "sync_mode": "P0_RECOVERY",
+          "sync_trigger_source": "BACKFILL",
+          "recovery_frozen_end": "2026-10-23T01:26:43.612165Z",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 8,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792722475946,
+        "last_enqueue_time": 1792721425241,
+        "interval_duration": 0,
+        "system_id": null,
+        "names": [
+          "health-sync-p0-recovery-v23-f06b9871e33e6fa0"
+        ],
+        "prerequisites": []
+      },
+      {
+        "id": "2f5e0af8-ffb6-4f67-94f8-053d40b0e49c",
+        "state": 0,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "canonical_user_key": "f06b9871e33e6fa0",
+          "sync_trigger_source": "PERIODIC_WORKER"
+        },
+        "run_attempt_count": 0,
+        "generation": 1,
+        "period_count": 4,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772623010,
+        "last_enqueue_time": 1792769575832,
+        "interval_duration": 7200000,
+        "system_id": 390,
+        "names": [
+          "health-sync-periodic-f06b9871e33e6fa0"
+        ],
+        "prerequisites": []
+      },
+      {
+        "id": "5123a553-7149-4c15-811f-c484ca37190c",
+        "state": 2,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "canonical_user_key": "f06b9871e33e6fa0",
+          "sync_trigger_source": "APP_START"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772621868,
+        "last_enqueue_time": 1792772621850,
+        "interval_duration": 0,
+        "system_id": 389,
+        "names": [
+          "health-sync-immediate-f06b9871e33e6fa0"
+        ],
+        "prerequisites": []
+      },
+      {
+        "id": "41ab61b0-dd86-497c-ad20-bc725dc9abfa",
+        "state": 2,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "parent_flow_id": "dc107ff9-9b7c-46a6-a046-cd598b286b50",
+          "sync_trigger_source": "APP_START",
+          "parent_worker_id": "5123a553-7149-4c15-811f-c484ca37190c",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772663233,
+        "last_enqueue_time": 1792772663209,
+        "interval_duration": 0,
+        "system_id": 391,
+        "names": [
+          "health-sync-immediate-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "5123a553-7149-4c15-811f-c484ca37190c"
+        ]
+      },
+      {
+        "id": "7210426c-0045-4da1-a4f5-57341e40015c",
+        "state": 2,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "parent_flow_id": "c6a9632b-6f0b-4895-81b9-0fb12e6ae656",
+          "sync_trigger_source": "APP_START",
+          "parent_worker_id": "41ab61b0-dd86-497c-ad20-bc725dc9abfa",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772739842,
+        "last_enqueue_time": 1792772739827,
+        "interval_duration": 0,
+        "system_id": 392,
+        "names": [
+          "health-sync-immediate-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "41ab61b0-dd86-497c-ad20-bc725dc9abfa"
+        ]
+      },
+      {
+        "id": "7d2a996d-7e83-440e-ad45-7af0856dae13",
+        "state": 2,
+        "input": {
+          "sync_mode": "INCREMENTAL",
+          "parent_flow_id": "5c470e4c-baea-43e3-9182-05ced16da086",
+          "sync_trigger_source": "APP_START",
+          "parent_worker_id": "7210426c-0045-4da1-a4f5-57341e40015c",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772792889,
+        "last_enqueue_time": 1792772792859,
+        "interval_duration": 0,
+        "system_id": 393,
+        "names": [
+          "health-sync-immediate-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "7210426c-0045-4da1-a4f5-57341e40015c"
+        ]
+      },
+      {
+        "id": "1f00d43c-b247-4338-935e-49a2fb5e6cfc",
+        "state": 2,
+        "input": {
+          "sync_mode": "BACKFILL",
+          "canonical_user_key": "f06b9871e33e6fa0",
+          "sync_trigger_source": "BACKFILL"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772871273,
+        "last_enqueue_time": 1792772871206,
+        "interval_duration": 0,
+        "system_id": null,
+        "names": [
+          "health-sync-backfill-f06b9871e33e6fa0"
+        ],
+        "prerequisites": []
+      },
+      {
+        "id": "69f6e68f-eb54-43c2-863b-1c85420d8b5c",
+        "state": 2,
+        "input": {
+          "sync_mode": "BACKFILL",
+          "parent_flow_id": "b0837461-f262-43bd-a145-e031e07778a3",
+          "sync_trigger_source": "BACKFILL",
+          "parent_worker_id": "1f00d43c-b247-4338-935e-49a2fb5e6cfc",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792772941470,
+        "last_enqueue_time": 1792772941439,
+        "interval_duration": 0,
+        "system_id": null,
+        "names": [
+          "health-sync-backfill-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "1f00d43c-b247-4338-935e-49a2fb5e6cfc"
+        ]
+      },
+      {
+        "id": "eaa54166-36ea-4cc1-8908-1511ae14d890",
+        "state": 2,
+        "input": {
+          "sync_mode": "BACKFILL",
+          "parent_flow_id": "18f110f5-5fed-4615-b2b7-a81f265512e9",
+          "sync_trigger_source": "BACKFILL",
+          "parent_worker_id": "69f6e68f-eb54-43c2-863b-1c85420d8b5c",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792773064457,
+        "last_enqueue_time": 1792773064425,
+        "interval_duration": 0,
+        "system_id": null,
+        "names": [
+          "health-sync-backfill-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "69f6e68f-eb54-43c2-863b-1c85420d8b5c"
+        ]
+      },
+      {
+        "id": "9ea853e4-76e8-40c8-bcf7-46c44372f4ff",
+        "state": 2,
+        "input": {
+          "sync_mode": "BACKFILL",
+          "parent_flow_id": "75c2af02-4ef5-4d43-950d-568616f90308",
+          "sync_trigger_source": "BACKFILL",
+          "parent_worker_id": "eaa54166-36ea-4cc1-8908-1511ae14d890",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792773159478,
+        "last_enqueue_time": 1792773159449,
+        "interval_duration": 0,
+        "system_id": null,
+        "names": [
+          "health-sync-backfill-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "eaa54166-36ea-4cc1-8908-1511ae14d890"
+        ]
+      },
+      {
+        "id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+        "state": 1,
+        "input": {
+          "sync_mode": "BACKFILL",
+          "parent_flow_id": "3cd5c93c-8079-4eb0-b31f-f5aea824bbc8",
+          "sync_trigger_source": "BACKFILL",
+          "parent_worker_id": "9ea853e4-76e8-40c8-bcf7-46c44372f4ff",
+          "canonical_user_key": "f06b9871e33e6fa0"
+        },
+        "run_attempt_count": 1,
+        "generation": 0,
+        "period_count": 0,
+        "stop_reason": -256,
+        "schedule_requested_at": 1792773301597,
+        "last_enqueue_time": 1792773301568,
+        "interval_duration": 0,
+        "system_id": 398,
+        "names": [
+          "health-sync-backfill-f06b9871e33e6fa0"
+        ],
+        "prerequisites": [
+          "9ea853e4-76e8-40c8-bcf7-46c44372f4ff"
+        ]
+      }
+    ],
+    "preferences": {
+      "sync_runtime_state": {
+        "f06b9871e33e6fa0_periodic_schedule_version": "2",
+        "f06b9871e33e6fa0_background_read_record_count": "79106",
+        "f06b9871e33e6fa0_background_result_at": "2026-10-23T16:35:42.312216Z",
+        "f06b9871e33e6fa0_background_last_progress_at": "2026-10-23T16:35:42.265Z",
+        "f06b9871e33e6fa0_background_stage": "UPLOAD",
+        "f06b9871e33e6fa0_background_read_source_apps": "com.android.healthconnect.phone.j886e716063d33fb4935bf8fc248fb435,com.fitbit.FitbitMobile,com.google.android.apps.fitness,com.xiaomi.wearable",
+        "f06b9871e33e6fa0_periodic_repair_at": "1792772622986",
+        "f06b9871e33e6fa0_background_attempt_count": "1",
+        "f06b9871e33e6fa0_background_result": "SYNCING",
+        "f06b9871e33e6fa0_background_read_domain_counts": "heart_rate:55549,sleep:217,sleep_stage:3247,spo2:6798,steps:9775,total_energy:3474,weight:2,workout:44",
+        "f06b9871e33e6fa0_legacy_state_migrated_v1": "true",
+        "f06b9871e33e6fa0_background_started_at": "2026-10-23T16:35:35.654782Z",
+        "f06b9871e33e6fa0_run_diagnostic": {
+          "trigger_source": "BACKFILL",
+          "origin_trigger_source": "BACKFILL",
+          "flow_id": "90ae01cc-a7ea-4cee-aff3-0888939a060f",
+          "worker_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+          "attempt": 1,
+          "worker_attempt": 0,
+          "started_at": "2026-10-23T16:35:34.766680Z"
+        },
+        "f06b9871e33e6fa0_background_terminal_at": "2026-10-23T16:34:58.828327Z",
+        "f06b9871e33e6fa0_background_enqueued_at": "2026-10-23T16:23:41.964662Z",
+        "f06b9871e33e6fa0_backfill_active_window_end": "2026-10-20T11:01:39.721742Z",
+        "f06b9871e33e6fa0_background_request_count": "0",
+        "f06b9871e33e6fa0_scheduled_scope": "true",
+        "f06b9871e33e6fa0_background_work_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+        "f06b9871e33e6fa0_periodic_scheduler_health": "HEALTHY",
+        "f06b9871e33e6fa0_backfill_active_window_start": "2026-09-20T11:01:39.721742Z",
+        "f06b9871e33e6fa0_history_pending": "true"
+      },
+      "sync_checkpoint": {
+        "f06b9871e33e6fa0_backfill_receipt_contract_version": "1",
+        "f06b9871e33e6fa0_backfill_next_batch_index": "184",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_next_batch_index": "16",
+        "f06b9871e33e6fa0_backfill_last_record_key_sha256": "08253b87904d6aa2636c074c27541ca8c377f03b69184683096e5b99ddac6710",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_dataset_changed": "false",
+        "f06b9871e33e6fa0_backfill_next_record_index": "18400",
+        "f06b9871e33e6fa0_backfill_reconciliation_pass": "1",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_plan_fingerprint": "v3:27a3f4ed7e1fc6a35f0cfe83f78d4028d7d2905324e02741390ebb2e902a3dc3",
+        "f06b9871e33e6fa0_backfill_plan_fingerprint": "v3:a554b96794b6c0be54069d84f535768a2828ca238387eebe67874199033717ab",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_last_record_key_sha256": "c3fc8bb6e7d7f8a350345b1f2ae3a114f52a4d36b414115dc46a3672cb9109ac",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_reconciliation_pass": "0",
+        "f06b9871e33e6fa0_backfill_dataset_changed": "false",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_next_record_index": "1527",
+        "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_receipt_contract_version": "1"
+      },
+      "sync_completeness": {
+        "f06b9871e33e6fa0": {
+          "schema_version": "SYNC_COMPLETENESS_CONTRACT_V1",
+          "sync_run_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+          "range_start": "2026-09-20T11:01:39.721742Z",
+          "range_end": "2026-10-20T11:01:39.721742Z",
+          "domains_requested": [
+            "heart_rate",
+            "hrv",
+            "resting_heart_rate",
+            "sleep",
+            "sleep_stage",
+            "spo2",
+            "steps",
+            "total_energy",
+            "weight",
+            "workout"
+          ],
+          "domains_read": [
+            "heart_rate",
+            "hrv",
+            "resting_heart_rate",
+            "sleep",
+            "sleep_stage",
+            "spo2",
+            "steps",
+            "total_energy",
+            "weight",
+            "workout"
+          ],
+          "domains_mapped": [
+            "heart_rate",
+            "sleep",
+            "sleep_stage",
+            "spo2",
+            "steps",
+            "total_energy",
+            "weight",
+            "workout"
+          ],
+          "domains_uploaded": [],
+          "domains_persisted": [],
+          "per_domain": {
+            "heart_rate": {
+              "source_count": 25000,
+              "mapped_count": 55549,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 50,
+              "read_status": "CAPPED",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "hrv": {
+              "source_count": 0,
+              "mapped_count": 0,
+              "upload_count": 0,
+              "persisted_count": 0,
+              "pages": 1,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "resting_heart_rate": {
+              "source_count": 0,
+              "mapped_count": 0,
+              "upload_count": 0,
+              "persisted_count": 0,
+              "pages": 1,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "sleep": {
+              "source_count": 217,
+              "mapped_count": 217,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 1,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "sleep_stage": {
+              "source_count": 3247,
+              "mapped_count": 3247,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 1,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "spo2": {
+              "source_count": 6798,
+              "mapped_count": 6798,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 14,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "steps": {
+              "source_count": 9775,
+              "mapped_count": 9775,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 20,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "total_energy": {
+              "source_count": 3474,
+              "mapped_count": 3474,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 7,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "weight": {
+              "source_count": 2,
+              "mapped_count": 2,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 1,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            },
+            "workout": {
+              "source_count": 44,
+              "mapped_count": 44,
+              "upload_count": 0,
+              "persisted_count": null,
+              "pages": 1,
+              "read_status": "COMPLETE",
+              "drop_reasons": {},
+              "recovery_attempts": 0
+            }
+          },
+          "status": "INCOMPLETE",
+          "warnings": [
+            "DATA_INTEGRITY_WARNING:heart_rate",
+            "DATA_INTEGRITY_WARNING:sleep",
+            "DATA_INTEGRITY_WARNING:sleep_stage",
+            "DATA_INTEGRITY_WARNING:spo2",
+            "DATA_INTEGRITY_WARNING:steps",
+            "DATA_INTEGRITY_WARNING:total_energy",
+            "DATA_INTEGRITY_WARNING:weight",
+            "DATA_INTEGRITY_WARNING:workout"
+          ],
+          "persistence_evidence": "EXACT_SQL_COMMIT_RECEIPT_KEYS",
+          "count_scope": "CUMULATIVE_VERIFIED_UPLOAD_PLAN",
+          "per_domain_range_start": {
+            "steps": "2026-09-20T11:01:39.721742Z",
+            "total_energy": "2026-09-20T11:01:39.721742Z",
+            "heart_rate": "2026-09-20T11:01:39.721742Z",
+            "resting_heart_rate": "2026-09-20T11:01:39.721742Z",
+            "sleep": "2026-09-20T11:01:39.721742Z",
+            "sleep_stage": "2026-09-20T11:01:39.721742Z",
+            "weight": "2026-09-20T11:01:39.721742Z",
+            "workout": "2026-09-20T11:01:39.721742Z",
+            "hrv": "2026-09-20T11:01:39.721742Z",
+            "spo2": "2026-09-20T11:01:39.721742Z"
+          },
+          "owner_scope_hash": "f06b9871e33e6fa0"
+        }
+      },
+      "sync_status": {
+        "f06b9871e33e6fa0_last_success": "2026-10-23T09:28:34.815519Z"
+      }
+    },
+    "actual_namespaced_jobs": {
+      "390": "waiting"
+    },
+    "incremental_cache_state": "ABSENT",
+    "cache_lookup_at": "2026-10-23T16:37:06.825874+00:00",
+    "cache_lookup_method": "actual selected cache gzip signature/header or fixed path-not-found result;exec-out test exit code not reliable",
+    "cache_lookup_summary": {
+      "diagnostic": "EXPECTED_PATH_NOT_FOUND"
+    },
+    "periodic_persisted_conditions": {
+      "required_network_type": 1,
+      "requires_charging": 0,
+      "requires_device_idle": 0,
+      "requires_battery_not_low": 0,
+      "requires_storage_not_low": 0,
+      "initial_delay": 0,
+      "interval_duration": 7200000,
+      "flex_duration": 7200000,
+      "backoff_policy": 0,
+      "backoff_delay_duration": 30000,
+      "next_schedule_time_override": 9223372036854775807,
+      "next_schedule_time_override_generation": 0,
+      "last_enqueue_time": 1792769575832,
+      "period_count": 4
+    },
+    "natural_periodic_classification": "PENDING_NO_POST_FIX_PERIOD_INCREMENT_OBSERVED"
+  },
+  "latest_runtime_failure": {
+    "sync_runtime_state": {
+      "f06b9871e33e6fa0_background_result_at": "2026-10-23T16:36:13.258915Z",
+      "f06b9871e33e6fa0_background_stage": "TERMINAL",
+      "f06b9871e33e6fa0_background_terminal_stage": "RESPONSE_READ",
+      "f06b9871e33e6fa0_background_http_status": "400",
+      "f06b9871e33e6fa0_background_exception_class": "BatchUploadFailed",
+      "f06b9871e33e6fa0_background_result": "FAILED",
+      "f06b9871e33e6fa0_background_work_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+      "f06b9871e33e6fa0_run_diagnostic": {
+        "trigger_source": "BACKFILL",
+        "origin_trigger_source": "BACKFILL",
+        "flow_id": "90ae01cc-a7ea-4cee-aff3-0888939a060f",
+        "worker_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+        "attempt": 1,
+        "worker_attempt": 0,
+        "started_at": "2026-10-23T16:35:34.766680Z"
+      },
+      "f06b9871e33e6fa0_background_terminal_at": "2026-10-23T16:36:13.258915Z"
+    },
+    "sync_checkpoint": {
+      "f06b9871e33e6fa0_backfill_next_record_index": "18700",
+      "f06b9871e33e6fa0_backfill_reconciliation_pass": "1",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_plan_fingerprint": "v3:27a3f4ed7e1fc6a35f0cfe83f78d4028d7d2905324e02741390ebb2e902a3dc3",
+      "f06b9871e33e6fa0_backfill_plan_fingerprint": "v3:a554b96794b6c0be54069d84f535768a2828ca238387eebe67874199033717ab",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_reconciliation_pass": "0",
+      "f06b9871e33e6fa0_incremental_page_a046c09737729e021084857a_next_record_index": "1527"
+    },
+    "captured_at": "2026-10-23T16:39:46.508657+00:00"
+  },
+  "page1_actual_reader": {
+    "version": 1,
+    "scope": "a037bda4f1fc7ed79637bc8e267bc6f3900040e9b217b97f1bfaf4053aa25c40",
+    "start": "2026-10-23T05:18:33.499692Z",
+    "end": "2026-10-23T09:28:34.815519Z",
+    "page": 1,
+    "remaining": [
+      "spo2",
+      "steps"
+    ],
+    "totals": {
+      "steps": {
+        "source": 1000,
+        "mapped": 1000,
+        "pages": 2,
+        "status": "CAPPED",
+        "drops": {},
+        "recoveries": 0
+      },
+      "total_energy": {
+        "source": 876,
+        "mapped": 876,
+        "pages": 2,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "heart_rate": {
+        "source": 0,
+        "mapped": 0,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "resting_heart_rate": {
+        "source": 0,
+        "mapped": 0,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "sleep": {
+        "source": 33,
+        "mapped": 33,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "sleep_stage": {
+        "source": 435,
+        "mapped": 435,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "weight": {
+        "source": 0,
+        "mapped": 0,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "workout": {
+        "source": 19,
+        "mapped": 19,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "hrv": {
+        "source": 0,
+        "mapped": 0,
+        "pages": 1,
+        "status": "COMPLETE",
+        "drops": {},
+        "recoveries": 0
+      },
+      "spo2": {
+        "source": 1000,
+        "mapped": 1000,
+        "pages": 2,
+        "status": "CAPPED",
+        "drops": {},
+        "recoveries": 0
+      }
+    },
+    "starts": {
+      "steps": "2026-10-16T09:28:34.815519Z",
+      "total_energy": "2026-10-16T09:28:34.815519Z",
+      "heart_rate": "2026-10-22T09:28:34.815519Z",
+      "resting_heart_rate": "2026-10-16T09:28:34.815519Z",
+      "sleep": "2026-10-16T09:28:34.815519Z",
+      "sleep_stage": "2026-10-16T09:28:34.815519Z",
+      "weight": "2026-10-16T09:28:34.815519Z",
+      "workout": "2026-10-16T09:28:34.815519Z",
+      "hrv": "2026-10-16T09:28:34.815519Z",
+      "spo2": "2026-10-16T09:28:34.815519Z"
+    },
+    "read_keys": [
+      "failed",
+      "capped",
+      "pages",
+      "traces",
+      "starts",
+      "next"
+    ],
+    "pending_record_occurrences": 1527,
+    "cursor_domains": [
+      "steps",
+      "spo2"
+    ],
+    "captured_at": "2026-10-23T16:26:25.476611+00:00",
+    "cache_sha256": "295b64556af40568ace6a054bcc575c49a84767f4cb7ecffa1f420ae67e064b4",
+    "actual_page_read": {
+      "failed": [],
+      "capped": [
+        "steps"
+      ],
+      "pages": 4,
+      "traces": {
+        "steps": {
+          "source": 1000,
+          "mapped": 1000,
+          "pages": 2,
+          "status": "CAPPED",
+          "drops": {},
+          "recoveries": 0
+        },
+        "spo2": {
+          "source": 527,
+          "mapped": 527,
+          "pages": 2,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        }
+      }
+    },
+    "actual_remaining_cursor_domains": [
+      "steps"
+    ],
+    "source_eof_this_page": false
+  },
+  "background_transition": {
+    "at": "2026-10-23T16:26:25.701844+00:00",
+    "action": "HOME_ONLY_APP_BACKGROUNDED",
+    "exit": 0,
+    "force_stop_used": false,
+    "classification": "CONTROLLED_ROOT_BACKGROUND_CONTINUATION_NOT_NATURAL_PERIODIC"
+  },
+  "snapshot_boundary": "Selected files stable before/copy/after; SQLite backup includes WAL, integrity ok. No cross-storage atomicity claim. Later selected runtime/checkpoint reads are separate timepoints, not one global snapshot."
+}

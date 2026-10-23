@@ -1,7 +1,7 @@
 {
   "phase": "BETA33_BACKGROUND_SYNC_FINAL_ACCEPTANCE",
   "task": "BETA34_INSTALL_AND_C_CONTINUATION_ACCEPTANCE",
-  "status": "PARTIAL_INSTALLED_SESSION_UNAVAILABLE",
+  "status": "PARTIAL_C_RECOVERED_HISTORICAL_DB_BEGIN_FAILED",
   "product_commit": "e7f8c8e2742289da5f4f53e5cda63ec6e0b4143a",
   "edge_unchanged": 64,
   "installed_version": "0.1.0-beta.34-debug",
@@ -95,7 +95,7 @@
   "adb_forced_job_used": false,
   "oauth_automated": false,
   "credential_storage_read": false,
-  "oauth_human_request": "One normal Google login request pending under user AGENTS Human stop conditions;not Beta release permission",
+  "oauth_human_request": "RESOLVED_USER_COMPLETED_NORMAL_GOOGLE_LOGIN",
   "scope39_sql_at": "2026-10-24T00:06:30.052086+08:00",
   "scope39_sql": {
     "expected": 39,
@@ -107,9 +107,12 @@
   },
   "source_manifest_sha256": "023ed75c5971e396cc6ab587a55ad2095782bbdf1ea451744e5986b272ddff0e",
   "source_manifest_scope": "original immutable3363 page;sourceEOF remains separate",
-  "controlled_recovery": "NOT_COMPLETED_SESSION_UNAVAILABLE",
+  "controlled_recovery": "PASS_FROZEN_INCREMENTAL_RUNTIME_ORIGINAL39_RECOVERED",
   "natural_whole_run": "PENDING",
   "historical_backfill": "PENDING_HR_SOURCE_CURSOR_NOT_EOF",
   "production_operations": 0,
-  "saved_at": "2026-10-23T16:14:13.307683+00:00"
+  "saved_at": "2026-10-23T16:43:57.194049+00:00",
+  "pre_login_status": "PARTIAL_INSTALLED_SESSION_UNAVAILABLE",
+  "post_login_followup": "post-login-acceptance-20261024.json",
+  "prior_scope39_sql_evidence_is_pre_login": true
 }

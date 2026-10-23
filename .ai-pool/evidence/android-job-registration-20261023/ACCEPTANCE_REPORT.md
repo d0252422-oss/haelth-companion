@@ -1,5 +1,69 @@
 # Android continuation/job registration recovery — beta.34
 
+## Current acceptance — 2026-10-24 post-login follow-up
+
+TASK = BETA34_POST_LOGIN_CONTROLLED_RECOVERY
+OWNER = Codex/root, sole writer
+REVIEWER = NONE; existing helpers performed bounded read-only SQL/source checks
+STATUS = PARTIAL_C_RECOVERED_HISTORICAL_DB_BEGIN_FAILED
+GOAL = Close the retained C scope without clearing progress, and distinguish controlled recovery, natural periodic execution and historical completeness.
+FILES_CHANGED = Sanitized acceptance evidence and manifests only this follow-up; product e7f8c8e remains unchanged.
+TESTS = Reused52 targeted JVM PASS, lint/build PASS and exact-commit CI39977468638 PASS. New product tests0. Fixture4PASS and six-day score recovery remain unchanged. The progress check still fails on the existing52 unique missing historical evidence paths across8 gates; overall project progress UNKNOWN.
+RESULT = User completed normal Google login. Correct owner scope f06b9871e33e6fa0 authenticated through native bearer. Original page checkpoint2400->3363 on the same fingerprint. Original20 missing records and19 stale revisions are now39 EXACT. The whole original3363 page and captured next1527 page reconcile EXACT4890, with0 missing/stale/newer/inactive/semantic/idempotency mismatches and0 identity overlap between those two pages.
+RISKS = Original beta33 I/O cause remains UNKNOWN. Final incremental page779 was not independently retained as a source manifest. Its normal committed batch receipts and terminal status prove runtime completion, not an independent whole-source SQL audit. Historical HR EOF and natural periodic whole-run remain unaccepted.
+BLOCKERS = A distinct historical BACKFILL failed at DB TRANSACTION_BEGIN at00:36:13; checkpoint18700 is retained. Underlying driver machine code was not captured. No proof supports changing the unknown-error retry policy or deploying another Edge version.
+NEXT_ACTION = Preserve the historical plan at18700; investigate exact request00d3593f-5d2c-4042-8d8a-eae7f95b8f55 with allowlisted DB-begin diagnostics, and separately accept the next existing natural periodic chain. No reinstall, forced job or broad replay.
+HUMAN_APPROVAL_REQUIRED = NO; required phone/login actions RESOLVED; no new human action.
+
+### Actual normal continuation
+
+Frozen incremental window remains2026-10-23T05:18:33.499692Z through09:28:34.815519Z; per-domain late-arrival replay starts are earlier and are retained separately. All four WorkSpecs are SUCCEEDED, with actual persisted Dependency and parent worker/flow input linking:
+
+| Worker | Flow | Normal ingestion occurrences this slice | Terminal |
+| --- | --- | ---: | --- |
+|5123a553-7149-4c15-811f-c484ca37190c|dc107ff9-9b7c-46a6-a046-cd598b286b50|963|PARTIAL; diagnostic whitelist reports null, not success|
+|41ab61b0-dd86-497c-ad20-bc725dc9abfa|c6a9632b-6f0b-4895-81b9-0fb12e6ae656|1200|PARTIAL; null is not success|
+|7210426c-0045-4da1-a4f5-57341e40015c|5c470e4c-baea-43e3-9182-05ced16da086|327|PARTIAL; null is not success|
+|7d2a996d-7e83-440e-ad45-7af0856dae13|e3208c17-6ce9-447a-9cab-9b8d67d1eaaf|779|SYNCED at2026-10-24T00:27:51.141+08:00|
+
+The first slice starts exactly after the retained2400 prefix, not from zero. Total3269 sent occurrences =253 accepted mutation receipts +3016 verified duplicates +0 rejected. Accepted is not equated with new SQL rows, and occurrence totals do not prove unique source counts. Exact owner/source/revision/15-field semantic/idempotency checks independently cover the two captured pages'4890 unique identities. Individual SQL chunks have their own timestamps; they are not one global database snapshot.
+
+Captured page1 is **not EOF**: steps1000 remained CAPPED and spo2527 completed. The following779-record page was uploaded by the last child. Source manifests for that last page were not retained and are not reconstructed from SQL. The installed runtime only emits its final SYNCED after all remaining domains have completed and all page mutations have exact commit receipts; the subsequent completed coverage cursor advances06:18:33.499692Z->09:28:34.815519Z and the selected pending cache is absent. This is PASS for controlled runtime completion and the original C tail, with the independent-source-audit boundary above.
+
+HOME was sent once at00:26:25.701844 to leave the Activity in the background; no force-stop occurred. Subsequent children and historical handoff executed in background. Origin remains APP_START: **CONTROLLED_RECOVERY**, not a natural PERIODIC_WORKER whole-run. No manual sync, forced Job, broadcast or heartbeat upload was used.
+
+### Real registration repair and evidence consistency
+
+Periodic retains UUID2f5e0af8-ffb6-4f67-94f8-053d40b0e49c, generation0->1 and period_count4. SystemIdInfo now maps generation1 to actual namespaced OS job390; `get-job-state` returns waiting. Persisted interval2h and connected-network constraint remain; charging/device-idle requirements are false. No new post-fix periodic execution is claimed. The old failed legacy C/backfill UUIDs were not revived.
+
+The00:25:00 and00:35:51 selected-file captures had stable before/copy/after hashes and SQLite-aware backup integrity ok, including WAL. There is no cross-storage atomicity claim. The cache absence check uses the actual selected path's fixed not-found result; `adb exec-out test` exit status alone was not reliable and is not evidence. Raw archives, manifests, source IDs, credentials and private databases remain on D, outside Git. Only sanitized summaries are committed.
+
+### Separate new historical failure
+
+History remains the fixed2026-09-20T11:01:39.721742Z through2026-10-20T11:01:39.721742Z scope. Normal BACKFILL continued13600->14800->18400->18700 on fingerprint v3:a554b96794b6c0be54069d84f535768a2828ca238387eebe67874199033717ab. It was not restarted from zero or extended to new dates.
+
+At00:36:13.382, Edge64 request00d3593f-5d2c-4042-8d8a-eae7f95b8f55 /execution5ed4158c-0305-45f3-a2cc-91ec0f4aa251 /flow90ae01cc-a7ea-4cee-aff3-0888939a060f /worker ef39ced2-7433-4859-8708-2f2d5db7a41c failed with HTTP400, INGESTION_INTERNAL_ERROR, TRANSACTION_BEGIN, UnknownError, SQLSTATE null. The phone independently records the same flow FAILED/RESPONSE_READ/BatchUploadFailed. The connector table at00:39 reports beta34, FAILED, updated00:36:14.869934; last successful report00:27:48.496 remains intact. Latest failure and earlier success are both retained.
+
+Actual source places APPLY_USER_SCOPE at the first transaction callback line. Thus this failure occurs before that callback, not in record validation or mutation writes. Native scope issuance happened earlier separately, so do not claim no SQL operation of any kind. Boot-to-failure4.575s is compatible with connect_timeout5 but does **not** prove CONNECT_TIMEOUT. UnknownError/null SQLSTATE can mask missing or unallowlisted driver codes. No known payload problem or historical beta33 I/O cause is established.
+
+Existing behavior preserves the cache/window/checkpoint when400 becomes FAILED. It does not immediately retry that failed WorkSpec. After a future normal periodic incremental completes and history_pending remains true, the existing scheduler enqueues a new BACKFILL and can resume18700 if that immutable plan still matches. This source-proven recovery path is not yet an observed post-failure recovery. No unknown-error retry broadening, blind Edge redeploy, backend push-policy workaround or additional phone action was attempted.
+
+C_SCOPE_COMPLETENESS = PASS_ORIGINAL3363_EXACT
+MISSING_20_STATUS = RECOVERED
+REVISION_19_STATUS = EXACT_CURRENT_SOURCE_REVISION
+PERIODIC_JOB_REGISTRATION = PASS_RUNTIME_JOB390
+CONTROLLED_RECOVERY = PASS_FROZEN_INCREMENTAL_RUNTIME
+INDEPENDENT_NEW_PAGE_SQL_AUDIT =4890EXACT;final779 source manifest not captured
+NATURAL_BACKGROUND_WHOLE_RUN = PENDING
+HISTORICAL_BACKFILL_COMPLETENESS = PENDING_DB_BEGIN_FAILED_HR_EOF_NOT_PROVEN
+DEPLOYMENTS_THIS_FOLLOWUP =0
+PRODUCTION_OPERATIONS =0
+
+Evidence: post-login-acceptance-20261024.json, post-login-device-evidence-20261024.json, post-login-server-receipts-20261024.json and backfill-begin-failure-20261024.json. Existing Codex Desktop task beta/DAILY09:00 remains unchanged and observational. No indefinite agent/background execution is claimed.
+
+---
+Prior acceptance snapshots follow chronologically; superseded blockers below are retained as history.
+
 TASK = REPAIR_C_CONTINUATION_AND_JOB_REGISTRATION
 OWNER = Codex/root (sole writer)
 REVIEWER = existing read-only ui_audit and engine_gap; no additional reviewer

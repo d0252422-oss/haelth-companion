@@ -1,0 +1,55 @@
+{
+  "window_utc": [
+    "2026-10-23T16:35:50Z",
+    "2026-10-23T16:40:00Z"
+  ],
+  "rows": [
+    {
+      "timestamp": "2026-10-23T16:36:13.382000",
+      "event": "INGESTION_FAILURE",
+      "request_id": "00d3593f-5d2c-4042-8d8a-eae7f95b8f55",
+      "trigger_source": "BACKFILL",
+      "origin_trigger_source": "BACKFILL",
+      "flow_id": "90ae01cc-a7ea-4cee-aff3-0888939a060f",
+      "worker_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+      "attempt": 1,
+      "worker_attempt": 0,
+      "started_at": "2026-10-23T16:35:34.766680Z",
+      "owner_scope_hash": "f06b9871e33e6fa0",
+      "failure_stage": "TRANSACTION_BEGIN",
+      "exception_class": "UnknownError",
+      "sqlstate": null,
+      "commit_confirmed": false,
+      "error": "INGESTION_FAILED",
+      "reason_code": "INGESTION_INTERNAL_ERROR",
+      "error_kind": "INTERNAL",
+      "retryable": false,
+      "http_status": 400,
+      "record_count": 100,
+      "batch_digest": "45b5f16fd7cc0257acc7bf19db5c8b07746ca40d2a7c41c1b2654d86900d6c66"
+    },
+    {
+      "timestamp": "2026-10-23T16:36:15.898000",
+      "kind": "connector_status",
+      "request_id": "59337edf-2905-43b2-b1d7-f6f311ab455b",
+      "owner_scope_hash": "f06b9871e33e6fa0",
+      "batch_digest": null,
+      "record_count": null,
+      "verified_platform": "android",
+      "verified_auth_kind": "native_bearer",
+      "trigger_source": "BACKFILL",
+      "origin_trigger_source": "BACKFILL",
+      "flow_id": "90ae01cc-a7ea-4cee-aff3-0888939a060f",
+      "worker_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+      "attempt": 1,
+      "worker_attempt": 0,
+      "started_at": "2026-10-23T16:35:34.766680Z",
+      "http_status": 200,
+      "accepted_count": null,
+      "duplicate_count": null,
+      "rejected_count": null,
+      "last_result": "FAILED",
+      "completed_at": "2026-10-23T16:36:15.897Z"
+    }
+  ]
+}

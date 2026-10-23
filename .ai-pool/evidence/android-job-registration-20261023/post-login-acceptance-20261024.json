@@ -1,0 +1,312 @@
+{
+  "phase": "BETA33_BACKGROUND_SYNC_FINAL_ACCEPTANCE",
+  "task": "BETA34_POST_LOGIN_CONTROLLED_RECOVERY",
+  "status": "PARTIAL_C_RECOVERED_HISTORICAL_DB_BEGIN_FAILED",
+  "product_commit": "e7f8c8e2742289da5f4f53e5cda63ec6e0b4143a",
+  "apk": "0.1.0-beta.34-debug",
+  "edge": 64,
+  "oauth": "USER_COMPLETED_NORMAL_GOOGLE_LOGIN",
+  "owner_scope_hash": "f06b9871e33e6fa0",
+  "new_product_changes": 0,
+  "tests_newly_executed": 0,
+  "tests_reused": "52 targeted JVM PASS; lint/build PASS; CI39977468638 PASS; fixture4PASS; six-day score recovery unchanged",
+  "scope": {
+    "start": "2026-10-23T05:18:33.499692Z",
+    "end": "2026-10-23T09:28:34.815519Z",
+    "replay_start_note": "Domain late-arrival replay ranges are earlier than nominal incremental start; do not equate nominal window with all read timestamps",
+    "original_plan": "v3:d5563757a7ef096a024ffc4297459e1322e0a4d744be97e87140f618cd663695",
+    "original_page_checkpoint": [
+      2400,
+      3363
+    ],
+    "page1_checkpoint": [
+      100,
+      1527
+    ],
+    "completed_coverage_before": "2026-10-23T06:18:33.499692Z",
+    "completed_coverage_after": "2026-10-23T09:28:34.815519Z"
+  },
+  "original39": {
+    "pre": {
+      "captured_at_utc": "2026-10-23T16:06:30.052086Z",
+      "missing": 20,
+      "stale": 19,
+      "exact": 0
+    },
+    "post": {
+      "captured_at_utc": "2026-10-23T16:24:52.977114Z",
+      "missing": 0,
+      "stale": 0,
+      "exact": 39
+    }
+  },
+  "sql_reconciliation": {
+    "method": "Owner-isolated platform/domain/source-app/source-ID identity; exact source revision; active UPSERT; 15-field canonical semantic hash; top-level idempotency column. Value normalization is numeric, not Java/Android JSON key order.",
+    "chunk_columns": [
+      "index",
+      "size",
+      "position_start",
+      "position_end_inclusive",
+      "captured_at_utc",
+      "EXACT"
+    ],
+    "page0": {
+      "manifest_sha256": "023ed75c5971e396cc6ab587a55ad2095782bbdf1ea451744e5986b272ddff0e",
+      "expected": 3363,
+      "exact": 3363,
+      "chunks": [
+        [
+          1,
+          256,
+          0,
+          255,
+          "2026-10-23T16:26:29.828208Z",
+          256
+        ],
+        [
+          2,
+          256,
+          256,
+          511,
+          "2026-10-23T16:26:33.834464Z",
+          256
+        ],
+        [
+          3,
+          256,
+          512,
+          767,
+          "2026-10-23T16:26:38.183294Z",
+          256
+        ],
+        [
+          4,
+          256,
+          768,
+          1023,
+          "2026-10-23T16:26:42.169491Z",
+          256
+        ],
+        [
+          5,
+          256,
+          1024,
+          1279,
+          "2026-10-23T16:26:45.879336Z",
+          256
+        ],
+        [
+          6,
+          256,
+          1280,
+          1535,
+          "2026-10-23T16:26:49.700290Z",
+          256
+        ],
+        [
+          7,
+          256,
+          1536,
+          1791,
+          "2026-10-23T16:26:53.316935Z",
+          256
+        ],
+        [
+          8,
+          256,
+          1792,
+          2047,
+          "2026-10-23T16:26:56.925866Z",
+          256
+        ],
+        [
+          9,
+          256,
+          2048,
+          2303,
+          "2026-10-23T16:27:00.711144Z",
+          256
+        ],
+        [
+          10,
+          256,
+          2304,
+          2559,
+          "2026-10-23T16:27:04.884204Z",
+          256
+        ],
+        [
+          11,
+          256,
+          2560,
+          2815,
+          "2026-10-23T16:27:10.459664Z",
+          256
+        ],
+        [
+          12,
+          256,
+          2816,
+          3071,
+          "2026-10-23T16:27:14.239094Z",
+          256
+        ],
+        [
+          13,
+          256,
+          3072,
+          3327,
+          "2026-10-23T16:27:17.915288Z",
+          256
+        ],
+        [
+          14,
+          35,
+          3328,
+          3362,
+          "2026-10-23T16:27:22.128958Z",
+          35
+        ]
+      ]
+    },
+    "page1": {
+      "manifest_sha256": "2f8e9234b24a36b0fa34026b99bf2c59f006d0a7a6148a4d6da548c64ae7bd6f",
+      "expected": 1527,
+      "exact": 1527,
+      "chunks": [
+        [
+          1,
+          256,
+          0,
+          255,
+          "2026-10-23T16:39:36.156649Z",
+          256
+        ],
+        [
+          2,
+          256,
+          256,
+          511,
+          "2026-10-23T16:39:40.309681Z",
+          256
+        ],
+        [
+          3,
+          256,
+          512,
+          767,
+          "2026-10-23T16:39:44.261027Z",
+          256
+        ],
+        [
+          4,
+          256,
+          768,
+          1023,
+          "2026-10-23T16:39:48.336009Z",
+          256
+        ],
+        [
+          5,
+          256,
+          1024,
+          1279,
+          "2026-10-23T16:39:52.210243Z",
+          256
+        ],
+        [
+          6,
+          247,
+          1280,
+          1526,
+          "2026-10-23T16:39:56.169569Z",
+          247
+        ]
+      ]
+    },
+    "other_status_counts_each_chunk": {
+      "missing": 0,
+      "stale": 0,
+      "newer": 0,
+      "inactive": 0,
+      "invalid_value_type": 0,
+      "semantic_payload_mismatch": 0,
+      "idempotency_column_mismatch": 0
+    },
+    "two_saved_page_intersection": 0,
+    "two_saved_page_unique_union": 4890,
+    "global_atomic_sql_snapshot": false,
+    "page2": "779 normal ingestion occurrences with committed server batch receipts and terminal SYNCED; independent source manifest NOT_CAPTURED. No SQL-derived expected source set or unique-total claim."
+  },
+  "control": {
+    "root_worker": "5123a553-7149-4c15-811f-c484ca37190c",
+    "root_flow": "dc107ff9-9b7c-46a6-a046-cd598b286b50",
+    "origin": "APP_START",
+    "home_at_utc": "2026-10-23T16:26:25.701844Z",
+    "background_continuation": "PASS_CONTROLLED_ROOT_NOT_NATURAL_PERIODIC",
+    "terminal_worker": "7d2a996d-7e83-440e-ad45-7af0856dae13",
+    "terminal_flow": "e3208c17-6ce9-447a-9cab-9b8d67d1eaaf",
+    "terminal_status": "SYNCED",
+    "server_completed_at": "2026-10-23T16:27:51.141Z",
+    "server_status_last_success_at": "2026-10-23T16:27:48.496Z",
+    "record_occurrences_sent_since_retained2400": 3269,
+    "accepted_mutations": 253,
+    "duplicate_receipts": 3016,
+    "rejected": 0,
+    "accepted_not_equated_with_new_sql_rows": true,
+    "expected_original_scope_3363": "PASS_EXACT_SOURCE_TO_SQL",
+    "runtime_completed_frozen_window": "PASS_CLIENT_VERIFIED_RECEIPTS_AND_TERMINAL_CHAIN",
+    "independent_full_source_set_readback": "PARTIAL_PAGE2_MANIFEST_UNAVAILABLE",
+    "manual_sync": false,
+    "adb_forced_job": false,
+    "checkpoint_reset": false
+  },
+  "periodic": {
+    "worker": "2f5e0af8-ffb6-4f67-94f8-053d40b0e49c",
+    "generation_before": 0,
+    "generation_after": 1,
+    "actual_namespaced_job": 390,
+    "actual_state": "waiting",
+    "period_count": 4,
+    "interval_ms": 7200000,
+    "natural_whole_run": "PENDING_NO_POST_FIX_PERIOD_INCREMENT_OBSERVED"
+  },
+  "historical": {
+    "start": "2026-09-20T11:01:39.721742Z",
+    "end": "2026-10-20T11:01:39.721742Z",
+    "plan": "v3:a554b96794b6c0be54069d84f535768a2828ca238387eebe67874199033717ab",
+    "checkpoint": [
+      13600,
+      14800,
+      18400,
+      18700
+    ],
+    "scope_extended": false,
+    "source_heart_rate_eof": "NOT_PROVEN",
+    "current_result": "FAILED_CHECKPOINT_PRESERVED",
+    "failure": {
+      "request_id": "00d3593f-5d2c-4042-8d8a-eae7f95b8f55",
+      "execution_id": "5ed4158c-0305-45f3-a2cc-91ec0f4aa251",
+      "worker_id": "ef39ced2-7433-4859-8708-2f2d5db7a41c",
+      "flow_id": "90ae01cc-a7ea-4cee-aff3-0888939a060f",
+      "timestamp": "2026-10-23T16:36:13.382Z",
+      "stage": "TRANSACTION_BEGIN",
+      "exception_class": "UnknownError",
+      "sqlstate": null,
+      "http_status": 400,
+      "code": "INGESTION_INTERNAL_ERROR",
+      "batch_digest": "45b5f16fd7cc0257acc7bf19db5c8b07746ca40d2a7c41c1b2654d86900d6c66",
+      "record_count": 100,
+      "mobile_stage": "RESPONSE_READ",
+      "mobile_class": "BatchUploadFailed",
+      "root_cause": "UNKNOWN_NO_DRIVER_MACHINE_CODE_CAPTURED",
+      "correlation": "same exact request/flow/worker/owner on Edge64 and phone, not time-only join",
+      "interpretation": "Failure occurs before scoped transaction run callback/APPLY_USER_SCOPE; native scope issuance already occurred separately. It does not demonstrate bad health payload, connection timeout or historical beta33 I/O cause.",
+      "existing_supported_recovery": "This FAILED backfill does not retry immediately. A later successful normal periodic INCREMENTAL enqueues pending BACKFILL; same frozen cache/fingerprint resumes18700. Not yet observed after this failure."
+    }
+  },
+  "monitor": "Existing Codex Desktop task beta DAILY09:00 Asia/Taipei; no new task or schedule change",
+  "required_human_action": "NONE",
+  "production_operations": 0,
+  "next_action": "Preserve historical plan at18700 and investigate exact DB begin request using safe machine-code evidence; separately verify next existing natural periodic run. Do not reinstall/redeploy unchanged beta34, reset checkpoint, fabricate records or retry denied backend push."
+}

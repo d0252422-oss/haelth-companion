@@ -74,9 +74,9 @@
   "expected_missing_tail": 20,
   "expected_stale_tail": 19,
   "ci": "SUCCESS",
-  "controlled_recovery": "NOT_COMPLETED_SESSION_UNAVAILABLE",
+  "controlled_recovery": "PASS_FROZEN_INCREMENTAL_RUNTIME_ORIGINAL39_RECOVERED",
   "natural_whole_run": "PENDING",
-  "historical_complete": "NO_HEART_RATE_EOF_NOT_PROVEN",
+  "historical_complete": "NO_HR_EOF_NOT_PROVEN_NEW_DB_BEGIN_FAILURE",
   "production_operations": 0,
   "created_at": "2026-10-23T15:22:02.344562+00:00",
   "ci_run": 39977468638,
@@ -89,13 +89,19 @@
   "install_result": "PASS_ADB_INSTALL_R_2026-10-24T00:03:33+08:00",
   "checkpoint_before_after": {
     "before": 2400,
-    "after": 2400,
-    "same_original_plan_retained": true
+    "after_original_page": 3363,
+    "original_plan_retained": true,
+    "page1_after": 1527,
+    "completed_coverage": "2026-10-23T09:28:34.815519Z"
   },
-  "missing20_status": "STILL_MISSING_AS_OF_PRE_INSTALL_SQL",
-  "stale19_status": "STILL_STALE_AS_OF_PRE_INSTALL_SQL",
-  "one_required_human_action": "Complete normal Google login in existing phone UI with original linked account;do not press manual sync",
-  "last_saved_at": "2026-10-23T15:27:52.576138+00:00",
+  "missing20_status": "RECOVERED_EXACT_SOURCE_TO_SQL",
+  "stale19_status": "UPDATED_EXACT_SOURCE_REVISION_SEMANTICS",
+  "one_required_human_action": "NONE_NORMAL_LOGIN_COMPLETED",
+  "last_saved_at": "2026-10-23T16:43:57.194049+00:00",
   "device_acceptance_followup": "device-acceptance-20261024.json",
-  "previous_install_failure_preserved_in": "ACCEPTANCE_REPORT.md prior2026-10-23 closure state"
+  "previous_install_failure_preserved_in": "ACCEPTANCE_REPORT.md prior2026-10-23 closure state",
+  "post_login_status": "PARTIAL_C_RECOVERED_HISTORICAL_DB_BEGIN_FAILED",
+  "post_login_evidence": "post-login-acceptance-20261024.json",
+  "new_product_changes_this_followup": false,
+  "tests_newly_executed_this_followup": 0
 }
