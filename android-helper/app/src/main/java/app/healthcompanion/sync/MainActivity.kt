@@ -243,11 +243,11 @@ class MainActivity : ComponentActivity() {
                         val permissionState = if (granted.containsAll(health.readPermissions)) "GRANTED" else "PARTIAL"
                         withContext(Dispatchers.IO) { client.reportStatus(session, read.records, result, permissionState, diagnostic) }
                         if (!partial) checkpoints.clear()
-                        ForegroundSyncResult(read.records.isNotEmpty(), partial)
+                        ForegroundSyncResult(read.records.isNotEmpty(), partial, window.end)
                     }
                 }
                 }.onSuccess { result ->
-                if (!result.partial) saveLastSync(session.canonicalUserId)
+                if (!result.partial) saveLastSync(session.canonicalUserId, result.completedThrough)
                 SyncRuntimeStateStore(this@MainActivity).markHistoryPending(session.canonicalUserId)
                 if (backgroundReadGranted) BackgroundSyncScheduler.enqueue(this@MainActivity, session.canonicalUserId)
                 render(SyncTerminalPolicy.state(result.hasData, result.partial, timedOut = false))
@@ -284,9 +284,8 @@ class MainActivity : ComponentActivity() {
         scope.launch { auth.signOut() }
     }
 
-    private fun saveLastSync(userId: String) {
-        val value = Instant.now().toString()
-        SyncRuntimeStateStore(this).saveLastSuccessfulSync(userId, Instant.parse(value))
+    private fun saveLastSync(userId: String, completedThrough: Instant) {
+        SyncRuntimeStateStore(this).saveLastSuccessfulSync(userId, completedThrough)
         updateLastSync()
     }
 
@@ -315,7 +314,7 @@ class MainActivity : ComponentActivity() {
                 }
                 "\n背景同步：$resultText · $atText"
             } ?: ""
-            "最近同步：$formatted$backgroundText"
+            "已完成資料截止：$formatted$backgroundText"
         } ?: "尚未完成同步"
     }
 
@@ -356,4 +355,4 @@ class MainActivity : ComponentActivity() {
 }
 
 class HealthPermissionMissing : Exception("HEALTH_PERMISSION_MISSING")
-data class ForegroundSyncResult(val hasData: Boolean, val partial: Boolean)
+data class ForegroundSyncResult(val hasData: Boolean, val partial: Boolean, val completedThrough: Instant)
