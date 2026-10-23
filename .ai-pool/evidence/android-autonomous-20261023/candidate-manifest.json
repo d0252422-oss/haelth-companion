@@ -1,0 +1,103 @@
+{
+  "candidate": "android-beta33-autonomous-20261023",
+  "source_commit": "993c710e2a126d1144510e9863e1cfc5a40b08e3",
+  "tree": "5f57584023f5b25bcf794d0f1ae405442f74c89d",
+  "merge_commit": "efbe4a8ae3f9238a14408cfaa39a8ba7a10e0333",
+  "pull_request": "https://github.com/d0252422-oss/haelth-companion/pull/4",
+  "ci_run": "39913149701",
+  "ci_conclusion": "SUCCESS",
+  "version_code": 33,
+  "version_name": "0.1.0-beta.33-debug",
+  "apk_sha256": "0a020daf4b2aad44c8bf660399348ff3ec77981a3785b0c8da677ae034285d1a",
+  "signer_sha256": "435ef9651e6b6c3141ecfc3370b57e15e93d3ecf3c2a722ded8b6aa875424300",
+  "sources": {
+    "android-helper/app/build.gradle.kts": "106f2eef6a7c9edb81f2c7c94aaa39160bb3442a7bf4d1861014a32ddeed095e",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/AutonomousSyncPolicy.kt": "4f61a778bada7fbbc658c394f733417ede0def2745495f0563544a4ae6e2e3c2",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/BackgroundHealthSync.kt": "dc81fd937aa85805b49f34da9bc19041eef766d79af41e1d1ff79725bfe11e62",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/HealthConnectGateway.kt": "76a918cfad42800c1b6414723cde4ab71f08b610d18a32a593080d20ddbd31dd",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/IngestionClient.kt": "0e13724fa5cdbcf3de8552e70a48a9f6d94cd8002b0467fd467151b3adae0741",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/MainActivity.kt": "c07d63f332b9ac87587301b8bad459c579631abaf84cc9c0fd259ba42d30eae7",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/NativeGoogleAuth.kt": "014bb8f348faa4b7ce66813711291466d37d4544c163240af47338660901fa20",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/PendingSyncPage.kt": "0a8535fc69ae898823605da0316329ae9c3089bb8e68920860076b1a46357cee",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/SyncCheckpointStore.kt": "b4f5fa46ab134300ec523ccba9762ff19b38e2ed51e8888a70291d846c7c7cdf",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/SyncPerformancePolicy.kt": "e2cc54bc85633884bf950798015e05e57ea3cbbb2c100bda1ade7a1548a4ead8",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/SyncRecoveryReceiver.kt": "8788b6e39f4c54c65b8ae09072c8ba7c500f1a2c31f36f89a70b70ceb4ff8923",
+    "android-helper/app/src/test/java/app/healthcompanion/sync/AutonomousSyncRecoveryTest.kt": "842473fc098b20d87ef9c2b5302f2f9947e07568b6ac0ea783494701f34210af",
+    "android-helper/app/src/test/java/app/healthcompanion/sync/SyncRuntimeCursorTest.kt": "fac1ba2634997a9925a3b2b411c7d83b9074c6f42959aa375ca349423a412b93"
+  },
+  "unit_suites": [
+    {
+      "suite": "AutonomousSyncRecoveryTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "2513e720a0c3a0260146364c63ce72b8f321f67398adb5dca4edc0a7e09d775e"
+    },
+    {
+      "suite": "BatchPlannerTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "dcc33a3b89431bf01d0dcb27f57ce4414d28834801de8fec551732db8d71a141"
+    },
+    {
+      "suite": "IngestionClientTimeoutTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "8b9539883e4057dbe3a344d52bd2c0c65e3ad39535d2fcf804fa186f89d21c7c"
+    },
+    {
+      "suite": "RetryProgressTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "2b2bbe085169e1b07e8ac2be8d9aff538708545ce8e85b73293a6d3f1b9e32b5"
+    },
+    {
+      "suite": "SessionAndRetryPolicyTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "4e2aaa4866216fe1d61618d70a4c8f61817fce0ed32494b419fd6268fd5fc658"
+    },
+    {
+      "suite": "SyncCompletenessTest",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "dcec4473dff3720c857f7d282afcd2b45b29a2884938ac34b59d5caf4799fd2a"
+    },
+    {
+      "suite": "SyncPerformancePolicyTest",
+      "tests": 58,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "071cb83cef33b0a75cf9a68c5d03660244a53660f9066bc11f8dadf8ca54d997"
+    },
+    {
+      "suite": "SyncRuntimeCursorTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "ff3229f8e148d038444d2b4b32ee038f40538875c83e956efdb0c73949d58a18"
+    },
+    {
+      "suite": "SyncTriggerDiagnosticTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "sha256": "1715f24b415ad447784affecff39112c10296babd269775a9f592a51c650aa75"
+    }
+  ],
+  "unit_passed": 137,
+  "unit_failed": 0,
+  "lint": "PASS",
+  "assembleDebug": "PASS",
+  "installed_at_taipei": "2026-10-23 14:52:59",
+  "first_install_preserved": "2026-09-02 21:20:22",
+  "natural_periodic_beta33": "PENDING",
+  "force_stop_test": "NOT_RUN_OS_LIMIT",
+  "os_reboot_test": "NOT_RUN",
+  "real_hc_next_page_sdk": "PENDING"
+}

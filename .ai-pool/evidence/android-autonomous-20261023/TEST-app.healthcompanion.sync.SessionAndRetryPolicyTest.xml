@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.SessionAndRetryPolicyTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-23T06:17:55.464Z" hostname="MSI" time="0.004">
+  <properties/>
+  <testcase name="partialReceiptIsNeverTreatedAsCompleteSuccess" classname="app.healthcompanion.sync.SessionAndRetryPolicyTest" time="0.001"/>
+  <testcase name="workManagerRetriesOnlyTransientFailuresAndRemainsBounded" classname="app.healthcompanion.sync.SessionAndRetryPolicyTest" time="0.001"/>
+  <testcase name="transportTimeoutIsRetryableButPermanentFailuresAreNot" classname="app.healthcompanion.sync.SessionAndRetryPolicyTest" time="0.0"/>
+  <testcase name="authAndOversizeNeverBlindRetry" classname="app.healthcompanion.sync.SessionAndRetryPolicyTest" time="0.0"/>
+  <testcase name="transientRetryIsBounded" classname="app.healthcompanion.sync.SessionAndRetryPolicyTest" time="0.0"/>
+  <testcase name="sessionRefreshUsesSafetySkew" classname="app.healthcompanion.sync.SessionAndRetryPolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

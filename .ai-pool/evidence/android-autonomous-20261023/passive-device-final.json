@@ -1,0 +1,490 @@
+{
+  "observed_at": "2026-10-23T07:33:27.557356+00:00",
+  "app_launch_performed": false,
+  "manual_sync_performed": false,
+  "adb_worker_trigger_performed": false,
+  "package": [
+    "versionCode=33 minSdk=28 targetSdk=36",
+    "versionName=0.1.0-beta.33-debug",
+    "lastUpdateTime=2026-10-23 14:52:59",
+    "firstInstallTime=2026-09-02 21:20:22",
+    "android.permission.health.READ_RESTING_HEART_RATE: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_HEART_RATE_VARIABILITY: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_OXYGEN_SATURATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_TOTAL_CALORIES_BURNED: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_EXERCISE: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_SLEEP: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_STEPS: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_WEIGHT: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.health.READ_HEART_RATE: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]"
+  ],
+  "prefs": {
+    "sync_runtime_state": {
+      "f06b9871e33e6fa0_periodic_schedule_version": "2",
+      "f06b9871e33e6fa0_background_read_record_count": "79106",
+      "f06b9871e33e6fa0_background_result_at": "2026-10-23T07:32:55.056140Z",
+      "f06b9871e33e6fa0_background_last_progress_at": "2026-10-23T07:33:19.654191Z",
+      "f06b9871e33e6fa0_background_stage": "UPLOAD",
+      "f06b9871e33e6fa0_background_read_source_apps": "com.android.healthconnect.phone.j886e716063d33fb4935bf8fc248fb435,com.fitbit.FitbitMobile,com.google.android.apps.fitness,com.xiaomi.wearable",
+      "f06b9871e33e6fa0_background_http_status": "200",
+      "f06b9871e33e6fa0_periodic_repair_at": "1792683212617",
+      "f06b9871e33e6fa0_background_http_rejection_reasons": null,
+      "f06b9871e33e6fa0_background_result": "SYNCING",
+      "f06b9871e33e6fa0_background_http_accepted_count": "51",
+      "f06b9871e33e6fa0_background_enqueued_at": "2026-10-22T15:33:33.233565Z",
+      "f06b9871e33e6fa0_background_http_rejected_count": "0",
+      "f06b9871e33e6fa0_backfill_active_window_end": "2026-10-20T11:01:39.721742Z",
+      "f06b9871e33e6fa0_background_work_id": "bf1b8b1a-1d20-4de0-9f4d-73561c636a94",
+      "f06b9871e33e6fa0_periodic_scheduler_health": "HEALTHY",
+      "f06b9871e33e6fa0_history_pending": "true",
+      "f06b9871e33e6fa0_background_attempt_count": "0",
+      "f06b9871e33e6fa0_background_http_duplicate_count": "49",
+      "f06b9871e33e6fa0_background_read_domain_counts": "heart_rate:55549,sleep:217,sleep_stage:3247,spo2:6798,steps:9775,total_energy:3474,weight:2,workout:44",
+      "f06b9871e33e6fa0_legacy_state_migrated_v1": "true",
+      "f06b9871e33e6fa0_background_started_at": "2026-10-23T07:32:55.052087Z",
+      "f06b9871e33e6fa0_background_terminal_at": "2026-10-23T07:32:16.231696Z",
+      "f06b9871e33e6fa0_run_diagnostic": "{\"trigger_source\":\"BACKFILL\",\"origin_trigger_source\":\"BACKFILL\",\"flow_id\":\"514e024f-f49d-49cc-b739-50573daa3162\",\"worker_id\":\"bf1b8b1a-1d20-4de0-9f4d-73561c636a94\",\"attempt\":1,\"worker_attempt\":0,\"started_at\":\"2026-10-23T07:32:53.562585Z\"}",
+      "f06b9871e33e6fa0_background_request_count": "466",
+      "f06b9871e33e6fa0_backfill_active_window_start": "2026-09-20T11:01:39.721742Z"
+    },
+    "sync_status": {
+      "f06b9871e33e6fa0_last_success": "2026-10-23T06:18:33.499692Z"
+    },
+    "sync_completeness": {
+      "f06b9871e33e6fa0": {
+        "schema_version": "SYNC_COMPLETENESS_CONTRACT_V1",
+        "sync_run_id": "bf1b8b1a-1d20-4de0-9f4d-73561c636a94",
+        "range_start": "2026-09-20T11:01:39.721742Z",
+        "range_end": "2026-10-20T11:01:39.721742Z",
+        "domains_requested": [
+          "heart_rate",
+          "hrv",
+          "resting_heart_rate",
+          "sleep",
+          "sleep_stage",
+          "spo2",
+          "steps",
+          "total_energy",
+          "weight",
+          "workout"
+        ],
+        "domains_read": [
+          "heart_rate",
+          "hrv",
+          "resting_heart_rate",
+          "sleep",
+          "sleep_stage",
+          "spo2",
+          "steps",
+          "total_energy",
+          "weight",
+          "workout"
+        ],
+        "domains_mapped": [
+          "heart_rate",
+          "sleep",
+          "sleep_stage",
+          "spo2",
+          "steps",
+          "total_energy",
+          "weight",
+          "workout"
+        ],
+        "domains_uploaded": [
+          "sleep",
+          "sleep_stage",
+          "spo2",
+          "total_energy"
+        ],
+        "domains_persisted": [
+          "sleep",
+          "sleep_stage",
+          "spo2",
+          "total_energy"
+        ],
+        "per_domain": {
+          "heart_rate": {
+            "source_count": 25000,
+            "mapped_count": 55549,
+            "upload_count": 0,
+            "persisted_count": null,
+            "pages": 50,
+            "read_status": "CAPPED",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "hrv": {
+            "source_count": 0,
+            "mapped_count": 0,
+            "upload_count": 0,
+            "persisted_count": 0,
+            "pages": 1,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "resting_heart_rate": {
+            "source_count": 0,
+            "mapped_count": 0,
+            "upload_count": 0,
+            "persisted_count": 0,
+            "pages": 1,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "sleep": {
+            "source_count": 217,
+            "mapped_count": 217,
+            "upload_count": 3,
+            "persisted_count": 3,
+            "pages": 1,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "sleep_stage": {
+            "source_count": 3247,
+            "mapped_count": 3247,
+            "upload_count": 51,
+            "persisted_count": 51,
+            "pages": 1,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "spo2": {
+            "source_count": 6798,
+            "mapped_count": 6798,
+            "upload_count": 34,
+            "persisted_count": 34,
+            "pages": 14,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "steps": {
+            "source_count": 9775,
+            "mapped_count": 9775,
+            "upload_count": 0,
+            "persisted_count": null,
+            "pages": 20,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "total_energy": {
+            "source_count": 3474,
+            "mapped_count": 3474,
+            "upload_count": 12,
+            "persisted_count": 12,
+            "pages": 7,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "weight": {
+            "source_count": 2,
+            "mapped_count": 2,
+            "upload_count": 0,
+            "persisted_count": null,
+            "pages": 1,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          },
+          "workout": {
+            "source_count": 44,
+            "mapped_count": 44,
+            "upload_count": 0,
+            "persisted_count": null,
+            "pages": 1,
+            "read_status": "COMPLETE",
+            "drop_reasons": {},
+            "recovery_attempts": 0
+          }
+        },
+        "status": "INCOMPLETE",
+        "warnings": [
+          "DATA_INTEGRITY_WARNING:heart_rate",
+          "DATA_INTEGRITY_WARNING:sleep",
+          "DATA_INTEGRITY_WARNING:sleep_stage",
+          "DATA_INTEGRITY_WARNING:spo2",
+          "DATA_INTEGRITY_WARNING:steps",
+          "DATA_INTEGRITY_WARNING:total_energy",
+          "DATA_INTEGRITY_WARNING:weight",
+          "DATA_INTEGRITY_WARNING:workout"
+        ],
+        "persistence_evidence": "EXACT_SQL_COMMIT_RECEIPT_KEYS",
+        "count_scope": "CUMULATIVE_VERIFIED_UPLOAD_PLAN",
+        "per_domain_range_start": {
+          "steps": "2026-09-20T11:01:39.721742Z",
+          "total_energy": "2026-09-20T11:01:39.721742Z",
+          "heart_rate": "2026-09-20T11:01:39.721742Z",
+          "resting_heart_rate": "2026-09-20T11:01:39.721742Z",
+          "sleep": "2026-09-20T11:01:39.721742Z",
+          "sleep_stage": "2026-09-20T11:01:39.721742Z",
+          "weight": "2026-09-20T11:01:39.721742Z",
+          "workout": "2026-09-20T11:01:39.721742Z",
+          "hrv": "2026-09-20T11:01:39.721742Z",
+          "spo2": "2026-09-20T11:01:39.721742Z"
+        }
+      }
+    },
+    "sync_checkpoint": {
+      "f06b9871e33e6fa0_backfill_receipt_contract_version": 1,
+      "f06b9871e33e6fa0_backfill_dataset_changed": true,
+      "f06b9871e33e6fa0_backfill_next_batch_index": 466,
+      "f06b9871e33e6fa0_backfill_last_record_key_sha256": "ecb67b59961ba4c496f372a60ff840f896edb5bdad48c082d3aaf9fb1c9e431e",
+      "f06b9871e33e6fa0_backfill_next_record_index": 46600,
+      "f06b9871e33e6fa0_backfill_reconciliation_pass": 0,
+      "f06b9871e33e6fa0_backfill_plan_fingerprint": "v3:0030416d79e83d8a771f0fc29db72e138facf832b821f642deea5e7c17bd66b1"
+    }
+  },
+  "jobs": [
+    [
+      "JOB androidx.work.systemjobscheduler:u0a648/311: 6d194d9 @androidx.work.systemjobscheduler@app.healthcompanion.sync.beta.debug/androidx.work.impl.background.systemjob.SystemJobService",
+      "Service: app.healthcompanion.sync.beta.debug/androidx.work.impl.background.systemjob.SystemJobService",
+      "Required constraints: TIMING_DELAY CONNECTIVITY FLEXIBILITY [0x90200000]",
+      "Satisfied constraints: CONNECTIVITY FLEXIBILITY DEVICE_NOT_DOZING BACKGROUND_NOT_RESTRICTED WITHIN_QUOTA SSRU [0x1b600000]",
+      "Unsatisfied constraints: TIMING_DELAY [0x80000000]",
+      "Standby bucket: ACTIVE",
+      "Run time: earliest=+49m55s191ms, latest=none, original latest=none",
+      "Ready: false (job=false user=true !restricted=true !pending=true !active=true !backingup=true comp=true)"
+    ],
+    [
+      "JOB androidx.work.systemjobscheduler:u0a648/333: 92193eb @androidx.work.systemjobscheduler@app.healthcompanion.sync.beta.debug/androidx.work.impl.background.systemjob.SystemJobService",
+      "Service: app.healthcompanion.sync.beta.debug/androidx.work.impl.background.systemjob.SystemJobService",
+      "Required constraints: TIMING_DELAY CONNECTIVITY FLEXIBILITY [0x90200000]",
+      "Satisfied constraints: TIMING_DELAY CONNECTIVITY FLEXIBILITY DEVICE_NOT_DOZING BACKGROUND_NOT_RESTRICTED WITHIN_QUOTA SSRU [0x9b600000]",
+      "Unsatisfied constraints:",
+      "Standby bucket: ACTIVE",
+      "Run time: earliest=-38s897ms, latest=none, original latest=none",
+      "Ready: false (job=true user=true !restricted=true !pending=true !active=false !backingup=true comp=true)"
+    ]
+  ],
+  "standby_bucket": "10",
+  "workspec": [
+    {
+      "id": "2f5e0af8-ffb6-4f67-94f8-053d40b0e49c",
+      "state": 0,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 0,
+      "last_enqueue_time": 1792736602912,
+      "interval_duration": 7200000,
+      "schedule_requested_at": 1792738447675,
+      "period_count": 2,
+      "stop_reason": -256
+    },
+    {
+      "id": "4d2d2c3a-1061-48ef-91e7-96be6b94f3de",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 9,
+      "last_enqueue_time": 1792721163287,
+      "interval_duration": 0,
+      "schedule_requested_at": -1,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "00b5cd1e-aa16-4998-94d1-181ba84f95a2",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 8,
+      "last_enqueue_time": 1792721425241,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792722475946,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "c7d60e39-d26b-4fdb-b493-49c39401f3f4",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 6,
+      "last_enqueue_time": 1792738021855,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792738447831,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "6c3db3d8-6a35-468f-8fea-79897bff141d",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792738632023,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792738632048,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "cd129e40-ff2e-4ad1-a62c-01e56f99b8d4",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792738779072,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792738779111,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "376342bd-844f-4010-8bf8-4e3b25922fc4",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792738931132,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792738931162,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "dddec3ae-6267-4df3-8416-f6a0c344a565",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739073775,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739073805,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "22af4cbd-c145-4025-9ea7-5735e1d87e48",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739227264,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739227295,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "5ba4eb37-2241-4665-aa31-9d36c53b3cf8",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739405554,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739405582,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "d1cf92c1-1973-410a-9b72-af67b1f73055",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739546144,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739546189,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "34569c1a-dc26-4a2c-901a-a8103eb50911",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739683383,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739683418,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "56198faa-8975-49f8-9cea-e77819069a6d",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739797756,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739797785,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "5e57163b-5eb3-4ddc-946a-3f62f14ef997",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792739920533,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792739920560,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "8bbe0762-c8bc-4c1b-ad7b-6f6b1a34aff3",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792740061038,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792740061073,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "a87881be-6a41-4797-bebd-1c4e0818feed",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792740154826,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792740154846,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "67eb2c83-a13f-4bdb-9962-0300df441b6e",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792740306582,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792740306601,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "d6866613-259e-4ff1-8c8b-317ff0e71f6a",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792740452303,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792740452327,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "54b1f76d-bade-4d61-9079-a3529949f9b1",
+      "state": 2,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792740595465,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792740595486,
+      "period_count": 0,
+      "stop_reason": -256
+    },
+    {
+      "id": "bf1b8b1a-1d20-4de0-9f4d-73561c636a94",
+      "state": 1,
+      "worker_class_name": "app.healthcompanion.sync.BackgroundHealthSyncWorker",
+      "run_attempt_count": 1,
+      "last_enqueue_time": 1792740738826,
+      "interval_duration": 0,
+      "schedule_requested_at": 1792740738849,
+      "period_count": 0,
+      "stop_reason": -256
+    }
+  ]
+}

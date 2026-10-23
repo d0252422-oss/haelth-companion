@@ -1,0 +1,5 @@
+Background sync could lose its durable checkpoint, reload the same capped Health Connect prefix, or terminate pending work after a temporary authentication failure. Beta33 persists one pending read page in app-private no-backup storage, verifies every ingestion receipt before committing page progress, and yields bounded slices to the existing unique WorkManager chain.
+
+The existing two-hour periodic schedule, account mapping, revision rules, and ingestion contract remain. Refreshes must retain the original owner; logout records a durable opt-out while preserving account-scoped unfinished progress. Failed/partial terminal reports remain pending until the authenticated server confirms them.
+
+Validation: 137 targeted Android tests passed; lintDebug, assembleDebug and assembleDebugAndroidTest passed locally. The local debug certificate matches installed beta32. Natural beta33 whole-run acceptance and OS restart/swipe tests remain pending; no force-stop, data clearing, re-pairing or manual source backfill was performed.

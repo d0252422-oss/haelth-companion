@@ -3,7 +3,6 @@ package app.healthcompanion.sync
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.health.connect.client.HealthConnectClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,29 +23,7 @@ class SyncRecoveryReceiver : BroadcastReceiver() {
         PeriodicSyncWatchdog.schedule(app)
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                withTimeout(8_000L) {
-                    val auth = NativeGoogleAuth(
-                        app, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-                        BuildConfig.GOOGLE_WEB_CLIENT_ID, BuildConfig.API_BASE_URL,
-                    )
-                    val session = auth.restore() ?: return@withTimeout
-                    if (!SyncRuntimeStateStore(app).automaticSyncAllowed(BackgroundWorkNames.userKey(session.canonicalUserId))) return@withTimeout
-                    val health = HealthConnectGateway(app)
-                    if (health.availability == HealthConnectClient.SDK_AVAILABLE &&
-                        health.hasAnyPermission() &&
-                        health.backgroundReadState() == BackgroundHealthReadState.GRANTED
-                    ) {
-                        if (intent.action == PeriodicSyncWatchdog.ACTION) {
-                            val repaired = BackgroundSyncScheduler.reconcilePeriodicFromWatchdog(app, session.canonicalUserId)
-                            if (repaired) {
-                                BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId, SyncTriggerSource.RETRY)
-                            }
-                        } else {
-                            BackgroundSyncScheduler.reconcileAndEnqueue(app, session.canonicalUserId, SyncTriggerSource.BOOT_RECOVERY)
-                            BackgroundSyncScheduler.enqueueP0Recovery(app, session.canonicalUserId)
-                        }
-                    }
-                }
+                withTimeout(8_000L) { BackgroundSyncScheduler.reconcileRegisteredWork(app) }
             } catch (_: Exception) {
                 // WorkManager's own reschedule receiver remains active. The next
                 // application/worker entry retries this bounded reconciliation.

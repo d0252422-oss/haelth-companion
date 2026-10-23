@@ -38,8 +38,8 @@ android {
         minSdk = 28
         targetSdk = 36
         testInstrumentationRunner = "app.healthcompanion.sync.SourceIntegrityProbe"
-        versionCode = 33
-        versionName = "0.1.0-beta.33"
+        versionCode = 34
+        versionName = "0.1.0-beta.34"
         buildConfigField("String", "API_BASE_URL", "\"${betaApiBaseUrl.get()}\"")
         buildConfigField("String", "AUTH_SETUP_URL", "\"${betaAuthSetupUrl.get()}\"")
         buildConfigField("String", "APP_LINK_HOST", "\"${betaAppLinkHost.get()}\"")
@@ -90,6 +90,8 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:3.3.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.10.2")
+    implementation("com.google.guava:guava:33.3.1-jre")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
