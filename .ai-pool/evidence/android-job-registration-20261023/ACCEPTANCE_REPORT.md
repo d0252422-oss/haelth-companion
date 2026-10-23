@@ -54,3 +54,29 @@ PRODUCTION_OPERATIONS = 0
 - Pre-install SQL still classified the exact prior39 exceptions as20MISSING/19SERVER_STALE. Prefix2400 is preserved; post-recovery cursor is UNKNOWN. The original C remains the acceptance reference; no replacement claim is invented.
 - New user authorization explicitly superseded the older read-only limitation; controlled recovery after installation is authorized and must be labeled CONTROLLED_RECOVERY. It does not count as the separate natural background whole-run acceptance.
 - No unrelated Edge/Web/migration or API release, no Production operations, no new observer/schedule. Original I/O cause and the OS disappearance cause remain UNKNOWN; the proven missing recovery branches were repaired.
+
+## 2026-10-24 installation / controlled acceptance follow-up
+
+STATUS = PARTIAL_INSTALLED_SESSION_UNAVAILABLE
+
+User reconnected the original phone. At00:03:33 Asia/Taipei, verified product e7f8c8e APK was installed with `adb install -r`; version34 and the original signing certificate are confirmed. First install2026-09-02, application data inode,10 granted Health Connect permissions (including background), both immutable pending-cache byte hashes and original plan/checkpoints remain intact. No rebuild or test rerun was required; all product hashes still match the frozen manifest.
+
+A stable pre-install snapshot independently showed a **newer state than the old39f5a25 report**: at2026-10-23T15:32:55.898427Z (23:32:55 Taipei), account-scoped status had already become AUTH_REQUIRED at SESSION. C and historical backfill WorkSpecs were FAILED before beta34 installation; periodic remained ENQUEUED with period_count4. Thus jobs for finished C/backfill must not be blindly resurrected or treated as current ENQUEUED registration gaps. The retained background_work_id may be older than this session-only result; recordSessionFailure does not bind a new flow, so no unsupported exact flow attribution is made.
+
+One authorized normal MainActivity launch was performed as CONTROLLED_RECOVERY (not natural background evidence). It still produced no authenticated handoff/new upload. Incremental checkpoint remains2400 on the same fingerprint; historical checkpoint13600 also remains intact. After this launch, the captured periodic ENQUEUED row had no matching active SystemIdInfo/OS job; successful registration repair is therefore **not claimed**.
+
+Reason/exception-class fields are absent in the session-only status. Source review shows the worker can label restore()==null as AUTH_REQUIRED, but Supabase Kotlin3.2.6 also returns currentSessionOrNull()==null in RefreshFailure. Missing/decode/decrypt/temporary-refresh conditions are not distinguished by existing diagnostics. This does not prove an expired/revoked token, and no historical cause is invented. Full SDK logs or credential storage were not copied/read; on-device fixed-literal filtering yielded no usable classification. No second product release is made for an unproven cause.
+
+At00:06:30.052086 Taipei, one scoped readonly SQL aggregate still found20 MISSING and19 SERVER_STALE among the exact original39 tail identities. No new source snapshot or SQL backfill was performed. This is POST_INSTALL_PRE_CONTROLLED_RECOVERY evidence, not successful recovery.
+
+The next normal product path requires a usable App session. One human Google-login action was requested under the user-provided AGENTS.md `Human stop conditions: OAuth or account login`; this is not another request for Beta authorization. No automated account selection, copied session, service credential, backdoor or auth-policy change is used. After the user completes normal login, continue the same plan through normal ingestion and verify its trusted receipts; do not reset cursors or rerun completed prefixes.
+
+APK_INSTALL = PASS
+APP_DATA_AND_PERMISSIONS = PASS
+C_SCOPE_COMPLETENESS = PENDING
+CHECKPOINT_BEFORE_AFTER = 2400 ->2400
+NATURAL_BACKGROUND_WHOLE_RUN = PENDING
+HISTORICAL_BACKFILL_COMPLETENESS = PENDING
+TESTS_NEWLY_EXECUTED = 0 (unchanged candidate)
+NEXT_ACTION = complete normal original-account phone login,then verify authenticated background handoff,actual namespaced jobs,C tail receipts and source EOF; do not press immediate sync
+PRODUCTION_OPERATIONS = 0

@@ -74,7 +74,7 @@
   "expected_missing_tail": 20,
   "expected_stale_tail": 19,
   "ci": "SUCCESS",
-  "controlled_recovery": "NOT_RUN_DEVICE_DISCONNECTED",
+  "controlled_recovery": "NOT_COMPLETED_SESSION_UNAVAILABLE",
   "natural_whole_run": "PENDING",
   "historical_complete": "NO_HEART_RATE_EOF_NOT_PROVEN",
   "production_operations": 0,
@@ -84,16 +84,18 @@
   "merge_commit": "64c66d52df7d273bccb8da64c52e74c141114571",
   "pull_request": "https://github.com/d0252422-oss/haelth-companion/pull/5",
   "merged_at": "2026-10-23T15:26:08Z",
-  "device_access_at_install": "BLOCKED_DEVICE_DISCONNECTED",
-  "apk_installed": false,
-  "install_result": "adb:device not found;adb devices -l independently returned empty",
+  "device_access_at_install": "CONNECTED_ORIGINAL_AUTHORIZED_DEVICE",
+  "apk_installed": true,
+  "install_result": "PASS_ADB_INSTALL_R_2026-10-24T00:03:33+08:00",
   "checkpoint_before_after": {
     "before": 2400,
-    "after": null,
-    "same_original_plan_retained_before_install": true
+    "after": 2400,
+    "same_original_plan_retained": true
   },
   "missing20_status": "STILL_MISSING_AS_OF_PRE_INSTALL_SQL",
   "stale19_status": "STILL_STALE_AS_OF_PRE_INSTALL_SQL",
-  "one_required_human_action": "Reconnect original phone;unlock and allow existing computer debugging prompt if shown;do not open App or press sync",
-  "last_saved_at": "2026-10-23T15:27:52.576138+00:00"
+  "one_required_human_action": "Complete normal Google login in existing phone UI with original linked account;do not press manual sync",
+  "last_saved_at": "2026-10-23T15:27:52.576138+00:00",
+  "device_acceptance_followup": "device-acceptance-20261024.json",
+  "previous_install_failure_preserved_in": "ACCEPTANCE_REPORT.md prior2026-10-23 closure state"
 }
