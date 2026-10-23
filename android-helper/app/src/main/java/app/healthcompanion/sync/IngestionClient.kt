@@ -52,6 +52,8 @@ internal class OkHttpIngestionTransport(
     connectTimeoutMs: Long = IngestionClient.CONNECT_TIMEOUT_MS,
     socketTimeoutMs: Long = IngestionClient.SOCKET_TIMEOUT_MS,
     callTimeoutMs: Long = IngestionClient.CALL_TIMEOUT_MS,
+    private val onStage: (String) -> Unit = {},
+    private val onHeaders: (IngestionHttpResult) -> Unit = {},
 ) : IngestionTransport {
     private val client = HttpClient(OkHttp) {
         engine {
@@ -79,6 +81,8 @@ internal class OkHttpIngestionTransport(
         }
         // Consume every response so the connection can be reused across hundreds
         // of bounded backfill requests. Only a small, allowlisted error code is kept.
+        onHeaders(IngestionHttpResult(response.status.value))
+        onStage("RESPONSE_READ")
         val responseBody = response.bodyAsText()
         return IngestionHttpResult(
             response.status.value,
@@ -100,10 +104,12 @@ internal fun sanitizedServerError(body: String): String? = runCatching {
 
 internal class IngestionClient(
     private val baseUrl: String,
-    private val transport: IngestionTransport = OkHttpIngestionTransport(baseUrl),
+    transport: IngestionTransport? = null,
     private val backoff: suspend (Long) -> Unit = { delay(it) },
     private val onHttpResult: (IngestionHttpResult) -> Unit = {},
+    private val onStage: (String) -> Unit = {},
 ) : Closeable {
+    private val transport = transport ?: OkHttpIngestionTransport(baseUrl, onStage = onStage, onHeaders = onHttpResult)
     var confirmedDomainCounts: Map<String, Int> = emptyMap()
         private set
     suspend fun upload(
@@ -135,6 +141,7 @@ internal class IngestionClient(
             val batch = BatchPlanner.nextStreamingBatch(session.canonicalUserId, plan.orderedRecords, nextRecordIndex)
                 ?: break
             postBatch(session, batch.body, diagnostic)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val newCounts = confirmedDomainCounts.toMutableMap()
             plan.orderedRecords.subList(nextRecordIndex, batch.nextRecordIndex).forEach { record ->
                 newCounts[record.domain] = (newCounts[record.domain] ?: 0) + 1
@@ -143,6 +150,7 @@ internal class IngestionClient(
             nextRecordIndex = batch.nextRecordIndex
             completedBatches += 1
             completedHere += 1
+            onStage("CHECKPOINT_SAVE")
             checkpoints.save(SyncCheckpoint(
                 planFingerprint = plan.fingerprint,
                 nextBatchIndex = completedBatches,
@@ -197,13 +205,16 @@ internal class IngestionClient(
             val requestBody = diagnostic?.let {
                 JSONObject(body).put("sync_diagnostic", it.request(attempt)).toString()
             } ?: body
+            onStage("BATCH_POST")
             val result = try { execute(session, requestBody) } catch (error: IOException) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 if (!RetryPolicy.isRetryable(error) || attempt >= MAX_ATTEMPTS) throw error
                 sleepBackoff(attempt)
                 continue
             }
             when (RetryPolicy.action(result.statusCode, attempt)) {
                 RetryAction.SUCCESS -> {
+                    onStage("RECEIPT_VERIFY")
                     if (result.receipt?.verifies(expected) == true) return
                     onHttpResult(result.copy(errorCode = "DATA_INTEGRITY_WARNING", receipt = null))
                     if (attempt >= MAX_ATTEMPTS) throw IncompleteIngestionReceipt()

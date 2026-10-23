@@ -3,6 +3,9 @@ package app.healthcompanion.sync
 import java.io.IOException
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -100,5 +103,57 @@ class RetryProgressTest {
             assertNotNull(kind, runCatching { client.upload(session, records(1), checkpoint) }.exceptionOrNull())
             assertNull(kind, checkpoint.value)
         }
+    }
+
+    @Test fun cancellationSurfacingAsIoDoesNotRetryOrAdvanceCheckpoint() = runTest {
+        val checkpoint = Checkpoints()
+        var calls = 0
+        val child = launch {
+            val client = IngestionClient("https://beta.example", IngestionTransport { _, _, _ ->
+                calls++; currentCoroutineContext().cancel(); throw IOException("isolated cancellation")
+            }, backoff = {})
+            client.upload(session, records(1), checkpoint)
+        }
+        child.join()
+        assertTrue(child.isCancelled)
+        assertEquals(1, calls)
+        assertNull(checkpoint.value)
+    }
+
+    @Test fun checkpointCommitFailureHasDistinctStageAndRetainsSafeReplay() = runTest {
+        val checkpoints = Checkpoints()
+        var stage: String? = null
+        val failing = object : CheckpointRepository {
+            override fun load() = checkpoints.value
+            override fun save(checkpoint: SyncCheckpoint) { throw CheckpointPersistenceFailed() }
+            override fun clear() = error("must not clear")
+        }
+        val client = IngestionClient("https://beta.example", IngestionTransport { _, _, body -> duplicateReceipt(body) },
+            backoff = {}, onStage = { stage = it })
+        assertTrue(runCatching { client.upload(session, records(1), failing) }.exceptionOrNull() is CheckpointPersistenceFailed)
+        assertEquals("CHECKPOINT_SAVE", stage)
+        assertNull(checkpoints.value)
+    }
+
+    @Test fun failureAtFirstBatchAfter2400RetainsItsExactPlanAndResumeFrontier() = runTest {
+        val input = records(2501)
+        val checkpoint = Checkpoints()
+        IngestionClient("https://beta.example", IngestionTransport { _, _, body -> duplicateReceipt(body) }, backoff = {})
+            .upload(session, input, checkpoint, budget = UploadWorkBudget(maxBatches = 24))
+        val before = checkpoint.value
+        assertEquals(2400, before!!.nextRecordIndex)
+        var stage: String? = null
+        val attempted = mutableListOf<List<String>>()
+        val failing = IngestionClient("https://beta.example", IngestionTransport { _, _, body ->
+            attempted += keys(body); throw IOException("isolated transport failure")
+        }, backoff = {}, onStage = { stage = it })
+        assertTrue(runCatching { failing.upload(session, input, checkpoint) }.exceptionOrNull() is IOException)
+        assertEquals(before, checkpoint.value)
+        assertEquals("BATCH_POST", stage)
+        val replayed = mutableListOf<List<String>>()
+        IngestionClient("https://beta.example", IngestionTransport { _, _, body -> replayed += keys(body); duplicateReceipt(body) }, backoff = {})
+            .upload(session, input, checkpoint)
+        assertEquals(attempted.first(), replayed.first())
+        assertEquals(2501, checkpoint.value!!.nextRecordIndex)
     }
 }

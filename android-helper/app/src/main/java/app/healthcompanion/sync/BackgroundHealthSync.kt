@@ -33,6 +33,10 @@ import java.time.Instant
 import java.io.IOException
 import org.json.JSONObject
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.guava.await
 import java.util.concurrent.TimeUnit
 
 class SyncRuntimeStateStore internal constructor(
@@ -159,6 +163,17 @@ class SyncRuntimeStateStore internal constructor(
     }
     internal fun automaticSyncAllowed(userKey: String): Boolean =
         !preferences.getBoolean("${userKey}_automatic_sync_disabled", false)
+    internal fun scheduledUserKeys(): Set<String> = preferences.all.keys.asSequence()
+        .filter { it.endsWith("_background_work_id") || it.endsWith("_scheduled_scope") }
+        .map { it.substringBefore('_') }.filter { it.matches(Regex("[a-f0-9]{16}")) && automaticSyncAllowed(it) }.toSet()
+    internal fun registerScheduledScope(userKey: String) {
+        require(userKey.matches(Regex("[a-f0-9]{16}")))
+        if (!preferences.edit().putBoolean("${userKey}_scheduled_scope", true).commit()) throw CheckpointPersistenceFailed()
+    }
+    internal fun registrationRepairAt(id: String): Long = preferences.getLong("registration_repair_$id", 0)
+    internal fun recordRegistrationRepair(id: String, at: Long) {
+        if (!preferences.edit().putLong("registration_repair_$id", at).commit()) throw CheckpointPersistenceFailed()
+    }
     fun recordObserved(
         userId: String,
         workId: String,
@@ -361,6 +376,12 @@ internal data class SyncFailureDiagnostic(val reason: String, val exceptionClass
             is IncompleteIngestionReceipt -> SyncFailureDiagnostic("RECEIPT_INCOMPLETE", "IncompleteIngestionReceipt")
             is DomainCompletenessExhausted -> SyncFailureDiagnostic("DOMAIN_INCOMPLETE", "DomainCompletenessExhausted")
             is BackfillCatchUpRequired -> SyncFailureDiagnostic("RECONCILIATION_PENDING", "BackfillCatchUpRequired")
+            is CheckpointPersistenceFailed -> SyncFailureDiagnostic("CHECKPOINT_PERSISTENCE_FAILED", "CheckpointPersistenceFailed")
+            is PendingScopeMismatch -> SyncFailureDiagnostic("PENDING_SCOPE_MISMATCH", "PendingScopeMismatch")
+            is java.net.UnknownHostException -> SyncFailureDiagnostic("DNS_FAILURE", "UnknownHostException")
+            is java.net.ConnectException -> SyncFailureDiagnostic("CONNECT_FAILURE", "ConnectException")
+            is javax.net.ssl.SSLException -> SyncFailureDiagnostic("TLS_FAILURE", "SSLException")
+            is java.io.InterruptedIOException -> SyncFailureDiagnostic("INTERRUPTED_IO", "InterruptedIOException")
             is OversizedBatchRejected -> SyncFailureDiagnostic("BATCH_OVERSIZED", "OversizedBatchRejected")
             is OversizedHealthRecord -> SyncFailureDiagnostic("RECORD_OVERSIZED", "OversizedHealthRecord")
             is BatchUploadFailed -> SyncFailureDiagnostic("BATCH_HTTP_FAILURE", "BatchUploadFailed")
@@ -375,6 +396,7 @@ internal data class SyncFailureDiagnostic(val reason: String, val exceptionClass
 }
 
 object BackgroundSyncScheduler {
+    private val registrationRepair = Mutex()
     private const val LEGACY_BACKFILL = "health-sync-history-backfill"
     private const val LEGACY_PERIODIC = "health-sync-periodic"
 
@@ -406,6 +428,8 @@ object BackgroundSyncScheduler {
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
         val immediatePolicy = if (replaceImmediate) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
+        SyncWorkRegistrationStore(context).save(userKey, BackgroundSyncMode.INCREMENTAL, immediate.id,
+            triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, trigger), expedited = true)
         withContext(Dispatchers.IO) {
             manager.beginUniqueWork(BackgroundWorkNames.immediate(userId), immediatePolicy, immediate).enqueue().await()
         }
@@ -416,7 +440,7 @@ object BackgroundSyncScheduler {
         return BackgroundRuntimeStatus.ENQUEUED
     }
 
-    private fun ensurePeriodic(
+    private suspend fun ensurePeriodic(
         manager: WorkManager,
         userId: String,
         constraints: Constraints,
@@ -428,7 +452,7 @@ object BackgroundSyncScheduler {
             .setInputData(triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, SyncTriggerSource.PERIODIC_WORKER))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        manager.enqueueUniquePeriodicWork(BackgroundWorkNames.periodic(userId), policy, periodic)
+        manager.enqueueUniquePeriodicWork(BackgroundWorkNames.periodic(userId), policy, periodic).await()
     }
 
     /** Keep WorkManager's unique name authoritative while repairing an orphaned OS job. */
@@ -438,12 +462,13 @@ object BackgroundSyncScheduler {
         userId: String,
         constraints: Constraints,
         replace: Boolean = false,
-    ): Boolean {
+    ): Boolean = registrationRepair.withLock {
         // JobScheduler can lose a WorkManager job while its WorkSpec still says
         // ENQUEUED. An independent, inexact alarm wakes this reconciliation even
         // when the user never opens the app again.
         PeriodicSyncWatchdog.schedule(context)
         val store = SyncRuntimeStateStore(context)
+        store.registerScheduledScope(BackgroundWorkNames.userKey(userId))
         val existing = queryWork(manager, BackgroundWorkNames.periodic(userId))
         val work = existing.firstOrNull { it.state == WorkInfo.State.RUNNING }
             ?: existing.firstOrNull { it.state in ACTIVE_STATES }
@@ -451,11 +476,11 @@ object BackgroundSyncScheduler {
         val cadenceOutdated = work != null &&
             PeriodicSyncCadencePolicy.needsUpdate(work.periodicityInfo?.repeatIntervalMillis)
         val present = if (state == DurableWorkState.ENQUEUED && !replace) {
-            systemJobPresent(context, work.id.toString())
+            systemJobPresent(context, work.id.toString(), work.generation)
         } else null
         val secondCheck = if (present == false) {
             delay(1_000)
-            systemJobPresent(context, work!!.id.toString())
+            systemJobPresent(context, work!!.id.toString(), work.generation)
         } else present
         val confirmedMissing = present == false && secondCheck == false
         val now = System.currentTimeMillis()
@@ -464,7 +489,8 @@ object BackgroundSyncScheduler {
             state, if (confirmedMissing) false else secondCheck, store.lastPeriodicRepairAt(userId), now,
         )
         if (repair) {
-            ensurePeriodic(manager, userId, constraints, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE)
+            ensurePeriodic(manager, userId, constraints,
+                if (replace || state == null) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.UPDATE)
             store.recordPeriodicSchedulerHealth(userId, "RECONCILING", now)
         } else if (state == null) {
             ensurePeriodic(manager, userId, constraints)
@@ -477,15 +503,16 @@ object BackgroundSyncScheduler {
         } else if (present == true) {
             store.recordPeriodicSchedulerHealth(userId, "HEALTHY")
         }
-        return repair || state == null
+        repair || state == null
     }
 
-    private fun systemJobPresent(context: Context, workId: String): Boolean? = runCatching {
+    private fun systemJobPresent(context: Context, workId: String, generation: Int? = null): Boolean? = runCatching {
         val scheduler = context.getSystemService(JobScheduler::class.java) ?: return@runCatching null
         val jobs = if (Build.VERSION.SDK_INT >= 34) {
-            scheduler.pendingJobsInAllNamespaces.values.flatten()
+            scheduler.forNamespace("androidx.work.systemjobscheduler").allPendingJobs
         } else scheduler.allPendingJobs
-        jobs.any { it.extras.getString("EXTRA_WORK_SPEC_ID") == workId }
+        jobs.any { it.extras.getString("EXTRA_WORK_SPEC_ID") == workId &&
+            (generation == null || it.extras.getInt("EXTRA_WORK_SPEC_GENERATION", 0) == generation) }
     }.getOrNull()
 
     suspend fun reconcilePeriodicAfterWorkerStart(context: Context, userId: String) {
@@ -496,6 +523,64 @@ object BackgroundSyncScheduler {
     suspend fun reconcilePeriodicFromWatchdog(context: Context, userId: String): Boolean =
         reconcilePeriodic(context, WorkManager.getInstance(context), userId,
             Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+
+    /** Repair only already configured work, without requiring network login in a receiver.
+     * Every worker still restores server-authenticated identity and checks permissions. */
+    internal suspend fun reconcileRegisteredWork(context: Context) = registrationRepair.withLock {
+        val manager = WorkManager.getInstance(context)
+        val state = SyncRuntimeStateStore(context)
+        val saved = SyncWorkRegistrationStore(context)
+        for (userKey in state.scheduledUserKeys()) {
+            val periodicName = "health-sync-periodic-$userKey"
+            val periodicInfos = queryWork(manager, periodicName)
+            val periodic = periodicInfos.firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+            if (periodicInfos.none { it.state in ACTIVE_STATES } && state.automaticSyncAllowed(userKey)) {
+                // UPDATE is a no-op for finished periodic work in WorkManager 2.11.2.
+                val request = PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>(PeriodicSyncCadencePolicy.INTERVAL_HOURS, TimeUnit.HOURS)
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                    .setInputData(triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, SyncTriggerSource.PERIODIC_WORKER)).build()
+                manager.enqueueUniquePeriodicWork(periodicName, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, request).await()
+            }
+            if (periodic != null) {
+                SyncRegistrationRecovery.repair(registration(periodic),
+                    { systemJobPresent(context, periodic.id.toString(), periodic.generation) }, { delay(1_000) },
+                    { manager.getWorkInfoByIdFlow(periodic.id).first()?.let(::registration) }) {
+                    if (!state.automaticSyncAllowed(userKey)) return@repair
+                    val request = PeriodicWorkRequestBuilder<BackgroundHealthSyncWorker>(PeriodicSyncCadencePolicy.INTERVAL_HOURS, TimeUnit.HOURS)
+                        .setConstraints(periodic.constraints)
+                        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                        .setInputData(triggerInput(BackgroundSyncMode.INCREMENTAL, userKey, SyncTriggerSource.PERIODIC_WORKER)).build()
+                    manager.enqueueUniquePeriodicWork(periodicName, ExistingPeriodicWorkPolicy.UPDATE, request).await()
+                }
+            }
+            val scopes = mapOf(BackgroundSyncMode.INCREMENTAL to "health-sync-immediate-$userKey",
+                BackgroundSyncMode.BACKFILL to "health-sync-backfill-$userKey",
+                BackgroundSyncMode.P0_RECOVERY to "health-sync-p0-recovery-v23-$userKey")
+            for ((mode, name) in scopes) {
+                val infos = queryWork(manager, name)
+                saved.prune(userKey, mode, infos.filter { it.state in ACTIVE_STATES }.map { it.id }.toSet())
+                val work = infos.singleOrNull { it.state == WorkInfo.State.ENQUEUED } ?: continue
+                val descriptor = saved.load(userKey, mode, work.id) ?: continue // Never guess legacy input.
+                if (System.currentTimeMillis() - state.registrationRepairAt(work.id.toString()) < PeriodicSchedulerRecoveryPolicy.REPAIR_COOLDOWN_MS) continue
+                SyncRegistrationRecovery.repair(registration(work),
+                    { systemJobPresent(context, work.id.toString(), work.generation) }, { delay(1_000) },
+                    { manager.getWorkInfoByIdFlow(work.id).first()?.let(::registration) }) {
+                    if (!state.automaticSyncAllowed(userKey)) return@repair
+                    val request = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>().setId(work.id)
+                        .setConstraints(work.constraints).setInputData(descriptor.input)
+                        .setInitialDelay(descriptor.initialDelayMs, TimeUnit.MILLISECONDS)
+                        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                        .apply { work.tags.forEach(::addTag)
+                            if (descriptor.expedited) setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }.build()
+                    withTimeout(5_000) { manager.updateWork(request).await() }
+                    state.recordRegistrationRepair(work.id.toString(), System.currentTimeMillis())
+                }
+            }
+        }
+    }
+
+    private fun registration(work: WorkInfo) = SyncRegistration(work.id, work.generation, durableState(work))
 
     /** Old beta.23 periodic WorkSpecs survive an in-place APK update under KEEP. */
     suspend fun resolveTrigger(context: Context, userId: String, workId: String, configured: SyncTriggerSource): SyncTriggerSource {
@@ -520,6 +605,8 @@ object BackgroundSyncScheduler {
             .setInputData(triggerInput(BackgroundSyncMode.BACKFILL, BackgroundWorkNames.userKey(userId), SyncTriggerSource.BACKFILL))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
+        SyncWorkRegistrationStore(context).save(BackgroundWorkNames.userKey(userId), BackgroundSyncMode.BACKFILL, request.id,
+            triggerInput(BackgroundSyncMode.BACKFILL, BackgroundWorkNames.userKey(userId), SyncTriggerSource.BACKFILL))
         manager.enqueueUniqueWork(BackgroundWorkNames.backfill(userId), ExistingWorkPolicy.KEEP, request)
     }
 
@@ -533,13 +620,15 @@ object BackgroundSyncScheduler {
             BackgroundSyncMode.P0_RECOVERY -> BackgroundWorkNames.p0Recovery(userId)
         }
         if (queryWork(manager, name).any { it.id.toString() != parentId && it.state in ACTIVE_STATES }) return
+        val input = workDataOf(WORK_MODE to mode.name, WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
+            WORK_TRIGGER_SOURCE to origin.name, "parent_worker_id" to parentId, "parent_flow_id" to flowId)
         val request = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInitialDelay(30, TimeUnit.SECONDS)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .setInputData(workDataOf(WORK_MODE to mode.name, WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
-                WORK_TRIGGER_SOURCE to origin.name, "parent_worker_id" to parentId, "parent_flow_id" to flowId))
+            .setInputData(input)
             .build()
+        SyncWorkRegistrationStore(context).save(BackgroundWorkNames.userKey(userId), mode, request.id, input, initialDelayMs = 30_000)
         withContext(Dispatchers.IO) {
             manager.enqueueUniqueWork(name, ExistingWorkPolicy.APPEND_OR_REPLACE, request).await()
         }
@@ -550,16 +639,17 @@ object BackgroundSyncScheduler {
         val manager = WorkManager.getInstance(context)
         val name = BackgroundWorkNames.p0Recovery(userId)
         if (queryWork(manager, name).isNotEmpty()) return
+        val input = workDataOf(
+            WORK_MODE to BackgroundSyncMode.P0_RECOVERY.name,
+            WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
+            WORK_FROZEN_END to Instant.now().toString(),
+            WORK_TRIGGER_SOURCE to SyncTriggerSource.BACKFILL.name)
         val request = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInputData(workDataOf(
-                WORK_MODE to BackgroundSyncMode.P0_RECOVERY.name,
-                WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
-                WORK_FROZEN_END to Instant.now().toString(),
-                WORK_TRIGGER_SOURCE to SyncTriggerSource.BACKFILL.name,
-            ))
+            .setInputData(input)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
+        SyncWorkRegistrationStore(context).save(BackgroundWorkNames.userKey(userId), BackgroundSyncMode.P0_RECOVERY, request.id, input)
         manager.enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, request)
     }
 
@@ -832,6 +922,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 val window = proposedWindow.copy(start = state.activeWindowStart(owner, mode, proposedWindow.start))
                 val pages = PendingSyncPageStore(java.io.File(applicationContext.noBackupFilesDir, "pending-sync"),
                     BuildConfig.API_BASE_URL, owner, mode)
+                reportProgress(state, owner, "PENDING_PAGE_LOAD")
                 var pending = pages.load(window) ?: PendingSyncPage(window)
                 reportProgress(state, owner, "HEALTH_READ")
                 val completeness = SyncCompletenessStore(applicationContext, owner)
@@ -846,6 +937,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     }
                     if (read.domainTraces.isEmpty()) throw SecurityException("PERMISSION_REQUIRED")
                     pending = pending.copy(read = read, starts = pending.starts + read.domainRangeStarts)
+                    reportProgress(state, owner, "PENDING_PAGE_SAVE")
                     pages.save(pending) // durable pending data BEFORE any source cursor can advance
                 }
                 val read = pending.read ?: pending.summary()
@@ -858,7 +950,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 completeness.save(id.toString(), window, read)
                 val client = IngestionClient(BuildConfig.API_BASE_URL, onHttpResult = { result ->
                     state.recordHttpResult(owner, result)
-                }).also { ingestionClient = it }
+                }, onStage = { stage -> state.recordProgress(owner, stage) }).also { ingestionClient = it }
                 reportProgress(state, owner, "UPLOAD", 0)
                 uploadStarted = true
                 val budget = UploadWorkBudget()
@@ -884,6 +976,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 reportProgress(state, owner, "CHECKPOINT")
                 completeness.save(id.toString(), window, read, uploadSummary.persistedDomainCounts)
                 if (uploadSummary.continuationPending) {
+                    reportProgress(state, owner, "CONTINUATION_ENQUEUE")
                     BackgroundSyncScheduler.enqueueContinuation(applicationContext, owner, mode, id.toString(), origin, diagnostic.flowId)
                     state.recordTerminal(owner, "PARTIAL")
                     return@withTimeout
@@ -891,10 +984,12 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 if (uploadSummary.reconciliationPending) throw BackfillCatchUpRequired()
                 if (!pending.complete) {
                     pending = pending.verified(uploadSummary.persistedDomainCounts)
+                    reportProgress(state, owner, "PENDING_PAGE_SAVE")
                     pages.save(pending) // receipt-verified read-page cursor is now durable
                 }
                 if (!pending.complete) {
                     if (read.failedDomains.isNotEmpty()) throw DomainCompletenessExhausted()
+                    reportProgress(state, owner, "CONTINUATION_ENQUEUE")
                     BackgroundSyncScheduler.enqueueContinuation(applicationContext, owner, mode, id.toString(), origin, diagnostic.flowId)
                     state.recordTerminal(owner, "PARTIAL")
                     return@withTimeout
@@ -939,6 +1034,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
             state.recordTerminal(owner, if (retry) "RETRY_PENDING" else "TIMEOUT", error)
             retryOrFail(maxAttempts)
         } catch (error: IOException) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val checkpoint = checkpoints.load()
             val maxAttempts = BackgroundContinuationPolicy.maxAttempts(
                 mode,
