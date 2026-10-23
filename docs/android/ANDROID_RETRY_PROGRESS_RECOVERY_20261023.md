@@ -96,14 +96,32 @@ pairing or security-policy operation occurred.
 Observation baseline: 2026-10-23T02:25:23.236556Z. The local coverage cursor was
 still 2026-10-10T07:44:15.244341Z. No new whole-run completion is inferred from
 the controlled backfill. One explicit ADB trigger of existing recovery job 305
-was recorded as **integration only**; an accepted scheduler command did not yet
-produce a new Worker terminal result. It is not natural periodic evidence.
+was recorded as **integration only**; that command initially produced no new Worker
+terminal result. WorkManager subsequently executed the existing recovery at
+2026-10-23T02:42:45.532714Z and completed it at 02:43:37.959094Z. It is not
+natural periodic evidence: this is a one-shot recovery, and the observation window
+includes the earlier ADB action.
+
+The same recovery Worker progressed from checkpoint 3 / record 300 to checkpoint
+17 / record 1,700, then completed the 1,750-record cumulative verified plan.
+The steps 1,363 and total_energy 387 counts were COMPLETE at source, mapping,
+upload and persistence, with no warnings. The recovered run's own checkpoint and
+frozen window were cleared by its existing normal success path. The unfinished
+regular incremental and backfill checkpoints remain intact.
+
+The server now records beta.32, SYNCED, success-report time
+2026-10-23T02:43:35.347Z (10:43:35 Asia/Taipei), consistent with that recovery's
+local terminal SUCCESS. The common coverage cursor intentionally remains 10/10:
+the two-domain P0_RECOVERY window does not complete the regular all-domain window.
+This status-report advance is **not** proof of a regular whole-run completion.
+The original beta.31 retry exception was not preserved and was not reproduced in
+this successful beta.32 attempt; its exact cause remains UNKNOWN.
 
 | Acceptance | Status |
 |---|---|
 | A: scoped source to SQL and product readback | PASS_SCOPED |
-| B: actual fixed-version run/checkpoint progress | PENDING |
-| C: actual fixed-version whole-run status update | PENDING; time semantics fixed/tested |
+| B: actual fixed-version run/checkpoint progress | PASS_SCOPED_RECOVERY; regular windows pending |
+| C: actual fixed-version status update | PASS_SCOPED_RECOVERY; regular whole-run pending |
 | D: complete natural periodic on fixed APK | PENDING |
 
 The existing three-hour heartbeat `beta` was updated, not duplicated. It compares
@@ -119,6 +137,10 @@ distinguishes reconciliation resets, and treats unreadable evidence as UNKNOWN.
   SessionAndRetryPolicyTest 6. Repeated executions are not added to this total.
 - `:app:lintDebug :app:assembleDebug --offline --console=plain`: PASS, with verified
   existing public Beta configuration; no signing key change.
+- Existing Android beta APK CI [39890196359](https://github.com/d0252422-oss/haelth-companion/actions/runs/39890196359): PASS for source
+  `81cc6a307ee7a4bac6de32d678780f3dd15a5ac5`. [PR 3](https://github.com/d0252422-oss/haelth-companion/pull/3) merged only these six files
+  into the existing Android development branch at
+  `c88a3c02605661f9cd013c1afb37ed84e3ff0d15`; no old branch was merged into main.
 - No Food, training-engine, Health Score, iOS or unrelated SQL tests were run.
 - `node scripts/calculate-project-progress.mjs --check`: exit 1 for historical
   missing evidence artifacts. Baseline/scope/weights unchanged; overall UNKNOWN.
@@ -133,9 +155,9 @@ OWNER = Codex primary; sole file writer
 REVIEWER = engine_gap / ui_audit, bounded read-only receipt/cursor review
 FILES_CHANGED = Android runtime, foreground cursor label, version, two targeted test files, this report
 TESTS = 107/0, lint/build PASS; natural periodic NOT_RUN
-RESULT = Scoped missing records recovered; cursor regression fixed; actual retry cause unresolved
+RESULT = Scoped missing records recovered; cursor regression fixed; recovery checkpoint/terminal accepted; original retry cause unresolved
 RISKS = No proof yet that frozen older work converges or recent increments continue automatically
-BLOCKERS = Fixed-version pending Worker must execute and expose actual reason/progress
-NEXT_ACTION = Read the next existing Worker attempt's fixed diagnostic and checkpoint; fix only its proved failing layer, then observe one natural periodic whole-run completion
+BLOCKERS = Regular all-domain windows and natural periodic completion remain unverified; historical retry exception unavailable
+NEXT_ACTION = Use the existing heartbeat to observe the retained regular incremental/backfill checkpoints and one natural periodic completion; if a retry recurs, use its fixed diagnostic to repair only the proved failing layer
 HUMAN_APPROVAL_REQUIRED = NO renewed Beta approval; normal device security/OAuth boundaries remain
 PRODUCTION_OPERATIONS = 0
