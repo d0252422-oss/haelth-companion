@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.SyncRegistrationRecoveryTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-23T15:18:49.833Z" hostname="MSI" time="0.134">
+  <properties/>
+  <testcase name="runningBlockedFinishedOrCancelledWorkCannotBeRevived" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.016"/>
+  <testcase name="descriptorCannotPersistSecretFieldOrClaimAnotherOwner" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.021"/>
+  <testcase name="updateFailureDoesNotReturnRepairSuccess" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.007"/>
+  <testcase name="stoppedAccountCannotBeSelectedForOfflineRegistrationRepair" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.018"/>
+  <testcase name="durableDescriptorPreservesExactParentAndInputAndRejectsOtherOwnerModeOrId" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.012"/>
+  <testcase name="unknownQueryOrExistingJobCannotBeTreatedAsMissing" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.013"/>
+  <testcase name="descriptorCommitFailureIsExplicitAndCannotProceedToEnqueue" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.002"/>
+  <testcase name="registrationReappearingDuringSettleIsNotReplaced" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.012"/>
+  <testcase name="confirmedOrphanUpdatesSameIdentityOnceAndRepeatedWakeDoesNotCompete" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.011"/>
+  <testcase name="generationStateAndIdentityRaceAllAbortUpdate" classname="app.healthcompanion.sync.SyncRegistrationRecoveryTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

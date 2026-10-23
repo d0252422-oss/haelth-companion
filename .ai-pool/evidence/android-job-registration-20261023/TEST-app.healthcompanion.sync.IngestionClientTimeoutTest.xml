@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.IngestionClientTimeoutTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-23T15:18:37.541Z" hostname="MSI" time="10.895">
+  <properties/>
+  <testcase name="connectorStatusFailureCannotBecomeFalseSyncSuccess" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.015"/>
+  <testcase name="serverErrorCodeIsAllowlistedAndBounded" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.002"/>
+  <testcase name="cancellationDoesNotAdvanceOrClearPastLastDurableBatch" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.078"/>
+  <testcase name="datasetDriftContinuesFromFrontierThenRunsBoundedCatchUpPass" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.195"/>
+  <testcase name="partialReceiptDoesNotAdvancePastRejectedBatchOrClearCheckpoint" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.036"/>
+  <testcase name="timeoutRetriesAndPreservesLastCompletedBatchCheckpoint" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.046"/>
+  <testcase name="successfulUploadRetainsCompletedCheckpointUntilStatusIsDurable" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.029"/>
+  <testcase name="productionTransportBoundsAConnectedServerThatNeverResponds" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="1.203"/>
+  <testcase name="failedBatchKeepsCheckpointAndRetriesIdenticalPayloadAfterRecovery" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.015"/>
+  <testcase name="connectorStatusFailureRetainsCompletedCursorAndAvoidsBatchReplay" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.049"/>
+  <testcase name="sanitizedHttpStatusIsReportedWithoutResponsePayload" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.11"/>
+  <testcase name="realBackfillScaleStreamingContinuationResumesExactlyOnce" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="8.899"/>
+  <testcase name="exhaustedDirtyPassSeedsLatestSnapshotAndPreservesReconciliationBudget" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.16"/>
+  <testcase name="interruptedMixedDomainUploadResumesWithSleepParentBeforeStages" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.047"/>
+  <testcase name="networkFailureKeepsCheckpointUntilRetrySucceeds" classname="app.healthcompanion.sync.IngestionClientTimeoutTest" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+java.lang.RuntimeException: Method isLoggable in android.util.Log not mocked. See https://developer.android.com/r/studio-ui/build/not-mocked for details.
+	at android.util.Log.isLoggable(Log.java)
+	at okhttp3.internal.platform.android.AndroidLog.enableLogging(AndroidLog.kt:127)
+	at okhttp3.internal.platform.android.AndroidLog.enable(AndroidLog.kt:109)
+	at okhttp3.internal.platform.PlatformRegistry.findPlatform(PlatformRegistry.kt:25)
+	at okhttp3.internal.platform.Platform$Companion.findPlatform(Platform.kt:223)
+	at okhttp3.internal.platform.Platform$Companion.access$findPlatform(Platform.kt:202)
+	at okhttp3.internal.platform.Platform.<clinit>(Platform.kt:203)
+	at okhttp3.OkHttpClient.<init>(OkHttpClient.kt:300)
+	at okhttp3.OkHttpClient$Builder.build(OkHttpClient.kt:1384)
+	at io.ktor.client.engine.okhttp.OkHttpEngine.okHttpClientPrototype_delegate$lambda$0(OkHttpEngine.kt:140)
+	at kotlin.SynchronizedLazyImpl.getValue(LazyJVM.kt:86)
+	at io.ktor.client.engine.okhttp.OkHttpEngine$Companion.getOkHttpClientPrototype(OkHttpEngine.kt:139)
+	at io.ktor.client.engine.okhttp.OkHttpEngine.createOkHttpClient(OkHttpEngine.kt:145)
+	at io.ktor.client.engine.okhttp.OkHttpEngine.access$createOkHttpClient(OkHttpEngine.kt:28)
+	at io.ktor.client.engine.okhttp.OkHttpEngine$clientCache$1.invoke(OkHttpEngine.kt:41)
+	at io.ktor.client.engine.okhttp.OkHttpEngine$clientCache$1.invoke(OkHttpEngine.kt:41)
+	at io.ktor.util.LRUCache.get(Cache.kt:53)
+	at java.base/java.util.Collections$SynchronizedMap.get(Collections.java:2673)
+	at io.ktor.client.engine.okhttp.OkHttpEngine.execute(OkHttpEngine.kt:64)
+	at io.ktor.client.engine.HttpClientEngine$executeWithinCallContext$2.invokeSuspend(HttpClientEngine.kt:183)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+]]></system-err>
+</testsuite>

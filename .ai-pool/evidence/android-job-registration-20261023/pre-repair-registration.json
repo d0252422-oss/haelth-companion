@@ -1,0 +1,56 @@
+{
+  "captured_start": "2026-10-23T14:58:54.030138+00:00",
+  "captured_end": "2026-10-23T14:58:55.176961+00:00",
+  "files_stable": true,
+  "works": [
+    {
+      "id": "2f5e0af8-ffb6-4f67-94f8-053d40b0e49c",
+      "state": 0,
+      "run_attempt_count": 0,
+      "generation": 0,
+      "schedule_requested_at": 1792747882219,
+      "last_enqueue_time": 1792747765991,
+      "stop_reason": -256,
+      "period_count": 3
+    },
+    {
+      "id": "38504f4c-fde7-482a-ab9c-5506fc98b000",
+      "state": 0,
+      "run_attempt_count": 4,
+      "generation": 0,
+      "schedule_requested_at": 1792747882219,
+      "last_enqueue_time": 1792747809304,
+      "stop_reason": -256,
+      "period_count": 0
+    },
+    {
+      "id": "727cf2a3-6005-4291-9d5d-091be8a88bc3",
+      "state": 0,
+      "run_attempt_count": 1,
+      "generation": 0,
+      "schedule_requested_at": 1792747890509,
+      "last_enqueue_time": 1792747890483,
+      "stop_reason": -256,
+      "period_count": 0
+    }
+  ],
+  "dependencies": [
+    {
+      "work_spec_id": "38504f4c-fde7-482a-ab9c-5506fc98b000",
+      "prerequisite_id": "9bb7ea3d-998e-4839-a60a-6c1eeb391a48"
+    },
+    {
+      "work_spec_id": "727cf2a3-6005-4291-9d5d-091be8a88bc3",
+      "prerequisite_id": "17d90ec5-cee9-4a4d-9fc5-103ccf857e55"
+    }
+  ],
+  "job_lookups": {
+    "385": "unknown(u0a648/jid385)\r\n",
+    "386": "unknown(u0a648/jid386)\r\n",
+    "388": "unknown(u0a648/jid388)\r\n"
+  },
+  "snapshot_kind": "STABLE_FILESET_WITH_WAL_SQLITE_LOGICAL_BACKUP",
+  "app_wide_atomicity": "NOT_PROVEN",
+  "original_io_cause": "UNKNOWN",
+  "phone_data_exported_to_git": false
+}

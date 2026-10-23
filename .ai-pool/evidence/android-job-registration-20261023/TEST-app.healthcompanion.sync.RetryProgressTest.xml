@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.RetryProgressTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-23T15:18:48.443Z" hostname="MSI" time="1.358">
+  <properties/>
+  <testcase name="failureAtFirstBatchAfter2400RetainsItsExactPlanAndResumeFrontier" classname="app.healthcompanion.sync.RetryProgressTest" time="1.079"/>
+  <testcase name="duplicateBatchThenFailureResumesAtNextBatchAcrossClientRestart" classname="app.healthcompanion.sync.RetryProgressTest" time="0.084"/>
+  <testcase name="allDuplicateBatchVerifiesEveryKeyAndSavesProgress" classname="app.healthcompanion.sync.RetryProgressTest" time="0.071"/>
+  <testcase name="cancellationSurfacingAsIoDoesNotRetryOrAdvanceCheckpoint" classname="app.healthcompanion.sync.RetryProgressTest" time="0.017"/>
+  <testcase name="checkpointCommitFailureHasDistinctStageAndRetainsSafeReplay" classname="app.healthcompanion.sync.RetryProgressTest" time="0.024"/>
+  <testcase name="lostResponseReplaysIdenticalKeysAndThenAcceptsDuplicateReceipt" classname="app.healthcompanion.sync.RetryProgressTest" time="0.067"/>
+  <testcase name="missingWrongOwnerAndRejectedRevisionNeverAdvanceCheckpoint" classname="app.healthcompanion.sync.RetryProgressTest" time="0.012"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

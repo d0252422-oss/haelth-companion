@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.SyncRuntimeCursorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-23T15:18:49.971Z" hostname="MSI" time="0.083">
+  <properties/>
+  <testcase name="startingOrSuccessfullyFinishingAnotherRunClearsStaleFailureDiagnostics" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.015"/>
+  <testcase name="specializedFailuresAreNotCollapsedIntoGenericIoOrCancellation" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.005"/>
+  <testcase name="oldStatusAcknowledgementCannotRemoveNewerFailureAndLogoutKeepsCoverage" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.005"/>
+  <testcase name="completionUsesWindowEndInsteadOfWallClockAndKeepsOwnersSeparate" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.001"/>
+  <testcase name="oldBackfillCompletionCannotRegressNewerIncrementalCursor" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.003"/>
+  <testcase name="diagnosticsKeepStageAndOwnerButNeverExceptionMessagesOrUnknownClassNames" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.053"/>
+  <testcase name="partialRetryDoesNotAdvanceCompletedCursor" classname="app.healthcompanion.sync.SyncRuntimeCursorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

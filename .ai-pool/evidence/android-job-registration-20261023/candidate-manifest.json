@@ -1,0 +1,99 @@
+{
+  "phase": "BETA33_BACKGROUND_SYNC_FINAL_ACCEPTANCE",
+  "task": "REPAIR_C_CONTINUATION_AND_JOB_REGISTRATION",
+  "product_commit": "e7f8c8e2742289da5f4f53e5cda63ec6e0b4143a",
+  "baseline_android": "3770b9b89e436a59a3722476ca293570864ccfdf",
+  "baseline_backend_evidence": "39f5a25d102de925f0cbaf5bd87c7c6cdaaa2557",
+  "version": "0.1.0-beta.34-debug",
+  "package": "app.healthcompanion.sync.beta.debug",
+  "edge_unchanged": 64,
+  "source_sha256": {
+    "android-helper/app/build.gradle.kts": "7f1540bc420517d91fc485111389dd2e96fc31045d0455a1c677a7cb7b635993",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/BackgroundHealthSync.kt": "9f0489796062fd123a947787feb54c363827b8c579522f4d7c0aa8ecc4e8312f",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/IngestionClient.kt": "99a18fdba65ea8fc192d877178534d1303f02c6c639ad4569bd6c90e10ddaeb6",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/SyncRecoveryReceiver.kt": "3bffbc303216fe5bd1af98b2153e98b781b4cf9846789929352978558fe447bc",
+    "android-helper/app/src/main/java/app/healthcompanion/sync/SyncWorkRegistration.kt": "e7f0fc1076c1cb5f42d5baeb34ffc5dee9258de9350ff3e5ef9b3443f35a569e",
+    "android-helper/app/src/test/java/app/healthcompanion/sync/RetryProgressTest.kt": "86c61a42de96c3a7a628aa852426c97094f612008f48dab03c63044989c77cee",
+    "android-helper/app/src/test/java/app/healthcompanion/sync/SyncRuntimeCursorTest.kt": "1f7a764da6dba30908695de5a695bc1e1ed5af345f82e9a4466d6948d208fbf5",
+    "android-helper/app/src/test/java/app/healthcompanion/sync/SyncRegistrationRecoveryTest.kt": "6146e3fd2b0facdc6c9473cdc51fb6141e2fb83adfaa43a78dabb37d905581c3"
+  },
+  "apk_sha256": "a829b3c0ad2bf3639ae8ba26f43116c0a7e45bc5c86b6c8c9891979c81432424",
+  "signer_sha256": "435ef9651e6b6c3141ecfc3370b57e15e93d3ecf3c2a722ded8b6aa875424300",
+  "tests": [
+    {
+      "name": "app.healthcompanion.sync.AutonomousSyncRecoveryTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-23T15:18:35.955Z"
+    },
+    {
+      "name": "app.healthcompanion.sync.IngestionClientTimeoutTest",
+      "tests": "15",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-23T15:18:37.541Z"
+    },
+    {
+      "name": "app.healthcompanion.sync.RetryProgressTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-23T15:18:48.443Z"
+    },
+    {
+      "name": "app.healthcompanion.sync.SyncRegistrationRecoveryTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-23T15:18:49.833Z"
+    },
+    {
+      "name": "app.healthcompanion.sync.SyncRuntimeCursorTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-23T15:18:49.971Z"
+    }
+  ],
+  "local_tests_passed": 52,
+  "local_tests_failed": 0,
+  "new_test_cases": 13,
+  "lint_errors": 0,
+  "lint_warnings": 68,
+  "compile_attempt_history": "D:/Dev/Evidence/beta33-repair-c-20261023; initial missing public Future API dependency and missing offline Android variant resolved, no failing product tests hidden",
+  "original_io_cause": "UNKNOWN",
+  "original_io_stage": "UPLOAD_SUBSTAGE_UNKNOWN",
+  "pre_repair_jobs_confirmed_missing": [
+    385,
+    386,
+    388
+  ],
+  "pre_repair_incremental_checkpoint": 2400,
+  "pre_repair_backfill_checkpoint": 13600,
+  "expected_missing_tail": 20,
+  "expected_stale_tail": 19,
+  "ci": "SUCCESS",
+  "controlled_recovery": "NOT_RUN_DEVICE_DISCONNECTED",
+  "natural_whole_run": "PENDING",
+  "historical_complete": "NO_HEART_RATE_EOF_NOT_PROVEN",
+  "production_operations": 0,
+  "created_at": "2026-10-23T15:22:02.344562+00:00",
+  "ci_run": 39977468638,
+  "ci_url": "https://github.com/d0252422-oss/haelth-companion/actions/runs/39977468638",
+  "merge_commit": "64c66d52df7d273bccb8da64c52e74c141114571",
+  "pull_request": "https://github.com/d0252422-oss/haelth-companion/pull/5",
+  "merged_at": "2026-10-23T15:26:08Z",
+  "device_access_at_install": "BLOCKED_DEVICE_DISCONNECTED",
+  "apk_installed": false,
+  "install_result": "adb:device not found;adb devices -l independently returned empty",
+  "checkpoint_before_after": {
+    "before": 2400,
+    "after": null,
+    "same_original_plan_retained_before_install": true
+  },
+  "missing20_status": "STILL_MISSING_AS_OF_PRE_INSTALL_SQL",
+  "stale19_status": "STILL_STALE_AS_OF_PRE_INSTALL_SQL",
+  "one_required_human_action": "Reconnect original phone;unlock and allow existing computer debugging prompt if shown;do not open App or press sync",
+  "last_saved_at": "2026-10-23T15:27:52.576138+00:00"
+}
