@@ -30,6 +30,7 @@ class SyncRecoveryReceiver : BroadcastReceiver() {
                         BuildConfig.GOOGLE_WEB_CLIENT_ID, BuildConfig.API_BASE_URL,
                     )
                     val session = auth.restore() ?: return@withTimeout
+                    if (!SyncRuntimeStateStore(app).automaticSyncAllowed(BackgroundWorkNames.userKey(session.canonicalUserId))) return@withTimeout
                     val health = HealthConnectGateway(app)
                     if (health.availability == HealthConnectClient.SDK_AVAILABLE &&
                         health.hasAnyPermission() &&

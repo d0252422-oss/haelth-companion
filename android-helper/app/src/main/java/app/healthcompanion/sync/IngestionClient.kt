@@ -11,6 +11,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Closeable
@@ -26,6 +27,7 @@ data class UploadSummary(
     val recordsUploaded: Int,
     val reconciliationPending: Boolean = false,
     val persistedDomainCounts: Map<String, Int> = emptyMap(),
+    val continuationPending: Boolean = false,
 )
 class AuthenticationRequired : IOException("AUTHENTICATION_REQUIRED")
 class OversizedBatchRejected : IOException("OVERSIZED_BATCH_REJECTED")
@@ -109,6 +111,7 @@ internal class IngestionClient(
         records: List<CanonicalHealthRecord>,
         checkpoints: CheckpointRepository,
         diagnostic: SyncTriggerDiagnostic? = null,
+        budget: UploadWorkBudget? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): UploadSummary {
         requireConfigured()
@@ -117,11 +120,18 @@ internal class IngestionClient(
         val plan = BatchPlanner.streamingPlan(session.canonicalUserId, records, verifiedCheckpoint)
         var nextRecordIndex = plan.nextRecordIndex
         var completedBatches = plan.nextBatchIndex
+        var completedHere = 0
         // A changed dataset can resume by ordering frontier, but that frontier is
         // not evidence for newly inserted/edited records before it.
         confirmedDomainCounts = if (plan.datasetChanged) emptyMap()
             else plan.orderedRecords.take(nextRecordIndex).groupingBy { it.domain }.eachCount()
         while (nextRecordIndex < plan.orderedRecords.size) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (budget?.exhausted(completedHere) == true) {
+                return UploadSummary(completedBatches,
+                    BatchPlanner.estimatedTotalBatches(completedBatches, plan.orderedRecords.size - nextRecordIndex),
+                    nextRecordIndex, persistedDomainCounts = confirmedDomainCounts, continuationPending = true)
+            }
             val batch = BatchPlanner.nextStreamingBatch(session.canonicalUserId, plan.orderedRecords, nextRecordIndex)
                 ?: break
             postBatch(session, batch.body, diagnostic)
@@ -132,6 +142,7 @@ internal class IngestionClient(
             confirmedDomainCounts = newCounts
             nextRecordIndex = batch.nextRecordIndex
             completedBatches += 1
+            completedHere += 1
             checkpoints.save(SyncCheckpoint(
                 planFingerprint = plan.fingerprint,
                 nextBatchIndex = completedBatches,
@@ -212,9 +223,9 @@ internal class IngestionClient(
         return result
     }
 
-    suspend fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String, diagnostic: SyncTriggerDiagnostic? = null) {
+    suspend fun reportStatus(session: BackendSession, records: List<CanonicalHealthRecord>, result: String, permissionState: String, diagnostic: SyncTriggerDiagnostic? = null, availableDomains: Set<String>? = null, reportedAt: String? = null) {
         requireConfigured()
-        val now = java.time.Instant.now().toString()
+        val now = reportedAt ?: java.time.Instant.now().toString()
         val body = JSONObject()
             .put("canonical_user_id", session.canonicalUserId)
             .put("platform", "android")
@@ -223,7 +234,7 @@ internal class IngestionClient(
             .put("last_attempt_at", now)
             .put("last_success_at", if (result == "SYNCED") now else JSONObject.NULL)
             .put("last_result", result)
-            .put("available_domains", JSONArray(records.map { it.domain }.distinct()))
+            .put("available_domains", JSONArray((availableDomains ?: records.map { it.domain }.toSet()).sorted()))
             .put("permission_state_if_known", permissionState)
             .apply { diagnostic?.let { put("sync_diagnostic", it.request(1)) } }
             .toString()

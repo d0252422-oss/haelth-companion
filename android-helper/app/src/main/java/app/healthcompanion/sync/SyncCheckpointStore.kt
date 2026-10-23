@@ -1,6 +1,7 @@
 package app.healthcompanion.sync
 
 import android.content.Context
+import android.content.SharedPreferences
 
 data class SyncCheckpoint(
     val planFingerprint: String,
@@ -25,24 +26,28 @@ internal object SyncStateNamespace {
         "${modePrefix(userId, mode)}_$name"
 }
 
-class SyncCheckpointStore(
-    context: Context,
-    userId: String,
+class SyncCheckpointStore internal constructor(
+    private val preferences: SharedPreferences,
+    private val userId: String,
     private val mode: BackgroundSyncMode,
+    private val segment: String? = null,
 ) : CheckpointRepository {
-    private val preferences = context.getSharedPreferences("sync_checkpoint", Context.MODE_PRIVATE)
-    private val fingerprintKey = SyncStateNamespace.modeKey(userId, mode, PLAN_FINGERPRINT)
-    private val batchIndexKey = SyncStateNamespace.modeKey(userId, mode, NEXT_BATCH_INDEX)
-    private val recordIndexKey = SyncStateNamespace.modeKey(userId, mode, NEXT_RECORD_INDEX)
-    private val lastRecordKey = SyncStateNamespace.modeKey(userId, mode, LAST_RECORD_KEY)
-    private val reconciliationPassKey = SyncStateNamespace.modeKey(userId, mode, RECONCILIATION_PASS)
-    private val datasetChangedKey = SyncStateNamespace.modeKey(userId, mode, DATASET_CHANGED)
-    private val receiptVersionKey = SyncStateNamespace.modeKey(userId, mode, RECEIPT_VERSION)
+    constructor(context: Context, userId: String, mode: BackgroundSyncMode, segment: String? = null) :
+        this(context.getSharedPreferences("sync_checkpoint", Context.MODE_PRIVATE), userId, mode, segment)
+    private fun scoped(name: String) = SyncStateNamespace.modeKey(userId, mode,
+        if (segment == null) name else "page_${CanonicalIdentity.sha256(segment).take(24)}_$name")
+    private val fingerprintKey = scoped(PLAN_FINGERPRINT)
+    private val batchIndexKey = scoped(NEXT_BATCH_INDEX)
+    private val recordIndexKey = scoped(NEXT_RECORD_INDEX)
+    private val lastRecordKey = scoped(LAST_RECORD_KEY)
+    private val reconciliationPassKey = scoped(RECONCILIATION_PASS)
+    private val datasetChangedKey = scoped(DATASET_CHANGED)
+    private val receiptVersionKey = scoped(RECEIPT_VERSION)
 
     init {
         // beta.16 stored one global cursor. It belongs to the outstanding history
         // backfill and must not be claimed or erased by an incremental worker.
-        if (mode == BackgroundSyncMode.BACKFILL) migrateLegacyBackfillCheckpoint()
+        if (segment == null && mode == BackgroundSyncMode.BACKFILL) migrateLegacyBackfillCheckpoint()
     }
 
     override fun load(): SyncCheckpoint? {
@@ -59,7 +64,7 @@ class SyncCheckpointStore(
     }
 
     override fun save(checkpoint: SyncCheckpoint) {
-        preferences.edit().putString(fingerprintKey, checkpoint.planFingerprint)
+        val committed = preferences.edit().putString(fingerprintKey, checkpoint.planFingerprint)
             .putInt(batchIndexKey, checkpoint.nextBatchIndex)
             .putInt(recordIndexKey, checkpoint.nextRecordIndex)
             .putInt(reconciliationPassKey, checkpoint.reconciliationPass)
@@ -69,11 +74,12 @@ class SyncCheckpointStore(
                 checkpoint.lastRecordKey?.let { editor.putString(lastRecordKey, it) }
                     ?: editor.remove(lastRecordKey)
             }
-            .apply()
+            .commit()
+        if (!committed) throw CheckpointPersistenceFailed()
     }
 
     override fun clear() {
-        preferences.edit()
+        val committed = preferences.edit()
             .remove(fingerprintKey)
             .remove(batchIndexKey)
             .remove(recordIndexKey)
@@ -81,7 +87,8 @@ class SyncCheckpointStore(
             .remove(reconciliationPassKey)
             .remove(datasetChangedKey)
             .remove(receiptVersionKey)
-            .apply()
+            .commit()
+        if (!committed) throw CheckpointPersistenceFailed()
     }
 
     private fun migrateLegacyBackfillCheckpoint() {

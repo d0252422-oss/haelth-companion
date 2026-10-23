@@ -87,10 +87,7 @@ class NativeGoogleAuth(
         requireConfigured()
         supabase.auth.awaitInitialization()
         if (supabase.auth.currentSessionOrNull() == null) return null
-        return runCatching { resolveCanonicalIdentity() }.recoverCatching {
-            supabase.auth.refreshCurrentSession()
-            resolveCanonicalIdentity()
-        }.getOrNull()
+        return NativeSessionRecovery.restore(::resolveCanonicalIdentity) { supabase.auth.refreshCurrentSession() }
     }
 
     suspend fun refresh(): NativeAuthSession {
@@ -117,7 +114,7 @@ class NativeGoogleAuth(
         val token = currentAccessToken()
         val connection = connection("$betaApiBaseUrl/v1/mobile/native-auth/session", "GET", token)
         connection.useResponse { status, body ->
-            if (status !in 200..299) throw NativeAuthRejected()
+            NativeSessionRecovery.checkHttp(status)
             parseNativeSession(JSONObject(body), token)
         }
     }

@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.await
 import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -30,6 +31,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.time.Instant
 import java.io.IOException
+import org.json.JSONObject
+import kotlinx.coroutines.isActive
 import java.util.concurrent.TimeUnit
 
 class SyncRuntimeStateStore internal constructor(
@@ -41,7 +44,7 @@ class SyncRuntimeStateStore internal constructor(
         context.getSharedPreferences("sync_status", Context.MODE_PRIVATE),
     )
 
-    fun markHistoryPending(userId: String) = preferences.edit().putBoolean(key(userId, HISTORY_PENDING), true).apply()
+    fun markHistoryPending(userId: String) { if (!preferences.edit().putBoolean(key(userId, HISTORY_PENDING), true).commit()) throw CheckpointPersistenceFailed() }
     fun periodicSchedulerHealth(userId: String): String? = preferences.getString(key(userId, PERIODIC_SCHEDULER_HEALTH), null)
     fun lastPeriodicRepairAt(userId: String): Long = preferences.getLong(key(userId, PERIODIC_REPAIR_AT), 0L)
     fun recordPeriodicSchedulerHealth(userId: String, health: String, repairAtMs: Long? = null) {
@@ -49,7 +52,7 @@ class SyncRuntimeStateStore internal constructor(
         repairAtMs?.let { editor.putLong(key(userId, PERIODIC_REPAIR_AT), it) }
         editor.apply()
     }
-    fun markHistoryComplete(userId: String) = preferences.edit().putBoolean(key(userId, HISTORY_PENDING), false).apply()
+    fun markHistoryComplete(userId: String) { if (!preferences.edit().putBoolean(key(userId, HISTORY_PENDING), false).commit()) throw CheckpointPersistenceFailed() }
     fun isHistoryPending(userId: String): Boolean = preferences.getBoolean(key(userId, HISTORY_PENDING), false)
     fun saveBackgroundResult(userId: String, result: String) = preferences.edit()
         .putString(key(userId, BACKGROUND_RESULT), result)
@@ -139,8 +142,23 @@ class SyncRuntimeStateStore internal constructor(
             editor.putString(key(userId, BACKGROUND_FAILURE_REASON), diagnostic.reason)
                 .putString(key(userId, BACKGROUND_EXCEPTION_CLASS), diagnostic.exceptionClass)
         }
-        editor.apply()
+        if (result == "SUCCESS") editor.remove(key(userId, "pending_status"))
+        else editor.putString(key(userId, "pending_status"), JSONObject().put("result", result).put("at", now)
+            .put("diagnostic", preferences.getString(key(userId, "run_diagnostic"), null)?.let(::JSONObject)).toString())
+        if (!editor.commit()) throw CheckpointPersistenceFailed()
     }
+    internal fun bindRunDiagnostic(userId: String, diagnostic: SyncTriggerDiagnostic) {
+        if (!preferences.edit().putString(key(userId, "run_diagnostic"), diagnostic.request(1).toString()).commit()) throw CheckpointPersistenceFailed()
+    }
+    internal fun pendingStatus(userId: String): String? = preferences.getString(key(userId, "pending_status"), null)
+    internal fun acknowledgeStatus(userId: String, expected: String) {
+        if (pendingStatus(userId) == expected && !preferences.edit().remove(key(userId, "pending_status")).commit()) throw CheckpointPersistenceFailed()
+    }
+    fun setAutomaticSyncEnabled(userId: String, enabled: Boolean) {
+        if (!preferences.edit().putBoolean(key(userId, "automatic_sync_disabled"), !enabled).commit()) throw CheckpointPersistenceFailed()
+    }
+    internal fun automaticSyncAllowed(userKey: String): Boolean =
+        !preferences.getBoolean("${userKey}_automatic_sync_disabled", false)
     fun recordObserved(
         userId: String,
         workId: String,
@@ -184,7 +202,7 @@ class SyncRuntimeStateStore internal constructor(
         // windows share this coverage cursor. An older backfill finishing later
         // must not undo a newer, already durable incremental completion.
         val completedThrough = maxOf(lastSuccessfulSync(userId) ?: value, value)
-        contextPreferences.edit().putString(key(userId, LAST_SUCCESS), completedThrough.toString()).apply()
+        if (!contextPreferences.edit().putString(key(userId, LAST_SUCCESS), completedThrough.toString()).commit()) throw CheckpointPersistenceFailed()
     }
     fun backgroundSummary(userId: String): Pair<String?, Instant?> =
         preferences.getString(key(userId, BACKGROUND_RESULT), null) to
@@ -225,11 +243,30 @@ class SyncRuntimeStateStore internal constructor(
         preferences.getString(scopedKey, null)?.let { saved ->
             runCatching { Instant.parse(saved) }.getOrNull()?.let { return it }
         }
-        preferences.edit().putString(scopedKey, proposed.toString()).apply()
+        if (!preferences.edit().putString(scopedKey, proposed.toString()).commit()) throw CheckpointPersistenceFailed()
         return proposed
     }
-    fun clearActiveWindow(userId: String, mode: BackgroundSyncMode) =
-        preferences.edit().remove(modeKey(userId, mode, ACTIVE_WINDOW_END)).apply()
+    fun activeWindowStart(userId: String, mode: BackgroundSyncMode, proposed: Instant): Instant {
+        val name = modeKey(userId, mode, "active_window_start")
+        preferences.getString(name, null)?.let { return Instant.parse(it) }
+        if (!preferences.edit().putString(name, proposed.toString()).commit()) throw CheckpointPersistenceFailed()
+        return proposed
+    }
+    fun clearActiveWindow(userId: String, mode: BackgroundSyncMode) {
+        if (!preferences.edit().remove(modeKey(userId, mode, ACTIVE_WINDOW_END))
+                .remove(modeKey(userId, mode, "active_window_start")).commit()) throw CheckpointPersistenceFailed()
+    }
+    fun recordSessionFailure(userKey: String, result: String, error: Throwable? = null) {
+        require(userKey.matches(Regex("[a-f0-9]{16}")))
+        val now = Instant.now().toString()
+        val diagnostic = error?.let(SyncFailureDiagnostic::from)
+        if (!preferences.edit().putString("${userKey}_background_result", result)
+                .putString("${userKey}_background_result_at", now)
+                .putString("${userKey}_background_terminal_at", now)
+                .putString("${userKey}_background_terminal_stage", "SESSION")
+                .putString("${userKey}_background_failure_reason", diagnostic?.reason)
+                .putString("${userKey}_background_exception_class", diagnostic?.exceptionClass).commit()) throw CheckpointPersistenceFailed()
+    }
 
     private fun migrateLegacyBackfillWindow(userId: String, mode: BackgroundSyncMode) {
         if (mode != BackgroundSyncMode.BACKFILL) return
@@ -369,8 +406,12 @@ object BackgroundSyncScheduler {
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
         val immediatePolicy = if (replaceImmediate) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
-        manager.beginUniqueWork(BackgroundWorkNames.immediate(userId), immediatePolicy, immediate).enqueue()
-        SyncRuntimeStateStore(context).recordEnqueued(userId, immediate.id.toString())
+        withContext(Dispatchers.IO) {
+            manager.beginUniqueWork(BackgroundWorkNames.immediate(userId), immediatePolicy, immediate).enqueue().await()
+        }
+        val actual = selectCurrent(queryWork(manager, BackgroundWorkNames.immediate(userId)), null)
+            ?: throw IOException("SCHEDULE_UNCONFIRMED")
+        SyncRuntimeStateStore(context).recordEnqueued(userId, actual.id.toString())
         reconcilePeriodic(context, manager, userId, constraints, replacePeriodic)
         return BackgroundRuntimeStatus.ENQUEUED
     }
@@ -482,6 +523,28 @@ object BackgroundSyncScheduler {
         manager.enqueueUniqueWork(BackgroundWorkNames.backfill(userId), ExistingWorkPolicy.KEEP, request)
     }
 
+    /** Persist the next slice before yielding. Existing failed leaves must not poison it. */
+    suspend fun enqueueContinuation(context: Context, userId: String, mode: BackgroundSyncMode,
+        parentId: String, origin: SyncTriggerSource, flowId: String) {
+        val manager = WorkManager.getInstance(context)
+        val name = when (mode) {
+            BackgroundSyncMode.INCREMENTAL -> BackgroundWorkNames.immediate(userId)
+            BackgroundSyncMode.BACKFILL -> BackgroundWorkNames.backfill(userId)
+            BackgroundSyncMode.P0_RECOVERY -> BackgroundWorkNames.p0Recovery(userId)
+        }
+        if (queryWork(manager, name).any { it.id.toString() != parentId && it.state in ACTIVE_STATES }) return
+        val request = OneTimeWorkRequestBuilder<BackgroundHealthSyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInitialDelay(30, TimeUnit.SECONDS)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .setInputData(workDataOf(WORK_MODE to mode.name, WORK_USER_KEY to BackgroundWorkNames.userKey(userId),
+                WORK_TRIGGER_SOURCE to origin.name, "parent_worker_id" to parentId, "parent_flow_id" to flowId))
+            .build()
+        withContext(Dispatchers.IO) {
+            manager.enqueueUniqueWork(name, ExistingWorkPolicy.APPEND_OR_REPLACE, request).await()
+        }
+    }
+
     /** One bounded, idempotent Beta recovery for the cursor gap found on beta.20. */
     suspend fun enqueueP0Recovery(context: Context, userId: String) {
         val manager = WorkManager.getInstance(context)
@@ -577,9 +640,8 @@ object BackgroundSyncScheduler {
             queryWork(manager, BackgroundWorkNames.periodic(userId)).filter { it.state == WorkInfo.State.RUNNING } +
             queryWork(manager, BackgroundWorkNames.p0Recovery(userId)).filter { it.state in ACTIVE_STATES }
 
-    private suspend fun queryWork(manager: WorkManager, name: String): List<WorkInfo> = runCatching {
+    private suspend fun queryWork(manager: WorkManager, name: String): List<WorkInfo> =
         withTimeout(WORK_QUERY_TIMEOUT_MS) { manager.getWorkInfosForUniqueWorkFlow(name).first() }
-    }.getOrDefault(emptyList())
 
     private fun selectCurrent(infos: List<WorkInfo>, preferredId: String?): WorkInfo? {
         val preferred = infos.firstOrNull { it.id.toString() == preferredId }
@@ -681,6 +743,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
             BuildConfig.API_BASE_URL,
         )
         val expectedUserKey = inputData.getString(BackgroundSyncScheduler.WORK_USER_KEY) ?: return Result.failure()
+        if (!state.automaticSyncAllowed(expectedUserKey)) return Result.failure()
         setProgress(workDataOf(
             BackgroundSyncScheduler.PROGRESS_STAGE to "SESSION",
             BackgroundSyncScheduler.PROGRESS_AT_EPOCH_MS to System.currentTimeMillis(),
@@ -694,29 +757,45 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 uploadStarted = mode != BackgroundSyncMode.INCREMENTAL,
                 checkpointIndex = 0,
             )
+            state.recordSessionFailure(expectedUserKey, "RETRY_PENDING")
             return retryOrFailWithoutSession(maxAttempts)
-        } ?: return Result.failure()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: NativeAuthRejected) {
+            state.recordSessionFailure(expectedUserKey, "AUTH_REQUIRED", error)
+            return Result.failure()
+        } catch (error: Exception) {
+            val retry = BackgroundContinuationPolicy.shouldRetry(runAttemptCount, MAX_RETRY_ATTEMPTS)
+            state.recordSessionFailure(expectedUserKey, if (retry) "RETRY_PENDING" else "FAILED", error)
+            return retryOrFailWithoutSession()
+        } ?: run {
+            state.recordSessionFailure(expectedUserKey, "AUTH_REQUIRED")
+            return Result.failure()
+        }
         if (BackgroundWorkNames.userKey(session.canonicalUserId) != expectedUserKey) {
             return Result.failure()
         }
-        val origin = BackgroundSyncScheduler.resolveTrigger(applicationContext, session.canonicalUserId,
+        val owner = session.canonicalUserId
+        val origin = BackgroundSyncScheduler.resolveTrigger(applicationContext, owner,
             id.toString(), SyncTriggerSource.fromWorkInput(inputData.getString(BackgroundSyncScheduler.WORK_TRIGGER_SOURCE)))
         val diagnostic = SyncTriggerDiagnostic(origin, workerId = id.toString(),
             startedAt = workerStartedAt, workerAttempt = runAttemptCount)
         // An immediate worker can revive an orphaned periodic schedule without
         // coupling either request to the other's terminal state.
         if (mode == BackgroundSyncMode.INCREMENTAL) {
-            BackgroundSyncScheduler.reconcilePeriodicAfterWorkerStart(applicationContext, session.canonicalUserId)
+            BackgroundSyncScheduler.reconcilePeriodicAfterWorkerStart(applicationContext, owner)
         }
-        val checkpoints = SyncCheckpointStore(applicationContext, session.canonicalUserId, mode)
+        var checkpoints = SyncCheckpointStore(applicationContext, owner, mode)
         if (!AppSyncSingleFlight.gate.tryStart()) {
             // Another WorkManager request owns the sync. Do not claim RUNNING or
             // overwrite its durable status; WorkManager will retry this contender.
-            return Result.retry()
+            return retryOrFail(BackgroundContinuationPolicy.BACKFILL_MAX_CONTINUATION_ATTEMPTS)
         }
         return try {
-            state.recordStarted(session.canonicalUserId, id.toString(), runAttemptCount)
-            reportProgress(state, session.canonicalUserId, "PERMISSION")
+            flushPendingStatus(state, owner, session)
+            state.recordStarted(owner, id.toString(), runAttemptCount)
+            state.bindRunDiagnostic(owner, diagnostic)
+            reportProgress(state, owner, "PERMISSION")
             val permissionReady = try {
                 withTimeout(PERMISSION_TIMEOUT_MS) {
                     health.availability == androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE &&
@@ -730,11 +809,11 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     checkpoint?.nextBatchIndex ?: 0,
                     checkpoint?.reconciliationPass ?: 0,
                 )
-                state.recordTerminal(session.canonicalUserId, "RETRY_PENDING", error)
+                state.recordTerminal(owner, "RETRY_PENDING", error)
                 return retryOrFail(maxAttempts)
             }
             if (!permissionReady) {
-                state.recordTerminal(session.canonicalUserId, "PERMISSION_REQUIRED")
+                state.recordTerminal(owner, "PERMISSION_REQUIRED")
                 return Result.failure()
             }
             withTimeout(BACKGROUND_DEADLINE_MS) {
@@ -742,87 +821,111 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                     inputData.getString(BackgroundSyncScheduler.WORK_FROZEN_END)
                         ?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.now()
                 } else Instant.now()
-                val end = state.activeWindowEnd(session.canonicalUserId, mode, proposedEnd)
-                val lastSuccess = state.lastSuccessfulSync(session.canonicalUserId)
-                val window = when (mode) {
+                val end = state.activeWindowEnd(owner, mode, proposedEnd)
+                val lastSuccess = state.lastSuccessfulSync(owner)
+                val proposedWindow = when (mode) {
                     BackgroundSyncMode.BACKFILL -> SyncWindowPolicy.backfill(end)
                     BackgroundSyncMode.P0_RECOVERY -> SyncWindowPolicy.p0Recovery(end)
                     BackgroundSyncMode.INCREMENTAL ->
                         SyncWindowPolicy.incremental(end, lastSuccess)
                 }
-                reportProgress(state, session.canonicalUserId, "HEALTH_READ")
-                val completeness = SyncCompletenessStore(applicationContext, session.canonicalUserId)
-                completeness.begin(id.toString(), window, HealthReadDomainPolicy.forMode(mode) ?: SyncCompletenessPolicy.SUPPORTED_DOMAINS)
-                val read = withTimeout(HEALTH_READ_TIMEOUT_MS) {
-                    health.readBounded(
-                        window.start, window.end, HealthReadDomainPolicy.forMode(mode),
-                        startForDomain = { domain ->
-                            if (mode == BackgroundSyncMode.INCREMENTAL && lastSuccess != null) LateArrivalReplayPolicy.readStart(window, domain)
-                            else window.start
-                        },
-                    )
+                val window = proposedWindow.copy(start = state.activeWindowStart(owner, mode, proposedWindow.start))
+                val pages = PendingSyncPageStore(java.io.File(applicationContext.noBackupFilesDir, "pending-sync"),
+                    BuildConfig.API_BASE_URL, owner, mode)
+                var pending = pages.load(window) ?: PendingSyncPage(window)
+                reportProgress(state, owner, "HEALTH_READ")
+                val completeness = SyncCompletenessStore(applicationContext, owner)
+                if (pending.read == null && !pending.complete) {
+                    val read = withTimeout(HEALTH_READ_TIMEOUT_MS) {
+                        health.readBounded(window.start, window.end,
+                            pending.remaining ?: HealthReadDomainPolicy.forMode(mode),
+                            startForDomain = { domain -> pending.starts[domain]?.let(Instant::parse)
+                                ?: if (mode == BackgroundSyncMode.INCREMENTAL && lastSuccess != null) LateArrivalReplayPolicy.readStart(window, domain) else window.start },
+                            resumeTokens = pending.cursors,
+                            maxPagesPerDomain = if (pending.page == 0 && checkpoints.load() != null) HealthConnectGateway.MAX_PAGES_PER_DOMAIN else 2)
+                    }
+                    if (read.domainTraces.isEmpty()) throw SecurityException("PERMISSION_REQUIRED")
+                    pending = pending.copy(read = read, starts = pending.starts + read.domainRangeStarts)
+                    pages.save(pending) // durable pending data BEFORE any source cursor can advance
                 }
-                state.recordReadSummary(session.canonicalUserId, read.records)
+                val read = pending.read ?: pending.summary()
+                completeness.begin(id.toString(), window, read.domainTraces.keys + pending.totals.keys)
+                checkpoints = SyncCheckpointStore(applicationContext, owner, mode, pending.segment)
+                state.recordReadSummary(owner, read.records)
                 // Source lastModifiedTime is not evidence that SQL received a record.
                 // Replay this bounded read by stable identity and require commit receipts.
                 val recordsToUpload = read.records
                 completeness.save(id.toString(), window, read)
                 val client = IngestionClient(BuildConfig.API_BASE_URL, onHttpResult = { result ->
-                    state.recordHttpResult(session.canonicalUserId, result)
+                    state.recordHttpResult(owner, result)
                 }).also { ingestionClient = it }
-                reportProgress(state, session.canonicalUserId, "UPLOAD", 0)
+                reportProgress(state, owner, "UPLOAD", 0)
                 uploadStarted = true
-                val uploadSummary = try {
+                val budget = UploadWorkBudget()
+                val uploadSummary = if (pending.complete) UploadSummary(0, 0, 0, persistedDomainCounts = pending.totals.mapValues { it.value.mappedCount }) else try {
                     withTimeout(UPLOAD_TIMEOUT_MS) {
                         withContext(Dispatchers.IO) {
-                            client.upload(session, recordsToUpload, checkpoints, diagnostic) { done, _ ->
-                                state.recordProgress(session.canonicalUserId, "UPLOAD", done)
+                            client.upload(session, recordsToUpload, checkpoints, diagnostic, budget) { done, _ ->
+                                state.recordProgress(owner, "UPLOAD", done)
                                 completeness.save(id.toString(), window, read, client.confirmedDomainCounts)
                             }
                         }
                     }
                 } catch (_: AuthenticationRequired) {
-                    reportProgress(state, session.canonicalUserId, "SESSION_REFRESH")
-                    session = withTimeout(SESSION_TIMEOUT_MS) { auth.refresh() }
-                    reportProgress(state, session.canonicalUserId, "UPLOAD")
+                    reportProgress(state, owner, "SESSION_REFRESH")
+                    val refreshed = withTimeout(SESSION_TIMEOUT_MS) { auth.refresh() }
+                    NativeSessionRecovery.requireSameOwner(owner, refreshed.canonicalUserId)
+                    session = refreshed
+                    reportProgress(state, owner, "UPLOAD")
                     withTimeout(UPLOAD_TIMEOUT_MS) {
-                        withContext(Dispatchers.IO) { client.upload(session, recordsToUpload, checkpoints, diagnostic) }
+                        withContext(Dispatchers.IO) { client.upload(session, recordsToUpload, checkpoints, diagnostic, budget) }
                     }
                 }
-                reportProgress(state, session.canonicalUserId, "CHECKPOINT")
+                reportProgress(state, owner, "CHECKPOINT")
                 completeness.save(id.toString(), window, read, uploadSummary.persistedDomainCounts)
-                val durablyComplete = SyncTerminalPolicy.isDurablyComplete(
-                    readPartial = read.isPartial || SyncCompletenessPolicy.incompleteDomains(read.domainTraces, uploadSummary.persistedDomainCounts).isNotEmpty(),
-                    reconciliationPending = uploadSummary.reconciliationPending,
-                )
-                val needsFollowUp = !durablyComplete
-                val result = if (needsFollowUp) "SYNCED_PARTIAL" else if (read.records.isEmpty()) "NO_DATA" else "SYNCED"
-                reportProgress(state, session.canonicalUserId, "REPORT_STATUS")
+                if (uploadSummary.continuationPending) {
+                    BackgroundSyncScheduler.enqueueContinuation(applicationContext, owner, mode, id.toString(), origin, diagnostic.flowId)
+                    state.recordTerminal(owner, "PARTIAL")
+                    return@withTimeout
+                }
+                if (uploadSummary.reconciliationPending) throw BackfillCatchUpRequired()
+                if (!pending.complete) {
+                    pending = pending.verified(uploadSummary.persistedDomainCounts)
+                    pages.save(pending) // receipt-verified read-page cursor is now durable
+                }
+                if (!pending.complete) {
+                    if (read.failedDomains.isNotEmpty()) throw DomainCompletenessExhausted()
+                    BackgroundSyncScheduler.enqueueContinuation(applicationContext, owner, mode, id.toString(), origin, diagnostic.flowId)
+                    state.recordTerminal(owner, "PARTIAL")
+                    return@withTimeout
+                }
+                val completeRead = pending.summary()
+                completeness.save(id.toString(), window, completeRead, pending.totals.mapValues { it.value.mappedCount })
+                val result = if (pending.totals.values.all { it.sourceCount == 0 }) "NO_DATA" else "SYNCED"
+                reportProgress(state, owner, "REPORT_STATUS")
                 withContext(Dispatchers.IO) {
-                    client.reportStatus(session, read.records, result, if (health.hasAllPermissions()) "GRANTED" else "PARTIAL", diagnostic)
+                    client.reportStatus(session, read.records, result, if (health.hasAllPermissions()) "GRANTED" else "PARTIAL", diagnostic,
+                        pending.totals.keys)
                 }
-                if (needsFollowUp) {
-                    state.markHistoryPending(session.canonicalUserId)
-                    if (uploadSummary.reconciliationPending) throw BackfillCatchUpRequired()
-                    throw DomainCompletenessExhausted()
-                }
-                if (mode == BackgroundSyncMode.BACKFILL) state.markHistoryComplete(session.canonicalUserId)
-                state.recordTerminal(session.canonicalUserId, "SUCCESS")
+                if (mode == BackgroundSyncMode.BACKFILL) state.markHistoryComplete(owner)
+                state.recordTerminal(owner, "SUCCESS")
                 if (mode != BackgroundSyncMode.P0_RECOVERY) {
-                    state.saveLastSuccessfulSync(session.canonicalUserId, SyncWindowPolicy.completedCursor(window))
+                    state.saveLastSuccessfulSync(owner, SyncWindowPolicy.completedCursor(window))
                 }
                 checkpoints.clear()
-                state.clearActiveWindow(session.canonicalUserId, mode)
-                if (mode == BackgroundSyncMode.INCREMENTAL && state.isHistoryPending(session.canonicalUserId)) {
-                    BackgroundSyncScheduler.enqueueBackfill(applicationContext, session.canonicalUserId)
+                SyncCheckpointStore(applicationContext, owner, mode).clear()
+                pages.clear()
+                state.clearActiveWindow(owner, mode)
+                if (mode == BackgroundSyncMode.INCREMENTAL && state.isHistoryPending(owner)) {
+                    BackgroundSyncScheduler.enqueueBackfill(applicationContext, owner)
                 }
             }
             Result.success()
         } catch (error: AuthenticationRequired) {
-            state.recordTerminal(session.canonicalUserId, "FAILED_AUTH", error)
+            state.recordTerminal(owner, "AUTH_REQUIRED", error)
             Result.failure()
         } catch (error: NativeAuthRejected) {
-            state.recordTerminal(session.canonicalUserId, "FAILED_AUTH", error)
+            state.recordTerminal(owner, "AUTH_REQUIRED", error)
             Result.failure()
         } catch (error: TimeoutCancellationException) {
             val checkpoint = checkpoints.load()
@@ -833,7 +936,7 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 checkpoint?.reconciliationPass ?: 0,
             )
             val retry = BackgroundContinuationPolicy.shouldRetry(runAttemptCount, maxAttempts)
-            state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "TIMEOUT", error)
+            state.recordTerminal(owner, if (retry) "RETRY_PENDING" else "TIMEOUT", error)
             retryOrFail(maxAttempts)
         } catch (error: IOException) {
             val checkpoint = checkpoints.load()
@@ -844,10 +947,10 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 checkpoint?.reconciliationPass ?: 0,
             )
             val retry = RetryPolicy.shouldRetryWorker(error, runAttemptCount, maxAttempts)
-            state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "FAILED", error)
+            state.recordTerminal(owner, if (retry) "RETRY_PENDING" else "FAILED", error)
             if (retry) Result.retry() else Result.failure()
         } catch (cancelled: CancellationException) {
-            state.recordTerminal(session.canonicalUserId, "RETRY_PENDING", cancelled)
+            state.recordTerminal(owner, "RETRY_PENDING", cancelled)
             throw cancelled
         } catch (error: Exception) {
             val checkpoint = checkpoints.load()
@@ -858,12 +961,42 @@ class BackgroundHealthSyncWorker(appContext: Context, params: WorkerParameters) 
                 checkpoint?.reconciliationPass ?: 0,
             )
             val retry = BackgroundContinuationPolicy.shouldRetry(runAttemptCount, maxAttempts)
-            state.recordTerminal(session.canonicalUserId, if (retry) "RETRY_PENDING" else "FAILED", error)
+            state.recordTerminal(owner, if (retry) "RETRY_PENDING" else "FAILED", error)
             retryOrFail(maxAttempts)
         } finally {
-            SyncCompletenessStore(applicationContext, session.canonicalUserId).finishPending(id.toString())
-            ingestionClient?.close()
-            AppSyncSingleFlight.gate.finish()
+            try {
+                SyncCompletenessStore(applicationContext, owner).finishPending(id.toString())
+                if (kotlinx.coroutines.currentCoroutineContext().isActive) flushPendingStatus(state, owner, session)
+            } finally {
+                try { ingestionClient?.close() } finally { AppSyncSingleFlight.gate.finish() }
+            }
+        }
+    }
+
+    private suspend fun flushPendingStatus(state: SyncRuntimeStateStore, owner: String, session: NativeAuthSession) {
+        if (owner != session.canonicalUserId) return
+        val raw = state.pendingStatus(owner) ?: return
+        try {
+            withTimeout(10_000L) {
+                val event = JSONObject(raw)
+                val d = event.optJSONObject("diagnostic")
+                val diagnostic = d?.let { SyncTriggerDiagnostic(
+                    SyncTriggerSource.fromWorkInput(it.optString("origin_trigger_source")), it.getString("flow_id"),
+                    it.optString("worker_id").takeUnless { value -> value == "null" || value.isBlank() },
+                    it.getString("started_at"), it.optInt("worker_attempt")) }
+                val domains = state.workMetadata(owner).readDomainCounts.orEmpty().split(',')
+                    .map { it.substringBefore(':') }.filter { it in SyncCompletenessPolicy.SUPPORTED_DOMAINS }.toSet()
+                IngestionClient(BuildConfig.API_BASE_URL).use { client ->
+                    client.reportStatus(session, emptyList(), event.getString("result"), "UNKNOWN", diagnostic, domains, event.getString("at"))
+                }
+                state.acknowledgeStatus(owner, raw)
+            }
+        } catch (_: TimeoutCancellationException) {
+            // The durable event remains pending; never replace it with a fabricated success.
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // No secret/exception message is logged. The next authenticated worker retries once.
         }
     }
 
