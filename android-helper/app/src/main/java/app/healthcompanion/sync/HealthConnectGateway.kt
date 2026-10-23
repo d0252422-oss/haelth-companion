@@ -35,6 +35,7 @@ data class HealthReadResult(
     val pagesRead: Int,
     val domainTraces: Map<String, DomainReadTrace> = emptyMap(),
     val domainRangeStarts: Map<String, String> = emptyMap(),
+    val nextPageTokens: Map<String, String> = emptyMap(),
 ) {
     val isPartial: Boolean get() = failedDomains.isNotEmpty() || cappedDomains.isNotEmpty()
 }
@@ -46,6 +47,7 @@ private data class DomainReadResult(
     val capped: Boolean = false,
     val failed: Boolean = false,
     val traces: Map<String, DomainReadTrace> = emptyMap(),
+    val nextPageToken: String? = null,
 )
 
 class HealthConnectGateway(private val context: Context) {
@@ -88,6 +90,8 @@ class HealthConnectGateway(private val context: Context) {
         end: Instant,
         includedDomains: Set<String>? = null,
         startForDomain: (String) -> Instant = { start },
+        resumeTokens: Map<String, String> = emptyMap(),
+        maxPagesPerDomain: Int = MAX_PAGES_PER_DOMAIN,
         onDomain: (domain: String, completed: Int, total: Int) -> Unit = { _, _, _ -> },
     ): HealthReadResult = coroutineScope {
         val zone = ZoneId.of("Asia/Taipei")
@@ -98,7 +102,8 @@ class HealthConnectGateway(private val context: Context) {
         fun <T : Record> add(domain: String, permission: String, type: KClass<T>, mapper: (T) -> List<CanonicalHealthRecord>) {
             if (permission in granted && HealthReadDomainPolicy.includes(includedDomains, domain)) {
                 readers += domain to {
-                    readDomain(domain, type, TimeRangeFilter.between(startForDomain(domain), end), mapper)
+                    readDomain(domain, type, TimeRangeFilter.between(startForDomain(domain), end), mapper,
+                        resumeTokens[domain], maxPagesPerDomain)
                 }
             }
         }
@@ -147,7 +152,8 @@ class HealthConnectGateway(private val context: Context) {
                         catch (_: SecurityException) { failedRead(domain, "PERMISSION") }
                         catch (_: Exception) { failedRead(domain, "READER_ERROR") }
                         current = current.copy(traces = current.traces.mapValues { (_, trace) -> trace.copy(recoveryAttempts = attempt) })
-                        if (!current.failed && !current.capped) break
+                        // A capped read is a continuation, not a reason to re-read page zero.
+                        if (current.capped || !current.failed) break
                     }
                     requireNotNull(current)
                 }
@@ -162,13 +168,15 @@ class HealthConnectGateway(private val context: Context) {
             pagesRead = results.sumOf { it.pages },
             domainTraces = results.flatMap { it.traces.entries }.associate { it.key to it.value },
             domainRangeStarts = results.flatMap { result -> result.traces.keys.map { it to startForDomain(result.domain).toString() } }.toMap(),
+            nextPageTokens = results.mapNotNull { result -> result.nextPageToken?.let { result.domain to it } }.toMap(),
         )
     }
 
-    private suspend fun <T : Record> readDomain(domain: String, type: KClass<T>, filter: TimeRangeFilter, mapper: (T) -> List<CanonicalHealthRecord>): DomainReadResult {
+    private suspend fun <T : Record> readDomain(domain: String, type: KClass<T>, filter: TimeRangeFilter, mapper: (T) -> List<CanonicalHealthRecord>, initialToken: String?, maxPages: Int): DomainReadResult {
         val records = mutableListOf<CanonicalHealthRecord>()
         val seenTokens = mutableSetOf<String>()
-        var token: String? = null
+        var token: String? = initialToken
+        initialToken?.let { seenTokens.add(it) }
         var pages = 0
         var sourceCount = 0
         var stageCount = 0
@@ -177,10 +185,10 @@ class HealthConnectGateway(private val context: Context) {
             val status = if (capped) "CAPPED" else if (drops.isNotEmpty()) "MAPPING_INCOMPLETE" else "COMPLETE"
             val traces = mutableMapOf(domain to DomainReadTrace(sourceCount, records.count { it.domain == domain }, pages, status, drops.toMap()))
             if (domain == "sleep") traces["sleep_stage"] = DomainReadTrace(stageCount, records.count { it.domain == "sleep_stage" }, pages, status, drops.toMap())
-            return DomainReadResult(domain, records, pages, capped, drops.isNotEmpty(), traces)
+            return DomainReadResult(domain, records, pages, capped, drops.isNotEmpty(), traces, if (capped) token else null)
         }
         do {
-            if (pages >= MAX_PAGES_PER_DOMAIN) return result(capped = true)
+            if (pages >= maxPages) return result(capped = true)
             val response = client.readRecords(ReadRecordsRequest(recordType = type, timeRangeFilter = filter, pageSize = PAGE_SIZE, pageToken = token))
             sourceCount += response.records.size
             response.records.forEach { source ->
@@ -197,7 +205,9 @@ class HealthConnectGateway(private val context: Context) {
             }
             pages += 1
             val next = PaginationGuard.nextPageToken(response.pageToken)
-            if (PaginationGuard.isRepeated(next, seenTokens)) return result(capped = true)
+            if (PaginationGuard.isRepeated(next, seenTokens)) return result(capped = true).copy(
+                failed = true, nextPageToken = null,
+                traces = result(capped = true).traces.mapValues { (_, trace) -> trace.copy(status = "PAGINATION_REPEATED") })
             token = next
         } while (token != null)
         return result()

@@ -225,7 +225,7 @@ object BackgroundWorkRecoveryPolicy {
         localResult: String?,
         preferredTerminalState: DurableWorkState? = null,
     ): BackgroundRuntimeStatus = when {
-        localResult in setOf("FAILED", "FAILED_AUTH", "TIMEOUT", "PERMISSION_REQUIRED") ->
+        localResult in setOf("FAILED", "FAILED_AUTH", "AUTH_REQUIRED", "TIMEOUT", "PERMISSION_REQUIRED") ->
             BackgroundRuntimeStatus.FAILED
         localResult in setOf("PARTIAL", "RETRY_PENDING", "SYNCING") ->
             BackgroundRuntimeStatus.RETRY_PENDING

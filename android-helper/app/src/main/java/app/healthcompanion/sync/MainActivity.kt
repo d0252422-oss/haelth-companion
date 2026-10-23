@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
         render(ConnectorUiState.AUTHENTICATING)
         scope.launch {
             runCatching { auth.signIn(this@MainActivity) }
-                .onSuccess { session -> currentSession = session; afterAuthentication(restoredSession = false) }
+                .onSuccess { session -> SyncRuntimeStateStore(this@MainActivity).setAutomaticSyncEnabled(session.canonicalUserId, true); currentSession = session; afterAuthentication(restoredSession = false) }
                 .onFailure { error ->
                     render(
                         if (error is NativeAuthCancelled) ConnectorUiState.SIGNED_OUT else ConnectorUiState.AUTH_ERROR,
@@ -107,6 +107,10 @@ class MainActivity : ComponentActivity() {
 
     private fun afterAuthentication(restoredSession: Boolean) {
         val session = currentSession ?: return render(ConnectorUiState.SIGNED_OUT)
+        if (restoredSession && !SyncRuntimeStateStore(this).automaticSyncAllowed(BackgroundWorkNames.userKey(session.canonicalUserId))) {
+            currentSession = null
+            return render(ConnectorUiState.SIGNED_OUT)
+        }
         if (SessionUpgradePolicy.shouldMigrateLegacySyncState(restoredSession, session.canonicalUserId)) {
             SyncRuntimeStateStore(this).migrateLegacyStateAfterSessionRestore(session.canonicalUserId)
         }
@@ -230,7 +234,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         } catch (_: AuthenticationRequired) {
-                            session = auth.refresh().also { currentSession = it }
+                            val originalOwner = session.canonicalUserId
+                            val refreshed = auth.refresh()
+                            NativeSessionRecovery.requireSameOwner(originalOwner, refreshed.canonicalUserId)
+                            session = refreshed.also { currentSession = it }
                             withContext(Dispatchers.IO) { client.upload(session, read.records, checkpoints, diagnostic) }
                         }
                         completeness.save(syncRunId, window, read, uploadSummary.persistedDomainCounts)
@@ -274,9 +281,9 @@ class MainActivity : ComponentActivity() {
 
     private fun logout() {
         val userId = currentSession?.canonicalUserId
-        userId?.let { SyncRuntimeStateStore(this).clear(it) }
+        // Durable opt-out precedes asynchronous cancellation/sign-out; never resurrect a logged-out account.
+        userId?.let { SyncRuntimeStateStore(this).setAutomaticSyncEnabled(it, false) }
         currentSession = null
-        userId?.let { SyncCheckpointStore.clearAll(this, it) }
         BackgroundSyncScheduler.cancel(this, userId)
         backgroundObserver?.cancel()
         workerDiagnostic.text = "Beta ${BuildConfig.VERSION_NAME}\nWorker: IDLE"

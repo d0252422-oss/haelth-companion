@@ -87,6 +87,25 @@ class SyncRuntimeCursorTest {
         assertNull(state.workMetadata("owner-a").exceptionClass)
     }
 
+    @Test fun oldStatusAcknowledgementCannotRemoveNewerFailureAndLogoutKeepsCoverage() {
+        val state = state()
+        state.recordStarted("owner-a", "first")
+        state.recordTerminal("owner-a", "PARTIAL")
+        val old = state.pendingStatus("owner-a")!!
+        state.recordTerminal("owner-a", "FAILED", IOException("private"))
+        val current = state.pendingStatus("owner-a")!!
+        state.acknowledgeStatus("owner-a", old)
+        assertEquals(current, state.pendingStatus("owner-a"))
+        assertNull(state.pendingStatus("owner-b"))
+        state.saveLastSuccessfulSync("owner-a", oldEnd)
+        state.setAutomaticSyncEnabled("owner-a", false)
+        assertFalse(state.automaticSyncAllowed(BackgroundWorkNames.userKey("owner-a")))
+        assertTrue(state.automaticSyncAllowed(BackgroundWorkNames.userKey("owner-b")))
+        assertEquals(oldEnd, state.lastSuccessfulSync("owner-a"))
+        state.setAutomaticSyncEnabled("owner-a", true)
+        assertTrue(state.automaticSyncAllowed(BackgroundWorkNames.userKey("owner-a")))
+    }
+
     // Exercise the actual state store without Android context or any disk/device.
     private fun memoryPreferences(): SharedPreferences {
         val values = mutableMapOf<String, Any?>()
