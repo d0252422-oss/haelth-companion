@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-10-23T08:08:18.310603+00:00",
+  "checkpoint": 63800,
+  "result": "SYNCING",
+  "stage": "UPLOAD",
+  "natural_beta33": "PENDING",
+  "manual_agent_sync": false,
+  "app_launch_by_agent": false,
+  "forced_adb_job": false
+}

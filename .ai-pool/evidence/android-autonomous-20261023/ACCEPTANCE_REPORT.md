@@ -26,3 +26,5 @@ The remaining scope is UNKNOWN. The legacy first page is capped for heart_rate; 
 The prior beta32 natural periodic run incremented period_count before this APK update. It is not beta33 evidence. Agent App launches/manual sync/ADB forced jobs=0. Human activity UNKNOWN. Update-triggered/retry/backfill continuation does not close the natural PERIODIC_WORKER whole-run Gate. Real process kill/reboot/offline/force-stop tests were not performed; JVM restart/cancellation/disk-loss cases do not masquerade as real OS evidence.
 
 Progress checker exit1 retains52 historical missing artifacts across8 gates. No baseline/weight/skips changed. Unrelated staged/untracked work is preserved. Production operations=0. Existing daily09:00 beta monitor is unchanged and is not required for phone synchronization.
+
+Closing passive observation 2026-10-23T08:08:18.310603+00:00: checkpoint 63800, status SYNCING, stage UPLOAD. No natural beta33 whole run credited;this closes the bounded observation without further waiting.
