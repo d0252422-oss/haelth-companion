@@ -1,0 +1,522 @@
+{
+  "check_passed": false,
+  "baseline_version": "known-scope-v0.1-provisional-2026-09-12",
+  "baseline_status": "PROVISIONAL_KNOWN_SCOPE_ONLY",
+  "full_scope_confirmed": false,
+  "scope_description": "Candidate known-scope union of documented Roadmap V1–V5 and current Health Companion F&F Beta/platform acceptance. NOT a confirmed complete delivery version.",
+  "overall_project_progress": "UNKNOWN",
+  "provisional_known_scope_percentage": 0,
+  "accepted_weight": 0,
+  "total_weight": 100,
+  "unverified_progress_weight": 100,
+  "unverified_weight_definition": "All weight not credited by a valid PASS, including FAIL/BLOCKED/UNKNOWN/IN_PROGRESS and rejected PASS evidence",
+  "exact_known_scope_percentage": 0,
+  "previous_progress": 32,
+  "progress_change_pp": -32,
+  "progress_change_reason": "SAME_BASELINE_VERSION_ONLY",
+  "progress_calculation": "100 × valid PASS leaf weights / all leaf weights; local gates never imply remote/device/validity acceptance",
+  "module_progress": {
+    "data": {
+      "earned_weight": 0,
+      "total_weight": 12,
+      "valid_pass_gates": 0,
+      "total_gates": 3,
+      "accepted_percentage": 0
+    },
+    "engines": {
+      "earned_weight": 0,
+      "total_weight": 16,
+      "valid_pass_gates": 0,
+      "total_gates": 4,
+      "accepted_percentage": 0
+    },
+    "runtime": {
+      "earned_weight": 0,
+      "total_weight": 8,
+      "valid_pass_gates": 0,
+      "total_gates": 2,
+      "accepted_percentage": 0
+    },
+    "web": {
+      "earned_weight": 0,
+      "total_weight": 8,
+      "valid_pass_gates": 0,
+      "total_gates": 2,
+      "accepted_percentage": 0
+    },
+    "android": {
+      "earned_weight": 0,
+      "total_weight": 8,
+      "valid_pass_gates": 0,
+      "total_gates": 2,
+      "accepted_percentage": 0
+    },
+    "ios": {
+      "earned_weight": 0,
+      "total_weight": 8,
+      "valid_pass_gates": 0,
+      "total_gates": 2,
+      "accepted_percentage": 0
+    },
+    "photo_food": {
+      "earned_weight": 0,
+      "total_weight": 12,
+      "valid_pass_gates": 0,
+      "total_gates": 3,
+      "accepted_percentage": 0
+    },
+    "release": {
+      "earned_weight": 0,
+      "total_weight": 12,
+      "valid_pass_gates": 0,
+      "total_gates": 3,
+      "accepted_percentage": 0
+    },
+    "roadmap": {
+      "earned_weight": 0,
+      "total_weight": 16,
+      "valid_pass_gates": 0,
+      "total_gates": 4,
+      "accepted_percentage": 0
+    }
+  },
+  "gate_results": [
+    {
+      "id": "canonical_ingestion",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/node.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/node.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/node.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/node-final.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/node-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json"
+      ]
+    },
+    {
+      "id": "local_identity",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-final-report.json"
+      ]
+    },
+    {
+      "id": "frozen_formula",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python-fresh.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.manifest.json"
+      ]
+    },
+    {
+      "id": "reference_engineering",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python-fresh.manifest.json"
+      ]
+    },
+    {
+      "id": "nutrition_label_local",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/http.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/http-ts-pg186.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-final-report.json"
+      ]
+    },
+    {
+      "id": "portable_core_parity",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/manual.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json"
+      ]
+    },
+    {
+      "id": "edge_execution",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "postgres_recompute",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/queue.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/manual.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers17.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers18.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/cutover/health-beta-sql-first-20260914/native17.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/cutover/health-beta-sql-first-20260914/queue17.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/manual.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/barriers17.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/barriers18.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/barriers17.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/rls.json"
+      ]
+    },
+    {
+      "id": "existing_browser",
+      "status": "PASS",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/browser-ts-deno-9c05576c-9599-4512-8280-11ca495aa502/report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-final-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-ui-final.xml"
+      ]
+    },
+    {
+      "id": "overview_training_weekly",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "android_nondevice_build",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "android_oem_device",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "ios_build",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "ios_device",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "photo_model",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "photo_reference_accuracy",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "food_reference",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "new_score_validity",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "remote_beta_oauth",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "line_v4",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "recovery_v2",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "guidance_v3",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "personalization_v5",
+      "status": "UNKNOWN",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "release_security_privacy",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    },
+    {
+      "id": "authorized_release",
+      "status": "BLOCKED",
+      "valid_pass": false,
+      "credited_weight": 0,
+      "reasons": []
+    }
+  ],
+  "diagnostics": [
+    {
+      "gate_id": "canonical_ingestion",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/node.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/node.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/node.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/node-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/node-final.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/node-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json"
+      ]
+    },
+    {
+      "gate_id": "local_identity",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-final-report.json"
+      ]
+    },
+    {
+      "gate_id": "frozen_formula",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python-fresh.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.manifest.json"
+      ]
+    },
+    {
+      "gate_id": "reference_engineering",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/python-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/python-fresh.manifest.json"
+      ]
+    },
+    {
+      "gate_id": "nutrition_label_local",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/http.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/http-ts-pg186.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-final-report.json"
+      ]
+    },
+    {
+      "gate_id": "portable_core_parity",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/manual.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/deno.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/deno-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/portable-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json"
+      ]
+    },
+    {
+      "gate_id": "postgres_recompute",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/observation.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/queue.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/manual.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers17.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/barriers18.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/cutover/health-beta-sql-first-20260914/native17.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/cutover/health-beta-sql-first-20260914/queue17.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/manual.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/barriers17.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/barriers18.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/native.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/barriers17.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/hosted.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/rls.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-junit.xml",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/native-final.manifest.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/rls.json"
+      ]
+    },
+    {
+      "gate_id": "existing_browser",
+      "reasons": [
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-ux/health-manual-ux-20260914-025012/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/overnight/health-overnight-20260914-0037/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserAB.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/edge-pg17/health-edge-pg17-20260913-2210/browserA.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-release-exercise/health-release-exercise-20260913-120836/browser-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/blocker-closure/browser-ts-deno-9c05576c-9599-4512-8280-11ca495aa502/report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-final-report.json",
+        "EVIDENCE_FILE_MISSING:.engine-artifacts/manual-sql-closure/manual-sql-ui-final.xml"
+      ]
+    }
+  ],
+  "limitations": [
+    "File hashes establish integrity, not semantic acceptance; evidence_valid remains an explicit reviewer attestation.",
+    "Provisional weights are planning assumptions; an unconfirmed full delivery scope has UNKNOWN overall progress."
+  ]
+}

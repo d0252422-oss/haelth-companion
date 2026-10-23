@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.SyncPerformancePolicyTest" tests="58" skipped="0" failures="0" errors="0" timestamp="2026-10-23T06:17:55.560Z" hostname="MSI" time="1.302">
+  <properties/>
+  <testcase name="p0RecoveryCoversBothMissingTaipeiDatesWithFrozenEnd" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.002"/>
+  <testcase name="paginationTerminatesOnRepeatedToken" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="failedImmediateDoesNotBlockPeriodicRepair" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.002"/>
+  <testcase name="backfillWithDurableUploadCheckpointGetsBoundedContinuationAttempts" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="workNamesAreDeterministicAndUserScoped" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="unknownWorkStateFailsClosedToRetry" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.003"/>
+  <testcase name="recentRunningMetadataKeepsExistingWork" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="delayedRetryAdvancesOnlyThroughFrozenWindowEnd" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="localSyncingCannotOverrideActualEnqueuedState" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="userScopedWorkNamesDoNotContainCanonicalUserId" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="missingSleepDatesStayEligibleForBoundedReplayAcrossMidnight" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="staleThresholdMatchesOverallWorkerDeadline" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="immediateBackfillAndPeriodicNamesNeverCollide" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="cancelledWorkBecomesRetryPending" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="partialReadOrPendingReconciliationCannotAdvanceDurableSuccess" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="checkpointAndWindowKeysAreIsolatedByUserAndSyncMode" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="runningAtDeadlineBoundaryIsNotPrematurelyReplaced" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="missingIdleWorkSchedulesWithoutClaimingRunning" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="succeededWorkTransitionsUpToDateBeforeNextSchedule" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="runningPastDeadlineIsRecovered" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="missingWorkRecoversPersistedRunningState" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="highVolumeTenThousandRecordsRemainBoundedAndComplete" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="1.25"/>
+  <testcase name="constrainedEnqueuedWorkIsNotCancelledMerelyForWaiting" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="sleepStageMutationKeepsIdentityAndMovesExistingRecordToWakeDate" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="staleRunningMetadataIsReplacedEvenWhenWorkManagerStillSaysRunning" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="syncSingleFlightRejectsOverlapAndReopensAfterCompletion" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="failedWorkBecomesRetryPending" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="continuedBackfillIOExceptionUsesExtendedAttemptBound" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="lateArrivingSleepReplaysRecentSessionsAndStagesWithoutRepeatingOtherOldUploads" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.002"/>
+  <testcase name="p0ReplayReadsOnlyMissingDomainsWhileNormalSyncStillReadsAll" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="p0RecoveryHasItsOwnUserScopedWorkAndCheckpoint" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="observerDoesNotReportFailedTerminalWorkAsUpToDate" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="accountWorkNamesRemainIsolated" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="enqueuedIsNeverReportedAsRunning" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="retryingEnqueuedWorkHasExplicitRetryState" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="missingOrTerminalWorkIsEnqueuedAgain" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="backfillUsesBoundedThirtyDayWindow" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="startupIncrementalWindowIsSmallWhenNoSuccessExists" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="singleFlightDoesNotPersistAcrossCoordinatorInstances" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="orphanedBlockedChainIsReplaced" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="missingSystemJobRepairsOnlyItsUniquePeriodicWork" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="persistedFailureWinsOverHistoricalSuccessfulWork" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="logoutEquivalentGateReleaseAllowsManualRetry" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="everyForegroundPathHasTerminalUiState" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="sleepStageOwnershipMigrationIsMonotonicAndReplaySafe" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="retryAttemptZeroRemainsQueued" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.006"/>
+  <testcase name="allStagesUseTheirSessionWakeDateAcrossTaipeiMidnight" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.007"/>
+  <testcase name="twoHourCadenceUpdatesAnExistingTwelveHourPeriodicWorkOnlyOnce" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.004"/>
+  <testcase name="foregroundWaitIsBoundedOnlyWhenBackgroundCanFinishAllDomains" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="localSyncingCannotOverrideBlockedState" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="incrementalWindowUsesOneHourOverlap" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="currentTerminalFailureWithoutSessionMetadataRemainsRetryable" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="runningOnlyFollowsActualWorkerEntry" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="blockedWorkWithRunnablePredecessorWaits" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="incrementalUploadContinuesFromItsCheckpointButUnstartedWorkKeepsDefaultBound" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="longOfflineGapIsNeverClippedByLateArrivalLookback" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <testcase name="runningWithoutProgressIsRecovered" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.001"/>
+  <testcase name="retryAttemptTwoRemainsBoundedRetryPending" classname="app.healthcompanion.sync.SyncPerformancePolicyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

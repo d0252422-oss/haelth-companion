@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.AutonomousSyncRecoveryTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-23T06:17:39.046Z" hostname="MSI" time="1.156">
+  <properties/>
+  <testcase name="receiptBeforeFailedLocalCommitReplaysSameIdentityWithoutFalseProgress" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.477"/>
+  <testcase name="cappedSleepPageAdvancesParentAndStagesTogetherOnlyAfterVerifiedPage" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.092"/>
+  <testcase name="sameTimestampDifferentSourceIdsSurvivePageRoundTrip" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.159"/>
+  <testcase name="laterPageUsesIndependentCheckpointAndPreservesLegacy17800" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.017"/>
+  <testcase name="transientAuthDoesNotRefreshOrBecomeSignedOutAndCancellationPropagates" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.017"/>
+  <testcase name="readThenProcessDeathKeepsPendingPageAndDoesNotConsumeSourceCursor" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.044"/>
+  <testcase name="budgetYieldsAfterDurableBatchAndFreshClientContinuesWithoutReadingSource" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.199"/>
+  <testcase name="sourceFailuresStayPendingAndAreNeverClassifiedAsEmptyComplete" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.003"/>
+  <testcase name="cancellationAfterServerCommitRetainsPendingPageForIdenticalReplay" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.061"/>
+  <testcase name="revokedRemainingDomainCannotDisappearAndBecomeFalseComplete" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.012"/>
+  <testcase name="actualAuthRejectionRefreshesOnceAndOwnerChangeIsRejected" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.015"/>
+  <testcase name="truncatedPendingDataFailsClosedInsteadOfReturningNoData" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.046"/>
+  <testcase name="rejectedCursorGetsOnlyOneFixedRangeRestart" classname="app.healthcompanion.sync.AutonomousSyncRecoveryTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

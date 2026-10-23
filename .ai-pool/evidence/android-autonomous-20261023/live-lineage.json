@@ -1,0 +1,248 @@
+{
+  "observed_at": "2026-10-23T07:11:52.905331+00:00",
+  "agent_app_launch": false,
+  "agent_manual_sync": false,
+  "adb_job_trigger": false,
+  "capture_atomicity": "BEST_EFFORT_DB_WAL_COPY",
+  "dependencies": [
+    {
+      "work_spec_id": "6c3db3d8-6a35-468f-8fea-79897bff141d",
+      "prerequisite_id": "c7d60e39-d26b-4fdb-b493-49c39401f3f4"
+    },
+    {
+      "work_spec_id": "cd129e40-ff2e-4ad1-a62c-01e56f99b8d4",
+      "prerequisite_id": "6c3db3d8-6a35-468f-8fea-79897bff141d"
+    },
+    {
+      "work_spec_id": "376342bd-844f-4010-8bf8-4e3b25922fc4",
+      "prerequisite_id": "cd129e40-ff2e-4ad1-a62c-01e56f99b8d4"
+    },
+    {
+      "work_spec_id": "dddec3ae-6267-4df3-8416-f6a0c344a565",
+      "prerequisite_id": "376342bd-844f-4010-8bf8-4e3b25922fc4"
+    },
+    {
+      "work_spec_id": "22af4cbd-c145-4025-9ea7-5735e1d87e48",
+      "prerequisite_id": "dddec3ae-6267-4df3-8416-f6a0c344a565"
+    },
+    {
+      "work_spec_id": "5ba4eb37-2241-4665-aa31-9d36c53b3cf8",
+      "prerequisite_id": "22af4cbd-c145-4025-9ea7-5735e1d87e48"
+    }
+  ],
+  "workers": [
+    {
+      "id": "2f5e0af8-ffb6-4f67-94f8-053d40b0e49c",
+      "state": 0,
+      "run_attempt_count": 0,
+      "interval_duration": 7200000,
+      "period_count": 2,
+      "input_parent_uuids": [],
+      "has_parent_worker_key": false,
+      "has_parent_flow_key": false
+    },
+    {
+      "id": "4d2d2c3a-1061-48ef-91e7-96be6b94f3de",
+      "state": 2,
+      "run_attempt_count": 9,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [],
+      "has_parent_worker_key": false,
+      "has_parent_flow_key": false
+    },
+    {
+      "id": "00b5cd1e-aa16-4998-94d1-181ba84f95a2",
+      "state": 2,
+      "run_attempt_count": 8,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [],
+      "has_parent_worker_key": false,
+      "has_parent_flow_key": false
+    },
+    {
+      "id": "c7d60e39-d26b-4fdb-b493-49c39401f3f4",
+      "state": 2,
+      "run_attempt_count": 6,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [],
+      "has_parent_worker_key": false,
+      "has_parent_flow_key": false
+    },
+    {
+      "id": "6c3db3d8-6a35-468f-8fea-79897bff141d",
+      "state": 2,
+      "run_attempt_count": 1,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [
+        "7dd05cbc-fd1f-4862-8801-466363f17ac0",
+        "c7d60e39-d26b-4fdb-b493-49c39401f3f4"
+      ],
+      "has_parent_worker_key": true,
+      "has_parent_flow_key": true
+    },
+    {
+      "id": "cd129e40-ff2e-4ad1-a62c-01e56f99b8d4",
+      "state": 2,
+      "run_attempt_count": 1,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [
+        "03dd386e-7a97-4d93-837e-2b5fc05c7d6e",
+        "6c3db3d8-6a35-468f-8fea-79897bff141d"
+      ],
+      "has_parent_worker_key": true,
+      "has_parent_flow_key": true
+    },
+    {
+      "id": "376342bd-844f-4010-8bf8-4e3b25922fc4",
+      "state": 2,
+      "run_attempt_count": 1,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [
+        "422d96cb-81be-4300-9653-30f1cbcc0700",
+        "cd129e40-ff2e-4ad1-a62c-01e56f99b8d4"
+      ],
+      "has_parent_worker_key": true,
+      "has_parent_flow_key": true
+    },
+    {
+      "id": "dddec3ae-6267-4df3-8416-f6a0c344a565",
+      "state": 2,
+      "run_attempt_count": 1,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [
+        "96b6c928-88f6-41a3-9c4f-1b1a719b68cd",
+        "376342bd-844f-4010-8bf8-4e3b25922fc4"
+      ],
+      "has_parent_worker_key": true,
+      "has_parent_flow_key": true
+    },
+    {
+      "id": "22af4cbd-c145-4025-9ea7-5735e1d87e48",
+      "state": 2,
+      "run_attempt_count": 1,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [
+        "f7d7bd61-04fe-4b35-821a-c083bc55a8d2",
+        "dddec3ae-6267-4df3-8416-f6a0c344a565"
+      ],
+      "has_parent_worker_key": true,
+      "has_parent_flow_key": true
+    },
+    {
+      "id": "5ba4eb37-2241-4665-aa31-9d36c53b3cf8",
+      "state": 1,
+      "run_attempt_count": 1,
+      "interval_duration": 0,
+      "period_count": 0,
+      "input_parent_uuids": [
+        "c80dd6ab-3208-4e85-8cb0-7b4e9d7c3517",
+        "22af4cbd-c145-4025-9ea7-5735e1d87e48"
+      ],
+      "has_parent_worker_key": true,
+      "has_parent_flow_key": true
+    }
+  ],
+  "pending_pages": [
+    {
+      "scope_hash": "7545be7ab4a10d523817a7207c219c269fd85e41e61198a1d0175eb7a5b54e6f",
+      "version": 1,
+      "start": "2026-09-20T11:01:39.721742Z",
+      "end": "2026-10-20T11:01:39.721742Z",
+      "page": 0,
+      "remaining": null,
+      "has_cached_read": true,
+      "cached_read_counts": {
+        "steps": {
+          "source": 9775,
+          "mapped": 9775,
+          "pages": 20,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "total_energy": {
+          "source": 3474,
+          "mapped": 3474,
+          "pages": 7,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "heart_rate": {
+          "source": 25000,
+          "mapped": 55549,
+          "pages": 50,
+          "status": "CAPPED",
+          "drops": {},
+          "recoveries": 0
+        },
+        "resting_heart_rate": {
+          "source": 0,
+          "mapped": 0,
+          "pages": 1,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "sleep": {
+          "source": 217,
+          "mapped": 217,
+          "pages": 1,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "sleep_stage": {
+          "source": 3247,
+          "mapped": 3247,
+          "pages": 1,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "weight": {
+          "source": 2,
+          "mapped": 2,
+          "pages": 1,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "workout": {
+          "source": 44,
+          "mapped": 44,
+          "pages": 1,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "hrv": {
+          "source": 0,
+          "mapped": 0,
+          "pages": 1,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        },
+        "spo2": {
+          "source": 6798,
+          "mapped": 6798,
+          "pages": 14,
+          "status": "COMPLETE",
+          "drops": {},
+          "recoveries": 0
+        }
+      },
+      "verified_totals": {},
+      "compressed_bytes": 1955478
+    }
+  ]
+}

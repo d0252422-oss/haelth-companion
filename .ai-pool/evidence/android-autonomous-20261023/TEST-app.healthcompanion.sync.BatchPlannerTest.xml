@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.healthcompanion.sync.BatchPlannerTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-23T06:17:40.216Z" hostname="MSI" time="8.346">
+  <properties/>
+  <testcase name="highVolumeHeartRateUsesRecordAndByteBoundedBatchesWithoutDropping" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.743"/>
+  <testcase name="deterministicOrderingAndReplayFingerprint" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.01"/>
+  <testcase name="legacyCheckpointFromAnotherUserRestartsWithoutCrossUserResume" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.006"/>
+  <testcase name="realBackfillScalePlanningFitsInsideWorkerBudget" classname="app.healthcompanion.sync.BatchPlannerTest" time="7.14"/>
+  <testcase name="sleepSessionIsUploadedBeforeItsStagesAtABatchBoundary" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.01"/>
+  <testcase name="changedRecordInvalidatesStreamingRecordCursorFailClosed" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.002"/>
+  <testcase name="changedPayloadInvalidatesCheckpointAndSamePlanResumes" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.053"/>
+  <testcase name="singleRecordOversizeFailsExplicitly" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.012"/>
+  <testcase name="reconciliationSeedStartsCurrentSnapshotWithoutLosingExtendedRetryBudget" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.002"/>
+  <testcase name="linearPlannerPreservesLegacyBodiesAndCheckpointFingerprint" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.341"/>
+  <testcase name="streamingCheckpointResumesAtExactRecordWithoutRebuildingCompletedPayloads" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.018"/>
+  <testcase name="preParentFirstCheckpointReplaysInsteadOfSkippingChangedSortOrder" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.002"/>
+  <testcase name="changedDatasetWithStableFrontierContinuesCurrentPassAndMarksCatchUp" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.003"/>
+  <testcase name="smallPayloadUsesOneBatch" classname="app.healthcompanion.sync.BatchPlannerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
